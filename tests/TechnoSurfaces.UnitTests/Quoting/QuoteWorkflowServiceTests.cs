@@ -135,6 +135,27 @@ public sealed class QuoteWorkflowServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_quote_can_be_given_its_own_validity_period()
+    {
+        var created = await AsAsync(Estimator, s => s.CreateAsync(new NewQuote("TS-VAL-1", _customerId, _contactId, 47m,
+            ValidForDays: 60)));
+
+        Assert.Equal(Today.AddDays(60), created.Quote!.ValidUntil);
+        Assert.Equal(60, created.Quote.DaysRemaining);
+    }
+
+    [Fact]
+    public async Task A_validity_period_outside_one_day_to_a_year_is_refused()
+    {
+        var none = await AsAsync(Estimator, s => s.CreateAsync(new NewQuote("TS-VAL-2", _customerId, _contactId, 47m, ValidForDays: 0)));
+        var tooLong = await AsAsync(Estimator, s => s.CreateAsync(new NewQuote("TS-VAL-3", _customerId, _contactId, 47m, ValidForDays: 366)));
+
+        Assert.Equal(WorkflowOutcome.Invalid, none.Outcome);
+        Assert.Contains(nameof(NewQuote.ValidForDays), none.Errors!.Keys);
+        Assert.Equal(WorkflowOutcome.Invalid, tooLong.Outcome);
+    }
+
+    [Fact]
     public async Task A_reference_already_in_use_is_refused()
     {
         await CreateAsync(Estimator, "TS-DUP");

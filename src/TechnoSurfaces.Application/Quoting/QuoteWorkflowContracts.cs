@@ -9,7 +9,9 @@ namespace TechnoSurfaces.Application.Quoting;
 
 /// <summary>
 /// A new quote (US-14, US-15). The reference is typed by hand and must be unique.
-/// The markup is entered on every quote; there is no default (team decision).
+/// The markup is entered on every quote; there is no default (team decision). The
+/// validity period defaults to the 30 days of the client's standing terms and can be
+/// set per quote.
 /// </summary>
 public sealed record NewQuote(
     string Reference,
@@ -19,7 +21,8 @@ public sealed record NewQuote(
     string? Site = null,
     string? Project = null,
     string? CustomerReference = null,
-    string? DeliveryAddress = null);
+    string? DeliveryAddress = null,
+    int ValidForDays = Quote.DefaultValidForDays);
 
 /// <summary>The job details printed on the quotation, editable until the quote is approved.</summary>
 public sealed record QuoteDetailsInput(string? Site, string? Project, string? CustomerReference, string? DeliveryAddress);
