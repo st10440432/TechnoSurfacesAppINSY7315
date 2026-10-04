@@ -26,7 +26,6 @@ public static class DatabaseStartup
         await CatalogueSeeder.SeedAsync(domainDb);
         await RateCardSeeder.SeedAsync(domainDb);
         await QuotationTermsSeeder.SeedAsync(domainDb);
-        await BrandWarrantySeeder.SeedAsync(domainDb);
 
         // RA Woodcraft, the real customer from invoice IN114317, so a quote can be
         // made as soon as the system is live.

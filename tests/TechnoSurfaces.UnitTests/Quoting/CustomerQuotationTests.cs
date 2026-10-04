@@ -33,7 +33,6 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         await CatalogueSeeder.SeedAsync(db);
         await RateCardSeeder.SeedAsync(db);
         await QuotationTermsSeeder.SeedAsync(db);
-        await BrandWarrantySeeder.SeedAsync(db);
         await CustomerSeeder.SeedAsync(db);
 
         var customer = await db.Customers.Include(c => c.Contacts).SingleAsync();
@@ -151,12 +150,33 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_brand_with_no_confirmed_warranty_prints_none()
+    {
+        // Infinito's warranty has not been confirmed by the client, so nothing is
+        // printed for it rather than another brand's wording (US-13).
+        var document = await WithServiceAsync(s => s.GenerateAsync(_quoteId));
+
+        Assert.Empty(document!.Warranties);
+    }
+
+    [Fact]
     public async Task The_warranty_follows_the_brand_quoted()
     {
+        await using (var db = new TechnoSurfacesDbContext(_options))
+        {
+            var staronPrice = await db.MaterialPrices
+                .Include(p => p.PriceBand).ThenInclude(b => b!.ProductLine)
+                .FirstAsync(p => p.PriceBand != null && p.PriceBand.ProductLine!.Name == "Staron");
+            var quote = await new QuoteRepository(db).GetAsync(_quoteId);
+            quote!.CurrentVersion!.AddCostingLine(CostingLine.ForMaterial(staronPrice.Id, "Staron material line", 500m,
+                "Staron price band, effective 2025-03-01", 1m, 2.7968m));
+            await db.SaveChangesAsync();
+        }
+
         var document = await WithServiceAsync(s => s.GenerateAsync(_quoteId));
 
         var warranty = Assert.Single(document!.Warranties);
-        Assert.Equal("Infinito", warranty.Brand);
+        Assert.Equal(QuotationTermsSeeder.StaronBrand, warranty.Brand);
         Assert.Equal("10 years", warranty.Material);
         Assert.Equal("1 year", warranty.Workmanship);
     }
