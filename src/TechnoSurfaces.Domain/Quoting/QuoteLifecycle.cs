@@ -43,6 +43,10 @@ public static class QuoteLifecycle
             [(QuoteStatus.Sent, QuoteTransition.Reopen)] = QuoteStatus.Draft,
             [(QuoteStatus.Accepted, QuoteTransition.Reopen)] = QuoteStatus.Draft,
 
+            // A customer who comes back after the quote lapsed: the quote is reopened
+            // as a new version with a fresh validity period (team decision).
+            [(QuoteStatus.Expired, QuoteTransition.Reopen)] = QuoteStatus.Draft,
+
             // The validity period lapsed with no answer. Task 1 5.2.1 also lets a
             // Draft that is never submitted expire.
             [(QuoteStatus.Sent, QuoteTransition.Expire)] = QuoteStatus.Expired,
