@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using TechnoSurfaces.Application.Catalogue;
 using TechnoSurfaces.Application.Costing;
 using TechnoSurfaces.Application.Customers;
@@ -45,6 +46,15 @@ public static class DependencyInjection
         // Customers and their contacts.
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICustomerService, CustomerService>();
+
+        // The quote workflow and the lists the screens show. One QuoteQueries per
+        // request serves both interfaces, so lapsed quotes are expired on the same
+        // context the workflow saves through.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<QuoteQueries>();
+        services.AddScoped<IQuoteQueries>(sp => sp.GetRequiredService<QuoteQueries>());
+        services.AddScoped<ILapsedQuotes>(sp => sp.GetRequiredService<QuoteQueries>());
+        services.AddScoped<IQuoteWorkflowService, QuoteWorkflowService>();
 
         return services;
     }
