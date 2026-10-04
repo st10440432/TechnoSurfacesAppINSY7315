@@ -14,7 +14,6 @@ namespace TechnoSurfacesApp.Api;
 /// </summary>
 [ApiController]
 [Route("api/customers")]
-[Produces("application/json")]
 public sealed class CustomerRecordsController : ControllerBase
 {
     private readonly ICustomerService _customers;
