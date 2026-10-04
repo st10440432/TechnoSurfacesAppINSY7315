@@ -17,7 +17,10 @@ public class Quote
 
     private Quote() { }
 
-    public Quote(string reference, int customerId, int contactId, string createdByUserId, DateOnly issueDate, int validForDays = 30)
+    /// <summary>"Quotation valid for 30 days only", from the client's standing terms.</summary>
+    public const int DefaultValidForDays = 30;
+
+    public Quote(string reference, int customerId, int contactId, string createdByUserId, DateOnly issueDate, int validForDays = DefaultValidForDays)
     {
         if (string.IsNullOrWhiteSpace(reference))
             throw new ArgumentException("A quote needs a reference.", nameof(reference));
@@ -156,16 +159,24 @@ public class Quote
     /// The earlier approval is cleared, because it approved the earlier version and
     /// not this revision. The sealed version and the audit trail keep the record of
     /// who approved what.
+    ///
+    /// The validity period starts again from <paramref name="reopenedOn"/>, so the
+    /// revision is not issued already lapsed or about to lapse (team decision). An
+    /// expired quote can be reopened the same way. The issue date does not move:
+    /// prices are resolved as at the issue date, and the original offer keeps it.
     /// </summary>
-    public QuoteVersion Reopen(string reopenedByUserId)
+    public QuoteVersion Reopen(string reopenedByUserId, DateOnly reopenedOn, int validForDays = DefaultValidForDays)
     {
         var current = CurrentVersion
             ?? throw new InvalidOperationException("A quote with no version cannot be reopened.");
+        if (validForDays < 1)
+            throw new ArgumentOutOfRangeException(nameof(validForDays), "A quote must be valid for at least one day.");
 
         Status = QuoteLifecycle.Next(Status, QuoteTransition.Reopen);
         current.Seal();
         ApprovedByUserId = null;
         ApprovedAtUtc = null;
+        ValidUntil = reopenedOn.AddDays(validForDays);
 
         var next = current.CreateRevision(current.VersionNo + 1, reopenedByUserId);
         _versions.Add(next);

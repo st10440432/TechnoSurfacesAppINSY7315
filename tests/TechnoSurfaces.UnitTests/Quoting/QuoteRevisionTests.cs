@@ -13,6 +13,8 @@ public sealed class QuoteRevisionTests
 {
     private readonly QuoteCalculationService _calculator = new();
 
+    private static readonly DateOnly ReopenedOn = new(2026, 10, 25);
+
     private static Quote SentQuoteWithLines(out QuoteVersion first)
     {
         var quote = new Quote("TS-REV-1", 1, 1, "estimator", new DateOnly(2026, 10, 2));
@@ -43,7 +45,7 @@ public sealed class QuoteRevisionTests
     {
         var quote = SentQuoteWithLines(out var first);
 
-        var second = quote.Reopen("estimator");
+        var second = quote.Reopen("estimator", ReopenedOn);
 
         Assert.Equal(QuoteStatus.Draft, quote.Status);
         Assert.Equal(2, quote.Versions.Count);
@@ -59,7 +61,7 @@ public sealed class QuoteRevisionTests
     {
         var quote = SentQuoteWithLines(out var first);
 
-        var second = quote.Reopen("estimator");
+        var second = quote.Reopen("estimator", ReopenedOn);
 
         Assert.Equal(_calculator.Calculate(first), _calculator.Calculate(second));
         Assert.Equal(first.MarkupPercent, second.MarkupPercent);
@@ -86,7 +88,7 @@ public sealed class QuoteRevisionTests
         var quote = SentQuoteWithLines(out var first);
         var totalsBefore = _calculator.Calculate(first);
 
-        var second = quote.Reopen("estimator");
+        var second = quote.Reopen("estimator", ReopenedOn);
         second.SetMarkupPercent(30m);
         second.ChangeQuantity(second.CostingLines.First(), 3m);
 
@@ -101,7 +103,7 @@ public sealed class QuoteRevisionTests
         var quote = SentQuoteWithLines(out var first);
         quote.MarkAccepted();
 
-        var second = quote.Reopen("md");
+        var second = quote.Reopen("md", ReopenedOn);
 
         Assert.Equal(QuoteStatus.Draft, quote.Status);
         Assert.Equal(2, second.VersionNo);
@@ -114,10 +116,36 @@ public sealed class QuoteRevisionTests
         var quote = SentQuoteWithLines(out _);
         Assert.Equal("md", quote.ApprovedByUserId);
 
-        quote.Reopen("estimator");
+        quote.Reopen("estimator", ReopenedOn);
 
         Assert.Null(quote.ApprovedByUserId);
         Assert.Null(quote.ApprovedAtUtc);
+    }
+
+    [Fact]
+    public void Reopening_starts_a_fresh_validity_period_and_keeps_the_issue_date()
+    {
+        var quote = SentQuoteWithLines(out _);
+        var issued = quote.IssueDate;
+
+        quote.Reopen("estimator", ReopenedOn);
+
+        Assert.Equal(ReopenedOn.AddDays(Quote.DefaultValidForDays), quote.ValidUntil);
+        Assert.Equal(issued, quote.IssueDate);
+        Assert.False(quote.ExpireIfLapsed(ReopenedOn.AddDays(Quote.DefaultValidForDays)));
+    }
+
+    [Fact]
+    public void An_expired_quote_can_be_reopened_as_a_new_version()
+    {
+        var quote = SentQuoteWithLines(out _);
+        Assert.True(quote.ExpireIfLapsed(quote.ValidUntil.AddDays(1)));
+
+        var revision = quote.Reopen("estimator", ReopenedOn);
+
+        Assert.Equal(QuoteStatus.Draft, quote.Status);
+        Assert.Equal(2, revision.VersionNo);
+        Assert.Equal(ReopenedOn.AddDays(Quote.DefaultValidForDays), quote.ValidUntil);
     }
 
     [Fact]
@@ -126,7 +154,7 @@ public sealed class QuoteRevisionTests
         var quote = new Quote("TS-REV-2", 1, 1, "estimator", new DateOnly(2026, 10, 2));
         quote.StartNewVersion("estimator", 40m);
 
-        Assert.Throws<InvalidQuoteTransitionException>(() => quote.Reopen("estimator"));
+        Assert.Throws<InvalidQuoteTransitionException>(() => quote.Reopen("estimator", ReopenedOn));
         Assert.Single(quote.Versions);
     }
 }
