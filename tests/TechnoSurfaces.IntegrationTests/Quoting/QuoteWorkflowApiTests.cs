@@ -168,6 +168,30 @@ public sealed class QuoteWorkflowApiTests
     }
 
     [Fact]
+    public async Task A_quote_is_created_with_its_own_validity_period_or_thirty_days()
+    {
+        var estimator = await AsAsync(AppFactory.EstimatorEmail);
+        var (customerId, contactId, _) = await SeededIdsAsync();
+
+        var custom = await JsonAsync(await estimator.PostAsync("/api/quotes", new
+        {
+            reference = "IT-VAL-" + Guid.NewGuid().ToString("N")[..6], customerId, contactId, markupPercent = 40m, validForDays = 45
+        }));
+        var standard = await JsonAsync(await estimator.PostAsync("/api/quotes", new
+        {
+            reference = "IT-VAL-" + Guid.NewGuid().ToString("N")[..6], customerId, contactId, markupPercent = 40m
+        }));
+        var invalid = await estimator.PostAsync("/api/quotes", new
+        {
+            reference = "IT-VAL-" + Guid.NewGuid().ToString("N")[..6], customerId, contactId, markupPercent = 40m, validForDays = 0
+        });
+
+        Assert.Equal(45, custom.GetProperty("daysRemaining").GetInt32());
+        Assert.Equal(30, standard.GetProperty("daysRemaining").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+    }
+
+    [Fact]
     public async Task A_duplicate_reference_is_409_and_missing_fields_are_400()
     {
         var estimator = await AsAsync(AppFactory.EstimatorEmail);
