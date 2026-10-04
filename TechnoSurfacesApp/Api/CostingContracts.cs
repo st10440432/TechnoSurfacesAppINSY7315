@@ -104,8 +104,9 @@ public sealed class ChangeLineRequest : IValidatableObject
         if (Quantity < 0)
             yield return new("A quantity cannot be negative.", new[] { nameof(Quantity) });
 
-        if (UnitPrice < 0)
-            yield return new("A unit price cannot be negative.", new[] { nameof(UnitPrice) });
+        // A line is never priced at zero, override included.
+        if (UnitPrice <= 0)
+            yield return new("A rate override must be greater than zero.", new[] { nameof(UnitPrice) });
 
         if (Quantity > ColumnLimits.Quantity)
             yield return new("This quantity is too large.", new[] { nameof(Quantity) });
