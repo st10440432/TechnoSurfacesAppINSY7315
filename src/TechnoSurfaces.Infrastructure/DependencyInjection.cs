@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TechnoSurfaces.Application.Catalogue;
 using TechnoSurfaces.Application.Costing;
+using TechnoSurfaces.Application.Customers;
 using TechnoSurfaces.Application.Pricing;
 using TechnoSurfaces.Application.Quoting;
 using TechnoSurfaces.Infrastructure.Data;
@@ -40,6 +41,10 @@ public static class DependencyInjection
         services.AddScoped<IQuoteRepository, QuoteRepository>();
         services.AddScoped<ICostingSheetService, CostingSheetService>();
         services.AddScoped<ICatalogueBrowser, CatalogueBrowser>();
+
+        // Customers and their contacts.
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerService, CustomerService>();
 
         return services;
     }
