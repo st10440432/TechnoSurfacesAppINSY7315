@@ -67,6 +67,12 @@ public interface IQuoteWorkflowService
 
 public sealed class QuoteWorkflowService : IQuoteWorkflowService
 {
+    /// <summary>
+    /// The longest validity period accepted on a new quote. A guard against a
+    /// mistyped figure such as 300 for 30, not a client rule.
+    /// </summary>
+    public const int MaxValidForDays = 365;
+
     private readonly IQuoteRepository _quotes;
     private readonly IQuoteQueries _queries;
     private readonly ILapsedQuotes _lapsed;
@@ -134,6 +140,8 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
             errors[nameof(NewQuote.Reference)] = new[] { "No more than 40 characters." };
         if (input.MarkupPercent is < 0 or > 999.99m)
             errors[nameof(NewQuote.MarkupPercent)] = new[] { "A markup must be between 0 and 999.99 per cent." };
+        if (input.ValidForDays is < 1 or > MaxValidForDays)
+            errors[nameof(NewQuote.ValidForDays)] = new[] { $"A quote must be valid for between 1 and {MaxValidForDays} days." };
         ValidateDetails(details, errors);
 
         var customer = await _customers.GetAsync(input.CustomerId, ct);
@@ -148,7 +156,7 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
         if (await _quotes.ReferenceExistsAsync(reference, ct))
             return new(WorkflowOutcome.ReferenceTaken, Problem: $"Another quote already has the reference {reference}.");
 
-        var quote = new Quote(reference, input.CustomerId, input.ContactId, _user.UserId, Today);
+        var quote = new Quote(reference, input.CustomerId, input.ContactId, _user.UserId, Today, input.ValidForDays);
         quote.UpdateDetails(details.Site, details.Project, details.CustomerReference, details.DeliveryAddress);
         quote.StartNewVersion(_user.UserId, input.MarkupPercent);
 

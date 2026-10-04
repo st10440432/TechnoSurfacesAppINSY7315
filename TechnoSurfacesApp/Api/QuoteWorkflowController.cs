@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Application.Quoting;
+using TechnoSurfaces.Domain.Quoting;
 using TechnoSurfacesApp.Identity;
 
 namespace TechnoSurfacesApp.Api;
@@ -85,7 +86,8 @@ public sealed class QuoteWorkflowController : ControllerBase
     {
         var result = await _workflow.CreateAsync(new NewQuote(
             request.Reference, request.CustomerId!.Value, request.ContactId!.Value, request.MarkupPercent!.Value,
-            request.Site, request.Project, request.CustomerReference, request.DeliveryAddress), ct);
+            request.Site, request.Project, request.CustomerReference, request.DeliveryAddress,
+            request.ValidForDays ?? Quote.DefaultValidForDays), ct);
 
         return result.Outcome == WorkflowOutcome.Ok
             ? CreatedAtRoute(nameof(GetQuote), new { id = result.Quote!.Id }, result.Quote)
@@ -250,6 +252,10 @@ public sealed class CreateQuoteRequest
 
     [StringLength(300)]
     public string? DeliveryAddress { get; set; }
+
+    /// <summary>Days the quote is valid for. Optional; the client's standing terms give 30.</summary>
+    [Range(1, QuoteWorkflowService.MaxValidForDays)]
+    public int? ValidForDays { get; set; }
 }
 
 /// <summary>The body of PUT /api/quotes/{id}/details.</summary>
