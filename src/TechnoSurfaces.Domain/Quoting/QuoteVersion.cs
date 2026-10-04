@@ -97,6 +97,43 @@ public class QuoteVersion
         _costingLines.Remove(line);
     }
 
+    /// <summary>Rewrites a customer-facing line on this version (US-10).</summary>
+    public void ChangeQuotationLine(QuotationLine line, string description, decimal amountExVat, string? room, decimal quantity)
+    {
+        EnsureUnsealed();
+        if (!_quotationLines.Contains(line))
+            throw new InvalidOperationException($"That quotation line is not on version {VersionNo}.");
+        line.Change(description, amountExVat, room, quantity);
+    }
+
+    public void RemoveQuotationLine(QuotationLine line)
+    {
+        EnsureUnsealed();
+        _quotationLines.Remove(line);
+    }
+
+    /// <summary>
+    /// Puts the customer-facing lines in the given order. Every line on the version
+    /// must be named exactly once, so a reorder cannot drop or duplicate a line.
+    /// </summary>
+    public void ReorderQuotationLines(IReadOnlyList<QuotationLine> order)
+    {
+        EnsureUnsealed();
+        if (order.Count != _quotationLines.Count || order.Distinct().Count() != order.Count
+            || order.Any(l => !_quotationLines.Contains(l)))
+            throw new ArgumentException("Name every quotation line on the version exactly once.", nameof(order));
+
+        for (var i = 0; i < order.Count; i++)
+            order[i].SortOrder = i + 1;
+    }
+
+    /// <summary>
+    /// What the customer quotation adds up to before VAT. US-10: this must equal the
+    /// costing's total excluding VAT before the quote is approved.
+    /// </summary>
+    public decimal QuotationSubtotalExVat() =>
+        Round(_quotationLines.Sum(l => l.AmountExVat));
+
     public void SetMarkupPercent(decimal markupPercent)
     {
         EnsureUnsealed();

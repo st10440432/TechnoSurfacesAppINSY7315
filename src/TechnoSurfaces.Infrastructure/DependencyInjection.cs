@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<IQuoteQueries>(sp => sp.GetRequiredService<QuoteQueries>());
         services.AddScoped<ILapsedQuotes>(sp => sp.GetRequiredService<QuoteQueries>());
         services.AddScoped<IQuoteWorkflowService, QuoteWorkflowService>();
+        services.AddScoped<IQuotationGenerationService, QuotationGenerationService>();
 
         // The Pastel invoice recorded against an accepted quote (US-25).
         services.AddScoped<IInvoiceRecords, InvoiceRecords>();

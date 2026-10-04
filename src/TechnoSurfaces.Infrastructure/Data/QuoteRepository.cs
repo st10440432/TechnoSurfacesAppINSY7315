@@ -13,8 +13,12 @@ public sealed class QuoteRepository : IQuoteRepository
 
     public Task<Quote?> GetAsync(int quoteId, CancellationToken ct = default) =>
         _db.Quotes
+            .Include(q => q.Customer)
+            .Include(q => q.Contact)
             .Include(q => q.Versions).ThenInclude(v => v.CostingLines)
             .Include(q => q.Versions).ThenInclude(v => v.QuotationLines)
+            .Include(q => q.Versions).ThenInclude(v => v.Terms)
+            .Include(q => q.Versions).ThenInclude(v => v.Warranties)
             .AsSplitQuery()
             .FirstOrDefaultAsync(q => q.Id == quoteId, ct);
 
@@ -24,6 +28,8 @@ public sealed class QuoteRepository : IQuoteRepository
     public void Add(Quote quote) => _db.Quotes.Add(quote);
 
     public void RemoveCostingLine(CostingLine line) => _db.CostingLines.Remove(line);
+
+    public void RemoveQuotationLine(QuotationLine line) => _db.QuotationLines.Remove(line);
 
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }
