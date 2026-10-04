@@ -10,4 +10,5 @@ public static class Policies
     public const string CanEditCatalogue = nameof(CanEditCatalogue);
     public const string CanManageUsers = nameof(CanManageUsers);
     public const string CanViewAuditTrail = nameof(CanViewAuditTrail);
+    public const string CanEditQuote = nameof(CanEditQuote);
 }

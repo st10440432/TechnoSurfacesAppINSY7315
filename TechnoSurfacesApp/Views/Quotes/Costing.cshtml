@@ -281,8 +281,11 @@
                 </p>
             </div>
         </div>
+        
+        @await Component.InvokeAsync("QuoteChanges", new { reference = q.Ref })
     </div>
 </div>
+
 
 @section Scripts {
     <script>

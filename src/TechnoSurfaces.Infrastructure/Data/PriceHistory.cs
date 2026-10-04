@@ -90,8 +90,8 @@ public sealed class PriceHistory : IPriceHistory
 
     private static RatePrice FirstRate(int rateItemId, int? supplierId, decimal amount, DateOnly from)
     {
-        if (amount < 0)
-            throw new ArgumentOutOfRangeException(nameof(amount), "A rate cannot be negative.");
+        if (amount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "A rate must be greater than zero.");
 
         return new RatePrice { RateItemId = rateItemId, SupplierId = supplierId, Amount = amount, EffectiveFrom = from };
     }

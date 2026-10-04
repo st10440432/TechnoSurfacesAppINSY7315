@@ -21,6 +21,15 @@ public class ProductLine
     /// <summary>Millimetres.</summary>
     public int ThicknessMm { get; set; }
 
+    /// <summary>
+    /// The brand the material is sold under, which decides the warranty printed on
+    /// the quotation (US-13). Optional: a product line whose brand has not been
+    /// confirmed by the client has none, and its quotation carries no warranty
+    /// wording rather than wording guessed from a similar brand.
+    /// </summary>
+    public int? BrandId { get; set; }
+    public Brand? Brand { get; set; }
+
     public CatalogueStatus Status { get; set; } = CatalogueStatus.Active;
 
     public ICollection<Colour> Colours { get; set; } = new List<Colour>();

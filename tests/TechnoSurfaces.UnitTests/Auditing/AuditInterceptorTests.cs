@@ -109,4 +109,19 @@ public sealed class AuditInterceptorTests : IAsyncLifetime
 
         Assert.Equal(count, await _db.AuditEntries.CountAsync());
     }
+
+    [Fact]
+    public async Task A_row_saved_with_its_parent_records_the_parents_real_key()
+    {
+        var item = new RateItem { Name = "Fabrication", Category = RateCategory.Fabrication, Unit = ChargeUnit.Hour };
+        var price = new RatePrice { RateItem = item, Amount = 450.00m, EffectiveFrom = new DateOnly(2026, 1, 1) };
+
+        _db.RatePrices.Add(price);   // the item is new too, so its id is temporary until the save
+        await _db.SaveChangesAsync();
+
+        var entry = await _db.AuditEntries.SingleAsync(a =>
+            a.EntityName == nameof(RatePrice) && a.PropertyName == nameof(RatePrice.RateItemId));
+
+        Assert.Equal(item.Id.ToString(), entry.NewValue);
+    }
 }

@@ -52,10 +52,8 @@ public sealed class CostingPersistenceTests : IAsyncLifetime
             var fabrication = await db.RateItems.FirstAsync(r => r.Name == "Fabrication — no backsplash, normal");
             var silicon = await db.RateItems.FirstAsync(r => r.Name == "Silicon + sealing");
 
-            var quote = new Quote("TS-PERSIST-1", customer.Id, contact.Id, "estimator", new DateOnly(2026, 10, 2))
-            {
-                CustomerReference = "SWEET VALLEY FARM"
-            };
+            var quote = new Quote("TS-PERSIST-1", customer.Id, contact.Id, "estimator", new DateOnly(2026, 10, 2));
+            quote.UpdateDetails(site: null, project: null, customerReference: "SWEET VALLEY FARM", deliveryAddress: null);
             var version = quote.StartNewVersion("estimator", markupPercent: 47m);
 
             var material = CostingLine.ForMaterial(price.Id, "Material", 4335.04m, "origin", 2m, 2.7968m);

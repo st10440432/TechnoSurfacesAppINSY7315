@@ -10,7 +10,6 @@ namespace TechnoSurfacesApp.Api;
 /// </summary>
 [ApiController]
 [Route("api/catalogue")]
-[Produces("application/json")]
 public sealed class CatalogueOptionsController : ControllerBase
 {
     private readonly ICatalogueBrowser _catalogue;

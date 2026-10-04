@@ -6,6 +6,8 @@ using TechnoSurfacesApp.Controllers;
 using TechnoSurfacesApp.Models;
 using static System.Collections.Specialized.BitVector32;
 using TechnoSurfacesApp.Identity;
+using Microsoft.AspNetCore.Authorization;
+using TechnoSurfaces.Application.Catalogue;
 
 namespace TechnoSurfacesApp.Controllers;
 
@@ -16,7 +18,10 @@ namespace TechnoSurfacesApp.Controllers;
 /// </summary>
 public class CatalogueController : AppController
 {
-    public CatalogueController(DemoSession session) : base(session) { }
+    private readonly ICatalogueService _catalogue;
+
+    public CatalogueController(DemoSession session, ICatalogueService catalogue) : base(session)
+        => _catalogue = catalogue;
 
     public async Task<IActionResult> Index(int? supplierId, int? productLineId,
         int? thickness, string? status, string? q)
@@ -100,6 +105,89 @@ public class CatalogueController : AppController
                 .OrderByDescending(a => a.When)
                 .ToList()
         });
+    }
+
+    // ======================================================================
+    //  Catalogue changes - Managing Director only (US-23, US-24, NFR-10).
+    //  The rules live in CatalogueService and IPriceHistory; these actions
+    //  only validate input, call the service and report the outcome.
+    // ======================================================================
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> SetMaterialPrice(SetMaterialPriceForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.SetMaterialPriceAsync(form.ColourId, form.PriceBandId, form.SheetSizeId,
+                    form.PricePerSqm!.Value, form.EffectiveFrom!.Value)
+                : CatalogueResult.Fail(FirstError()),
+            "Price saved. Existing quotes keep the price they were created with.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> SetRate(SetRateForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.SetRateAsync(form.RateItemId, form.SupplierId, form.Amount!.Value, form.EffectiveFrom!.Value)
+                : CatalogueResult.Fail(FirstError()),
+            "Rate saved. It applies to new quotes from its effective date.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> RetireColour(int colourId) =>
+        Outcome(await _catalogue.RetireColourAsync(colourId),
+            "Colour retired. It stays on existing quotes but cannot be chosen on new ones.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> RetireProductLine(int productLineId) =>
+        Outcome(await _catalogue.RetireProductLineAsync(productLineId),
+            "Product line retired. It stays on existing quotes but cannot be chosen on new ones.");
+
+    // Quotation terms and brand warranties (US-12, US-13): the same policy, since
+    // the MD maintains everything printed on a quotation.
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> AddTerm(AddTermForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.AddTermAsync(form.Section, form.Text!)
+                : CatalogueResult.Fail(FirstError()),
+            "Line added. New quotations print it; approved quotes keep the wording they were issued with.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> UpdateTerm(UpdateTermForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.UpdateTermAsync(form.TermId, form.Text!)
+                : CatalogueResult.Fail(FirstError()),
+            "Line saved. Approved quotes keep the wording they were issued with.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> RetireTerm(int termId) =>
+        Outcome(await _catalogue.RetireTermAsync(termId),
+            "Line retired. It no longer prints on new quotations.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> SetBrandWarranty(BrandWarrantyForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.SetBrandWarrantyAsync(form.BrandId, form.MaterialWarranty, form.WorkmanshipWarranty)
+                : CatalogueResult.Fail(FirstError()),
+            "Warranty saved.");
+
+    private string FirstError() =>
+        ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).FirstOrDefault()
+        ?? "Check the values entered.";
+
+    /// <summary>Shows the outcome on the page the change came from.</summary>
+    private IActionResult Outcome(CatalogueResult result, string success)
+    {
+        TempData[result.Succeeded ? "CatalogueMessage" : "CatalogueError"] =
+            result.Succeeded ? success : result.Error;
+
+        // A Referer header can be forged, so only a local page is accepted.
+        var back = Request.Headers.Referer.ToString();
+        return Url.IsLocalUrl(back) ? Redirect(back) : RedirectToAction(nameof(Index));
     }
 }
 

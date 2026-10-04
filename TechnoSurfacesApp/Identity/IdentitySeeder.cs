@@ -42,7 +42,11 @@ public static class IdentitySeeder
         }
 
         if (!includeDevelopmentAccounts)
+        {
+            await SeedInitialManagingDirectorAsync(userManager, domain, configuration, logger);
             return;
+        }
+
 
         var password = configuration["Seed:DevelopmentPassword"];
         if (string.IsNullOrWhiteSpace(password))
@@ -90,5 +94,64 @@ public static class IdentitySeeder
         }
 
         await domain.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Production has no development accounts, so nobody could sign in to create the
+    /// first one. On first start, if no Managing Director exists and the three
+    /// Seed:InitialAdmin* settings are present (Key Vault secrets
+    /// Seed--InitialAdminEmail, Seed--InitialAdminName, Seed--InitialAdminPassword),
+    /// the MD's account is created and must change its password at first sign-in -
+    /// so the Key Vault password is used exactly once. Once an MD exists this does
+    /// nothing, and the secrets can be removed.
+    /// </summary>
+    private static async Task SeedInitialManagingDirectorAsync(
+        UserManager<UserAccount> userManager, TechnoSurfacesDbContext domain,
+        IConfiguration configuration, ILogger logger)
+    {
+        if ((await userManager.GetUsersInRoleAsync(Roles.ManagingDirector)).Count > 0)
+            return;
+
+        var email = configuration["Seed:InitialAdminEmail"];
+        var name = configuration["Seed:InitialAdminName"];
+        var password = configuration["Seed:InitialAdminPassword"];
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogWarning(
+                "No Managing Director account exists and Seed:InitialAdmin* is not configured; nobody can sign in until it is.");
+            return;
+        }
+
+        var account = new UserAccount
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            MustChangePassword = true
+        };
+
+        var created = await userManager.CreateAsync(account, password);
+        if (!created.Succeeded)
+            throw new InvalidOperationException(
+                "Could not create the initial Managing Director account: " +
+                string.Join("; ", created.Errors.Select(e => e.Description)));
+
+        await userManager.AddToRoleAsync(account, Roles.ManagingDirector);
+
+        domain.Users.Add(new DomainUser
+        {
+            Id = account.Id,
+            UserName = email,
+            FullName = name,
+            Email = email,
+            Role = DomainRole.ManagingDirector,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+        await domain.SaveChangesAsync();
+
+        // No email or name in the log (POPIA).
+        logger.LogInformation("Initial Managing Director account created; its password must be changed at first sign-in.");
     }
 }

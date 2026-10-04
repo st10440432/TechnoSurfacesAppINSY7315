@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Costing;
 using TechnoSurfaces.Application.Quoting;
+using TechnoSurfacesApp.Identity;
 
 namespace TechnoSurfacesApp.Api;
 
@@ -13,17 +15,25 @@ namespace TechnoSurfacesApp.Api;
 /// no line is created (NFR-01, US-03). Write calls need the antiforgery token in a
 /// RequestVerificationToken header.
 ///
-/// The rule that an estimator edits only their own draft belongs to the
-/// authorisation handler and is applied here once that handler is on develop.
+/// Every write is checked against the CanEditQuote policy first: the Managing
+/// Director may change any quote, an estimator only their own draft. Reading is
+/// open to every signed-in user, because estimators see all pricing by client
+/// decision.
 /// </summary>
 [ApiController]
 [Route("api/quotes/{quoteId:int}")]
-[Produces("application/json")]
 public sealed class QuoteCostingController : ControllerBase
 {
     private readonly ICostingSheetService _costing;
+    private readonly IQuoteRepository _quotes;
+    private readonly IAuthorizationService _authorization;
 
-    public QuoteCostingController(ICostingSheetService costing) => _costing = costing;
+    public QuoteCostingController(ICostingSheetService costing, IQuoteRepository quotes, IAuthorizationService authorization)
+    {
+        _costing = costing;
+        _quotes = quotes;
+        _authorization = authorization;
+    }
 
     /// <summary>GET /api/quotes/{quoteId}/costing: the current version, its lines and totals.</summary>
     [HttpGet("costing")]
@@ -42,9 +52,13 @@ public sealed class QuoteCostingController : ControllerBase
     [ProducesResponseType<QuoteTotals>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ChangeCosting(int quoteId, ChangeCostingRequest request, CancellationToken ct)
     {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
         var result = await _costing.ChangeCostingAsync(quoteId,
             new ChangeCosting(request.MarkupPercent, request.TransportAmount), ct);
         return result.Outcome == CostingOutcome.Ok ? Ok(result.Totals) : Failure(result, quoteId);
@@ -77,10 +91,14 @@ public sealed class QuoteCostingController : ControllerBase
     [ProducesResponseType<LineResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> AddLine(int quoteId, AddLineRequest request, CancellationToken ct)
     {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
         var result = request.Type == AddLineRequest.Material
             ? await _costing.AddMaterialLineAsync(quoteId,
                 new AddMaterialLine(request.ColourId!.Value, request.SheetSizeId!.Value, request.Quantity, request.SupplierDiscountPercent), ct)
@@ -99,10 +117,14 @@ public sealed class QuoteCostingController : ControllerBase
     [ProducesResponseType<LineResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> ChangeLine(int quoteId, int lineId, ChangeLineRequest request, CancellationToken ct)
     {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
         var result = await _costing.ChangeLineAsync(quoteId, lineId, new ChangeLine(
             request.Quantity, request.UnitPrice, request.ClearPriceOverride,
             request.SupplierDiscountPercent, request.RestoreDerivedQuantity), ct);
@@ -116,11 +138,34 @@ public sealed class QuoteCostingController : ControllerBase
     [HttpDelete("lines/{lineId:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RemoveLine(int quoteId, int lineId, CancellationToken ct)
     {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
         var result = await _costing.RemoveLineAsync(quoteId, lineId, ct);
         return result.Outcome == CostingOutcome.Ok ? NoContent() : Failure(result, quoteId);
+    }
+
+    /// <summary>
+    /// The resource-based CanEditQuote check, which needs the quote itself. Returns
+    /// the response to send when the quote is missing or the user may not change
+    /// it, and null when the write may go ahead.
+    /// </summary>
+    private async Task<IActionResult?> RefuseUnlessEditableAsync(int quoteId, CancellationToken ct)
+    {
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        if (quote is null)
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Quote not found",
+                detail: $"There is no quote {quoteId}.");
+
+        var allowed = await _authorization.AuthorizeAsync(User, quote, Policies.CanEditQuote);
+        return allowed.Succeeded
+            ? null
+            : Problem(statusCode: StatusCodes.Status403Forbidden, title: "You cannot change this quote",
+                detail: "The Managing Director can change any quote. An estimator can change only their own quote while it is a draft.");
     }
 
     private IActionResult Failure(CostingResult result, int quoteId) => result.Outcome switch

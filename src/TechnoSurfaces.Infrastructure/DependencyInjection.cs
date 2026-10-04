@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.AddDbContext<TechnoSurfacesDbContext>(o => o.UseSqlServer(connectionString));
 
         services.AddScoped<ICatalogueReader, CatalogueReader>();
+        services.AddScoped<IQuotationTermsReader, QuotationTermsReader>();
+        services.AddScoped<IQuoteTermsRecorder, QuoteTermsRecorder>();
 
         // Both strategies are registered, and PriceResolver picks the one matching
         // the supplier's pricing scheme. A sixth supplier on a new scheme means

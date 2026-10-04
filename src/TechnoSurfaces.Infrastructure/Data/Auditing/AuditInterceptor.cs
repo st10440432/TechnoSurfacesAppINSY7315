@@ -7,6 +7,7 @@ using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Domain.Auditing;
 using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfaces.Domain.Quoting;
+using TechnoSurfaces.Domain.People;
 
 namespace TechnoSurfaces.Infrastructure.Data.Auditing;
 
@@ -25,7 +26,17 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
 
     private static readonly HashSet<Type> AuditedTypes = new()
     {
-        typeof(MaterialPrice), typeof(RatePrice), typeof(Quote), typeof(QuoteVersion), typeof(CostingLine)
+        typeof(MaterialPrice), typeof(RatePrice), typeof(Quote), typeof(QuoteVersion), typeof(CostingLine),
+
+        // US-23/24: retiring a colour or a product line is a catalogue change too.
+        typeof(Colour), typeof(ProductLine),
+
+        // US-26: creating, deactivating and reactivating an account.
+        typeof(AppUser),
+
+        // US-12/13: the standing wording and bank details printed on every
+        // quotation, and the warranty printed for each brand.
+        typeof(QuotationTerm), typeof(Brand)
     };
 
     private readonly ICurrentUser _currentUser;
@@ -126,27 +137,31 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
         {
             if (!AuditedTypes.Contains(entry.Metadata.ClrType)) continue;
 
-            IEnumerable<PropertyChange> changes = entry.State switch
-            {
-                EntityState.Added => entry.Properties
-                    .Where(p => !p.Metadata.IsPrimaryKey() && p.CurrentValue is not null)
-                    .Select(p => new PropertyChange(p.Metadata.Name, null, Format(p.CurrentValue))),
+            var entityName = entry.Metadata.ClrType.Name;
 
+            // A new row's key, and the foreign key of a row added together with its
+            // parent, hold temporary values until the save. Both are read after it.
+            if (entry.State == EntityState.Added)
+            {
+                pending.Add(new PendingChange(entry, entityName, KeyBeforeSave: null, Properties: null));
+                continue;
+            }
+
+            var changes = entry.State switch
+            {
                 EntityState.Modified => entry.Properties
                     .Where(p => p.IsModified && !Equals(p.OriginalValue, p.CurrentValue))
-                    .Select(p => new PropertyChange(p.Metadata.Name, Format(p.OriginalValue), Format(p.CurrentValue))),
+                    .Select(p => new PropertyChange(p.Metadata.Name, Format(p.OriginalValue), Format(p.CurrentValue)))
+                    .ToList(),
 
-                EntityState.Deleted => new[] { new PropertyChange("(deleted)", null, null) },
+                EntityState.Deleted => new List<PropertyChange> { new("(deleted)", null, null) },
 
-                _ => Enumerable.Empty<PropertyChange>()
+                _ => new List<PropertyChange>()
             };
 
-            var list = changes.ToList();
-            if (list.Count == 0) continue;
+            if (changes.Count == 0) continue;
 
-            // A new row's key is only known after the save, so it is read then.
-            var keyBeforeSave = entry.State == EntityState.Added ? null : KeyOf(entry);
-            pending.Add(new PendingChange(entry, entry.Metadata.ClrType.Name, keyBeforeSave, list));
+            pending.Add(new PendingChange(entry, entityName, KeyOf(entry), changes));
         }
 
         _pending = pending.Count > 0 ? pending : null;
@@ -160,10 +175,19 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
         foreach (var change in pending)
         {
             var key = change.KeyBeforeSave ?? KeyOf(change.Entry);
-            foreach (var p in change.Properties)
+            var properties = change.Properties ?? ValuesOfNewRow(change.Entry);
+
+            foreach (var p in properties)
                 yield return new AuditEntry(change.EntityName, key, p.Name, p.OldValue, p.NewValue, userId);
         }
     }
+
+    /// <summary>Read after the save, so keys and foreign keys are the real ones.</summary>
+    private static List<PropertyChange> ValuesOfNewRow(EntityEntry entry) =>
+        entry.Properties
+            .Where(p => !p.Metadata.IsPrimaryKey() && p.CurrentValue is not null)
+            .Select(p => new PropertyChange(p.Metadata.Name, null, Format(p.CurrentValue)))
+            .ToList();
 
     private void Reset()
     {
@@ -196,5 +220,5 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
     private sealed record PropertyChange(string Name, string? OldValue, string? NewValue);
 
     private sealed record PendingChange(
-        EntityEntry Entry, string EntityName, string? KeyBeforeSave, List<PropertyChange> Properties);
+    EntityEntry Entry, string EntityName, string? KeyBeforeSave, List<PropertyChange>? Properties);
 }
