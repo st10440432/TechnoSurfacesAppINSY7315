@@ -41,6 +41,25 @@ public class QuotationLine
 
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// Rewrites the line. Made through QuoteVersion, which refuses it once the
+    /// version is sealed; internal so nothing outside the domain can skip that check.
+    /// </summary>
+    internal void Change(string description, decimal amountExVat, string? room, decimal quantity)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+            throw new ArgumentException("A quotation line needs a description.", nameof(description));
+        if (amountExVat < 0)
+            throw new ArgumentOutOfRangeException(nameof(amountExVat), "An amount cannot be negative.");
+        if (quantity < 0)
+            throw new ArgumentOutOfRangeException(nameof(quantity), "A quantity cannot be negative.");
+
+        Description = description;
+        AmountExVat = amountExVat;
+        Room = room;
+        Quantity = quantity;
+    }
+
     /// <summary>A copy of this line for a new version of the quote.</summary>
     internal QuotationLine CopyForRevision() =>
         new(Description, AmountExVat, Room, Quantity) { SortOrder = SortOrder };
