@@ -48,13 +48,29 @@ public class QuoteCalculationTests
     {
         // The single most important test in the suite. The spreadsheet returns a
         // plausible figure when a lookup fails; this system must refuse instead.
+        // The line carries a plausible figure on purpose: a line marked unresolved
+        // blocks the calculation whatever number it holds.
         var version = NewVersion();
         version.AddCostingLine(CostingLine.ForRate(
-            rateItemId: 1, description: "Fabrication", resolvedUnitPrice: 0m,
-            priceOrigin: "unresolved", quantity: 10m, isBelowTheLine: false));
+            rateItemId: 1, description: "Fabrication", resolvedUnitPrice: 265m,
+            priceOrigin: PriceResolution.UnresolvedOrigin, quantity: 10m, isBelowTheLine: false));
 
         var ex = Assert.Throws<PriceNotResolvedException>(() => _calculator.Calculate(version));
         Assert.Contains("Fabrication", ex.Message);
+    }
+
+    [Fact]
+    public void A_line_cannot_be_priced_at_zero()
+    {
+        // The other half of NFR-01: a price of zero is refused before a line
+        // exists, so it can never reach the totals.
+        Assert.Throws<ArgumentOutOfRangeException>(() => CostingLine.ForRate(
+            rateItemId: 1, description: "Fabrication", resolvedUnitPrice: 0m,
+            priceOrigin: "Rate card: Fabrication", quantity: 10m, isBelowTheLine: false));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => CostingLine.ForMaterial(
+            materialPriceId: 1, description: "Staron Bright White", resolvedUnitPrice: 0m,
+            priceOrigin: "Staron price band Bright White", quantity: 1m, sheetAreaM2: 2.7968m));
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 on:
   pull_request:
     branches: [develop, main]
@@ -6,7 +6,22 @@ permissions:
   contents: read
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    services:
+      # SQL Server for the integration tests. Throwaway: it exists for this job
+      # only and is reachable only from it.
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: CiOnly-Password-2026
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P CiOnly-Password-2026 -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -22,6 +37,8 @@ jobs:
           --logger trx --collect:"XPlat Code Coverage" --results-directory results/unit
       - name: Integration tests
         if: hashFiles('tests/TechnoSurfaces.IntegrationTests/*.csproj') != ''
+        env:
+          TECHNOSURFACES_TEST_SQL: Server=localhost,1433;User ID=sa;Password=CiOnly-Password-2026;TrustServerCertificate=True
         run: >
           dotnet test tests/TechnoSurfaces.IntegrationTests -c Release --no-build
           --logger trx --collect:"XPlat Code Coverage" --results-directory results/integration

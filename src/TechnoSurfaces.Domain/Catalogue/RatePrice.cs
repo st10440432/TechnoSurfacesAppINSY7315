@@ -37,8 +37,8 @@ public class RatePrice
     public RatePrice Supersede(decimal amount, DateOnly from)
     {
         PricePeriod.EnsureCanSupersede(EffectiveFrom, EffectiveTo, from);
-        if (amount < 0)
-            throw new ArgumentOutOfRangeException(nameof(amount), "A rate cannot be negative.");
+        if (amount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "A rate must be greater than zero.");
 
         EffectiveTo = from.AddDays(-1);
 

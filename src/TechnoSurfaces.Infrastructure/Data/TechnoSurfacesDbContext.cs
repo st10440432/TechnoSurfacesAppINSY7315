@@ -23,6 +23,7 @@ public class TechnoSurfacesDbContext : DbContext
     public DbSet<ProductLine> ProductLines => Set<ProductLine>();
     public DbSet<SheetSize> SheetSizes => Set<SheetSize>();
     public DbSet<PriceBand> PriceBands => Set<PriceBand>();
+    public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Colour> Colours => Set<Colour>();
     public DbSet<MaterialPrice> MaterialPrices => Set<MaterialPrice>();
     public DbSet<RateItem> RateItems => Set<RateItem>();
@@ -37,6 +38,9 @@ public class TechnoSurfacesDbContext : DbContext
     public DbSet<CostingLine> CostingLines => Set<CostingLine>();
     public DbSet<QuotationLine> QuotationLines => Set<QuotationLine>();
     public DbSet<InvoiceRecord> InvoiceRecords => Set<InvoiceRecord>();
+    public DbSet<QuotationTerm> QuotationTerms => Set<QuotationTerm>();
+    public DbSet<QuoteVersionTerm> QuoteVersionTerms => Set<QuoteVersionTerm>();
+    public DbSet<QuoteVersionWarranty> QuoteVersionWarranties => Set<QuoteVersionWarranty>();
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 

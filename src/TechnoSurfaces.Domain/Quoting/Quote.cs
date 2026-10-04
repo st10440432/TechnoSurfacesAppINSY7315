@@ -44,16 +44,20 @@ public class Quote
     public int ContactId { get; private set; }
     public Contact? Contact { get; private set; }
 
-    public string? Site { get; set; }
-    public string? Project { get; set; }
+    // The job details below are printed on the customer quotation (US-14). They
+    // change only through UpdateDetails, which refuses once the quote has been
+    // approved, so an issued quotation cannot be altered after the fact (US-21).
+
+    public string? Site { get; private set; }
+    public string? Project { get; private set; }
 
     /// <summary>
     /// The customer's own reference for the job, printed as "Your ref" on the
     /// quotation and carried to the Pastel invoice.
     /// </summary>
-    public string? CustomerReference { get; set; }
+    public string? CustomerReference { get; private set; }
 
-    public string? DeliveryAddress { get; set; }
+    public string? DeliveryAddress { get; private set; }
 
     public DateOnly IssueDate { get; private set; }
     public DateOnly ValidUntil { get; private set; }
@@ -67,6 +71,25 @@ public class Quote
     public DateTime? ApprovedAtUtc { get; private set; }
 
     public IReadOnlyCollection<QuoteVersion> Versions => _versions.AsReadOnly();
+
+    /// <summary>
+    /// Sets the job details printed on the quotation. Allowed while the quote is a
+    /// draft, and while it is pending approval so the Managing Director can correct
+    /// it before approving (US-18). Refused once it is approved: what the customer
+    /// was sent stays as it was, and a change needs the quote reopened as a new
+    /// version.
+    /// </summary>
+    public void UpdateDetails(string? site, string? project, string? customerReference, string? deliveryAddress)
+    {
+        if (Status is not (QuoteStatus.Draft or QuoteStatus.PendingApproval))
+            throw new InvalidOperationException(
+                $"A quote that is {Status} cannot be changed. Reopen it to make a revision.");
+
+        Site = site;
+        Project = project;
+        CustomerReference = customerReference;
+        DeliveryAddress = deliveryAddress;
+    }
 
     /// <summary>The version currently being worked on or last issued.</summary>
     public QuoteVersion? CurrentVersion => _versions.OrderByDescending(v => v.VersionNo).FirstOrDefault();

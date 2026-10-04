@@ -26,8 +26,12 @@ public class CostingLine
         bool isBelowTheLine,
         DerivationRule derivation)
     {
-        if (resolvedUnitPrice < 0)
-            throw new ArgumentOutOfRangeException(nameof(resolvedUnitPrice), "A unit price cannot be negative.");
+        // NFR-01: no line is ever priced at zero. A price that did not resolve
+        // never reaches this point, and a resolved price of zero is refused here
+        // for the same reason: it is the plausible wrong figure the spreadsheet
+        // produced.
+        if (resolvedUnitPrice <= 0)
+            throw new ArgumentOutOfRangeException(nameof(resolvedUnitPrice), "A line cannot be priced at zero or less.");
         GuardQuantity(quantity);
         GuardDiscount(supplierDiscountPercent);
         if (string.IsNullOrWhiteSpace(priceOrigin))
@@ -238,8 +242,10 @@ public class CostingLine
 
     internal void OverrideUnitPrice(decimal unitPrice)
     {
-        if (unitPrice < 0)
-            throw new ArgumentOutOfRangeException(nameof(unitPrice), "A unit price cannot be negative.");
+        // A rate typed on the quote is held to the same rule as a catalogue price
+        // (team decision, 3 October 2026): an override of zero is refused.
+        if (unitPrice <= 0)
+            throw new ArgumentOutOfRangeException(nameof(unitPrice), "A rate typed on the quote must be greater than zero.");
         OverriddenUnitPrice = unitPrice == ResolvedUnitPrice ? null : unitPrice;
     }
 

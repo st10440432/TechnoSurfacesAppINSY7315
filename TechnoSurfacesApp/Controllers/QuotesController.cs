@@ -235,11 +235,7 @@ public class QuotesController : AppController
         {
             Quote = quote,
             IsMd = await CanAsync(Policies.CanApproveQuote),
-            Checks = BuildChecks(quote),
-            Activity = Db.Audit
-                .Where(a => a.EntityRef == quote.Ref)
-                .OrderByDescending(a => a.When)
-                .ToList()
+            Checks = BuildChecks(quote)
         });
     }
 
@@ -474,7 +470,6 @@ public class ReviewVm
     public Quote Quote { get; set; } = null!;
     public bool IsMd { get; set; }
     public List<ReviewCheck> Checks { get; set; } = new();
-    public List<AuditEntry> Activity { get; set; } = new();
 }
 
 public class VersionsVm

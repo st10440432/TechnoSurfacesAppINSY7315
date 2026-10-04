@@ -228,4 +228,21 @@ public class CostingOverrideTests
         Assert.Throws<ArgumentOutOfRangeException>(() => version.OverrideUnitPrice(line, -1m));
         Assert.Throws<ArgumentOutOfRangeException>(() => version.ChangeQuantity(line, -1m));
     }
+
+    [Fact]
+    public void An_override_of_zero_is_refused_and_the_line_keeps_its_rate()
+    {
+        var version = NewVersion();
+        var labour = Fabrication(hours: 1m);
+        var material = Sheets(quantity: 1m);
+        version.AddCostingLine(labour);
+        version.AddCostingLine(material);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => version.OverrideUnitPrice(labour, 0m));
+        Assert.Throws<ArgumentOutOfRangeException>(() => version.OverrideUnitPrice(material, 0m));
+
+        Assert.False(labour.HasPriceOverride);
+        Assert.Equal(labour.ResolvedUnitPrice, labour.UnitPrice);
+        Assert.False(material.HasPriceOverride);
+    }
 }

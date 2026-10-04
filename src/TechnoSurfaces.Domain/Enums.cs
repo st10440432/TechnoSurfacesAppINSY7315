@@ -94,3 +94,25 @@ public enum PricingStructure
     Band,
     Item
 }
+
+/// <summary>
+/// The sections of standing wording printed on every customer quotation, in the
+/// order the client's quotation template prints them. Added last so the stored
+/// values of the existing enumerations are unaffected.
+/// </summary>
+public enum TermSection
+{
+    Notes,
+    LeadTimes,
+    Exclusions,
+    TermsAndConditions,
+    Disclaimers,
+    Warranties,
+    PaymentTerms,
+
+    /// <summary>
+    /// Not seeded: the repository is public and the client's banking details fall
+    /// under the non-disclosure agreement. Entered by the Managing Director.
+    /// </summary>
+    BankDetails
+}

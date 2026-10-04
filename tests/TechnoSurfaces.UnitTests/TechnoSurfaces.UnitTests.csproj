@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\TechnoSurfaces.Domain\TechnoSurfaces.Domain.csproj" />
     <ProjectReference Include="..\..\src\TechnoSurfaces.Application\TechnoSurfaces.Application.csproj" />
     <ProjectReference Include="..\..\src\TechnoSurfaces.Infrastructure\TechnoSurfaces.Infrastructure.csproj" />
+	<ProjectReference Include="..\..\TechnoSurfacesApp\TechnoSurfacesApp.csproj" />
   </ItemGroup>
 
 </Project>

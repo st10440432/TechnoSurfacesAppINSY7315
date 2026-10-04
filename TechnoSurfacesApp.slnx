@@ -6,6 +6,7 @@
     <Project Path="TechnoSurfacesApp/TechnoSurfacesApp.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TechnoSurfaces.IntegrationTests/TechnoSurfaces.IntegrationTests.csproj" />
     <Project Path="tests/TechnoSurfaces.UnitTests/TechnoSurfaces.UnitTests.csproj" />
   </Folder>
 </Solution>

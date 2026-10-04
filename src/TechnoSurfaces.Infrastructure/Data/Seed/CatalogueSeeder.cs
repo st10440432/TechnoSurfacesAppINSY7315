@@ -20,8 +20,17 @@ namespace TechnoSurfaces.Infrastructure.Data.Seed;
 /// </summary>
 public static class CatalogueSeeder
 {
+    /// <summary>
+    /// The prefix of the Staron codes an earlier version of this seeder made up. The
+    /// Staron list carries no product codes, so those codes matched nothing a
+    /// supplier would recognise on an order.
+    /// </summary>
+    private const string InventedStaronCodePrefix = "STARON-";
+
     public static async Task SeedAsync(TechnoSurfacesDbContext db, CancellationToken ct = default)
     {
+        await ClearInventedStaronCodesAsync(db, ct);
+
         if (await db.Suppliers.AnyAsync(ct)) return;
 
         await SeedSurfaceStudioAsync(db, ct);
@@ -29,6 +38,27 @@ public static class CatalogueSeeder
         await SeedMaxOnTopAsync(db, ct);
         await SeedWoodcentreAsync(db, ct);
         await SeedPeragoAsync(db, ct);
+    }
+
+    /// <summary>
+    /// A database seeded before this change holds the made-up Staron codes. They are
+    /// cleared on start-up, through EF Core so the audit trail records the change.
+    /// Only Staron colours whose code still has the made-up form are touched; a code
+    /// the Managing Director has since entered is left alone.
+    /// </summary>
+    private static async Task ClearInventedStaronCodesAsync(TechnoSurfacesDbContext db, CancellationToken ct)
+    {
+        var invented = await db.Colours
+            .Where(c => c.ProductLine!.Supplier!.Name == "Staron (Salvocorp)"
+                     && c.SupplierCode.StartsWith(InventedStaronCodePrefix))
+            .ToListAsync(ct);
+
+        if (invented.Count == 0) return;
+
+        foreach (var colour in invented)
+            colour.SupplierCode = "";
+
+        await db.SaveChangesAsync(ct);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -220,13 +250,13 @@ public static class CatalogueSeeder
 
             // Staron's many colour names map into these categories. One
             // representative colour per category is seeded; the Managing Director
-            // adds the rest through the catalogue screen.
+            // adds the rest through the catalogue screen. The Staron list gives no
+            // product codes, so none is recorded rather than one being made up.
             db.Colours.Add(new Colour
             {
                 ProductLineId = staron12.Id,
                 PriceBandId = band.Id,
-                Name = name,
-                SupplierCode = $"STARON-{name.ToUpperInvariant().Replace(" ", "-")}"
+                Name = name
             });
         }
 
@@ -234,7 +264,7 @@ public static class CatalogueSeeder
         db.PriceBands.Add(bw6);
         await db.SaveChangesAsync(ct);
         AddBandPrice(db, bw6, size6, 1485.00m, dated);
-        db.Colours.Add(new Colour { ProductLineId = staron6.Id, PriceBandId = bw6.Id, Name = "Bright White", SupplierCode = "STARON-BRIGHT-WHITE-6" });
+        db.Colours.Add(new Colour { ProductLineId = staron6.Id, PriceBandId = bw6.Id, Name = "Bright White" });
 
         await db.SaveChangesAsync(ct);
     }

@@ -1,0 +1,26 @@
+﻿@model ErrorViewModel
+@{
+    ViewData["Title"] = "Something went wrong";
+    Layout = "_AuthLayout";
+}
+
+<h1>Something went wrong</h1>
+
+<div class="notice notice-info" role="alert">
+    <svg class="ico"><use href="#i-alert" /></svg>
+    <div>
+        <strong>The page could not be shown.</strong>
+        Nothing you entered has been lost if it was saved before this page appeared.
+        Try again, and if it happens again, tell the Managing Director and quote the
+        reference below.
+    </div>
+</div>
+
+@if (Model.ShowRequestId)
+{
+    <p style="margin-top:18px">Reference: <code>@Model.RequestId</code></p>
+}
+
+<p style="margin-top:18px">
+    <a class="btn btn-secondary" href="/">Back to the start</a>
+</p>

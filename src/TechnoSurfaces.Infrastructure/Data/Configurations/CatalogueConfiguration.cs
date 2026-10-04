@@ -30,7 +30,32 @@ public sealed class ProductLineConfiguration : IEntityTypeConfiguration<ProductL
             // would prevent historic quotes from resolving.
             .OnDelete(DeleteBehavior.NoAction);
 
+        e.HasOne(x => x.Brand)
+            .WithMany(b => b.ProductLines)
+            .HasForeignKey(x => x.BrandId)
+            .OnDelete(DeleteBehavior.NoAction);
+
         e.HasIndex(x => new { x.SupplierId, x.Name, x.ThicknessMm }).IsUnique();
+    }
+}
+
+public sealed class BrandConfiguration : IEntityTypeConfiguration<Brand>
+{
+    public void Configure(EntityTypeBuilder<Brand> e)
+    {
+        e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+        e.Property(x => x.MaterialWarranty).HasMaxLength(60);
+        e.Property(x => x.WorkmanshipWarranty).HasMaxLength(60);
+        e.Ignore(x => x.HasConfirmedWarranty);
+
+        e.HasIndex(x => x.Name).IsUnique();
+
+        // A warranty is confirmed as a pair or not at all. Half a warranty would
+        // print on a quotation as if it were the whole of it.
+        e.ToTable(t => t.HasCheckConstraint(
+            "CK_Brand_WarrantyComplete",
+            "([MaterialWarranty] IS NULL AND [WorkmanshipWarranty] IS NULL) OR " +
+            "([MaterialWarranty] IS NOT NULL AND [WorkmanshipWarranty] IS NOT NULL)"));
     }
 }
 
@@ -201,7 +226,9 @@ public sealed class RatePriceConfiguration : IEntityTypeConfiguration<RatePrice>
 
         e.ToTable(t =>
         {
-            t.HasCheckConstraint("CK_RatePrice_NotNegative", "[Amount] >= 0");
+            // A rate of zero would price a line at zero. An item with no rate has
+            // no RatePrice row and reports as unresolved instead.
+            t.HasCheckConstraint("CK_RatePrice_Positive", "[Amount] > 0");
             t.HasCheckConstraint("CK_RatePrice_Period", "[EffectiveTo] IS NULL OR [EffectiveTo] >= [EffectiveFrom]");
             t.HasTrigger(PriceTriggers.RatePriceNoOverlap);
         });

@@ -103,6 +103,27 @@ public sealed class PriceHistoryTests : IAsyncLifetime
         Assert.Throws<ArgumentOutOfRangeException>(() => current.Supersede(0m, new DateOnly(2026, 2, 1), "md"));
     }
 
+    [Fact]
+    public void A_rate_of_zero_is_refused()
+    {
+        var current = new RatePrice { RateItemId = 1, Amount = 265m, EffectiveFrom = new DateOnly(2026, 1, 1) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => current.Supersede(0m, new DateOnly(2026, 2, 1)));
+    }
+
+    [Fact]
+    public async Task A_first_rate_of_zero_is_refused_and_the_item_stays_unresolved()
+    {
+        // A rate the client has not supplied stays unresolved. Setting it to zero
+        // would turn a visible gap back into a plausible figure.
+        var sink = await RateIdAsync("Sink / vanity");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            _history.SetRateAsync(sink, null, 0m, new DateOnly(2026, 10, 2)));
+
+        Assert.False((await _rates.ResolveAsync(sink, null, new DateOnly(2026, 10, 2))).Resolved);
+    }
+
     // ------------------------------------------------------------ the service
 
     [Fact]

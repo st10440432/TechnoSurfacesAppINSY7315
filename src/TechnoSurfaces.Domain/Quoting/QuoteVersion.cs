@@ -17,6 +17,8 @@ public class QuoteVersion
 {
     private readonly List<CostingLine> _costingLines = new();
     private readonly List<QuotationLine> _quotationLines = new();
+    private readonly List<QuoteVersionTerm> _terms = new();
+    private readonly List<QuoteVersionWarranty> _warranties = new();
 
     private QuoteVersion() { }
 
@@ -64,6 +66,18 @@ public class QuoteVersion
 
     public IReadOnlyCollection<CostingLine> CostingLines => _costingLines.AsReadOnly();
     public IReadOnlyCollection<QuotationLine> QuotationLines => _quotationLines.AsReadOnly();
+
+    /// <summary>
+    /// The standing wording this version was approved with. Empty until the
+    /// version is approved; a version still being worked on prints the current
+    /// wording instead.
+    /// </summary>
+    public IReadOnlyCollection<QuoteVersionTerm> Terms => _terms.AsReadOnly();
+
+    /// <summary>The brand warranties this version was approved with.</summary>
+    public IReadOnlyCollection<QuoteVersionWarranty> Warranties => _warranties.AsReadOnly();
+
+    public bool HasRecordedTerms => _terms.Count > 0;
 
     public void AddCostingLine(CostingLine line)
     {
@@ -163,6 +177,27 @@ public class QuoteVersion
             revision._quotationLines.Add(line.CopyForRevision());
 
         return revision;
+    }
+
+    /// <summary>
+    /// Records the standing wording and brand warranties this version is approved
+    /// with. Called once, immediately before the version is approved and sealed, so
+    /// the quotation it was issued with can always be reproduced exactly. Refused
+    /// on a sealed version, and refused a second time, because a recorded term is
+    /// part of the issued record.
+    /// </summary>
+    public void RecordTerms(IEnumerable<QuoteVersionTerm> terms, IEnumerable<QuoteVersionWarranty> warranties)
+    {
+        EnsureUnsealed();
+        if (HasRecordedTerms)
+            throw new InvalidOperationException($"The terms for version {VersionNo} have already been recorded.");
+
+        var recorded = terms.ToList();
+        if (recorded.Count == 0)
+            throw new ArgumentException("A version cannot be issued with no standing terms.", nameof(terms));
+
+        _terms.AddRange(recorded);
+        _warranties.AddRange(warranties);
     }
 
     private void EnsureUnsealed()

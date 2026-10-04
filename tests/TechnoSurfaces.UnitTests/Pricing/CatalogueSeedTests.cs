@@ -160,6 +160,46 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task No_staron_colour_carries_a_made_up_supplier_code()
+    {
+        // The Staron list gives no product codes. A code that matches nothing on the
+        // supplier's list would be worse than none on an order.
+        var staron = await _db.Colours.AsNoTracking()
+            .Where(c => c.ProductLine!.Supplier!.Name == "Staron (Salvocorp)")
+            .ToListAsync();
+
+        Assert.Equal(12, staron.Count);
+        Assert.All(staron, c => Assert.Equal("", c.SupplierCode));
+    }
+
+    [Fact]
+    public async Task A_database_seeded_with_made_up_staron_codes_has_them_cleared()
+    {
+        // A database seeded before the fix holds codes such as STARON-SUPREME.
+        var supreme = await _db.Colours.FirstAsync(c => c.Name == "Supreme");
+        supreme.SupplierCode = "STARON-SUPREME";
+        var surfaceStudio = await _db.Colours.FirstAsync(c => c.SupplierCode == "SS-A-INF-003");
+        await _db.SaveChangesAsync();
+
+        await CatalogueSeeder.SeedAsync(_db);
+
+        Assert.Equal("", (await _db.Colours.AsNoTracking().FirstAsync(c => c.Id == supreme.Id)).SupplierCode);
+        Assert.Equal("SS-A-INF-003", (await _db.Colours.AsNoTracking().FirstAsync(c => c.Id == surfaceStudio.Id)).SupplierCode);
+    }
+
+    [Fact]
+    public async Task A_code_entered_for_a_staron_colour_is_left_alone()
+    {
+        var supreme = await _db.Colours.FirstAsync(c => c.Name == "Supreme");
+        supreme.SupplierCode = "SU-123";
+        await _db.SaveChangesAsync();
+
+        await CatalogueSeeder.SeedAsync(_db);
+
+        Assert.Equal("SU-123", (await _db.Colours.AsNoTracking().FirstAsync(c => c.Id == supreme.Id)).SupplierCode);
+    }
+
+    [Fact]
     public async Task A_max_on_top_item_price_matches_the_published_sheet_price()
     {
         var colour = await _db.Colours

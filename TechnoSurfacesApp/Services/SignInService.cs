@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using TechnoSurfaces.Infrastructure.Data;
 using TechnoSurfacesApp.Identity;
+using System.Security.Claims;
 
 namespace TechnoSurfacesApp.Services;
 
@@ -69,4 +70,31 @@ public sealed class SignInService : ISignInService
     }
 
     public Task SignOutAsync() => _signInManager.SignOutAsync();
+
+    public async Task<IReadOnlyList<string>> ChangePasswordAsync(
+    ClaimsPrincipal principal, string currentPassword, string newPassword)
+    {
+        var account = await _userManager.GetUserAsync(principal);
+        if (account is null)
+            return new[] { "Your session has expired. Sign in again." };
+
+        if (newPassword == currentPassword)
+            return new[] { "Choose a password that is different from the temporary one." };
+
+        // Checks the current password and the policy; updates the security stamp,
+        // which invalidates every other session for this account.
+        var changed = await _userManager.ChangePasswordAsync(account, currentPassword, newPassword);
+        if (!changed.Succeeded)
+            return changed.Errors.Select(e => e.Description).ToList();
+
+        account.MustChangePassword = false;
+        await _userManager.UpdateAsync(account);
+
+        // Reissue this session without the must-change claim.
+        await _signInManager.RefreshSignInAsync(account);
+
+        _logger.LogInformation("Password changed by its owner.");
+        return Array.Empty<string>();
+    }
+
 }
