@@ -9,7 +9,10 @@ namespace TechnoSurfaces.Application.Quoting;
 /// </summary>
 public interface IQuoteRepository
 {
-    /// <summary>A quote with every version and every line, tracked for changes.</summary>
+    /// <summary>
+    /// A quote with its customer and contact, and every version with its lines and
+    /// recorded terms, tracked for changes.
+    /// </summary>
     Task<Quote?> GetAsync(int quoteId, CancellationToken ct = default);
 
     Task<bool> ReferenceExistsAsync(string reference, CancellationToken ct = default);
@@ -22,6 +25,9 @@ public interface IQuoteRepository
     /// be removed explicitly rather than left as an orphan.
     /// </summary>
     void RemoveCostingLine(CostingLine line);
+
+    /// <summary>Deletes a quotation line, for the same reason as a costing line.</summary>
+    void RemoveQuotationLine(QuotationLine line);
 
     Task SaveChangesAsync(CancellationToken ct = default);
 }
