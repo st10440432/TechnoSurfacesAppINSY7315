@@ -77,7 +77,27 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.LogoutPath = "/Account/Logout";
     options.AccessDeniedPath = "/Account/AccessDenied";
+
+    // A browser page is sent to sign-in or to the access-denied note. A call to
+    // /api is answered with 401 or 403 instead, so the costing sheet's script sees
+    // the real status rather than following a redirect to an HTML page.
+    options.Events.OnRedirectToLogin = context => ApiAwareRedirect(context, StatusCodes.Status401Unauthorized);
+    options.Events.OnRedirectToAccessDenied = context => ApiAwareRedirect(context, StatusCodes.Status403Forbidden);
+
+    static Task ApiAwareRedirect(
+        Microsoft.AspNetCore.Authentication.RedirectContext<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions> context,
+        int apiStatus)
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+            context.Response.StatusCode = apiStatus;
+        else
+            context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    }
 });
+
+// RFC 9457 problem details for every API error.
+builder.Services.AddProblemDetails();
 
 // Re-validate the security stamp every minute, so a deactivated user's open
 // session ends within a minute rather than when the cookie expires.
@@ -136,12 +156,19 @@ TechnoSurfacesApp.Data.Db.Initialise();
 
 // Configure the HTTP request pipeline.
 app.UseSecurityHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// An unexpected error on /api is answered with a ProblemDetails body, not the HTML
+// error page the browser screens use, so the costing sheet's script can read it.
+// Registered after the page handler so it is the inner one and runs first.
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/api"),
+    api => api.UseExceptionHandler());
 
 app.UseHttpsRedirection();
 app.UseRouting();

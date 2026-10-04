@@ -40,4 +40,8 @@ public class QuotationLine
     public decimal AmountExVat { get; private set; }
 
     public int SortOrder { get; set; }
+
+    /// <summary>A copy of this line for a new version of the quote.</summary>
+    internal QuotationLine CopyForRevision() =>
+        new(Description, AmountExVat, Room, Quantity) { SortOrder = SortOrder };
 }

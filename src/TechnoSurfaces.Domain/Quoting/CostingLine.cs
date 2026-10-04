@@ -184,6 +184,30 @@ public class CostingLine
     public bool IsDerived => Derivation != DerivationRule.Entered;
 
     /// <summary>
+    /// A copy of this line for a new version of the quote. Everything is carried
+    /// across as it stands, including the copied price and any override; the price
+    /// is not resolved again. Internal so that only QuoteVersion can make one.
+    /// </summary>
+    internal CostingLine CopyForRevision() => new()
+    {
+        LineType = LineType,
+        MaterialPriceId = MaterialPriceId,
+        RateItemId = RateItemId,
+        Description = Description,
+        ResolvedUnitPrice = ResolvedUnitPrice,
+        PriceOrigin = PriceOrigin,
+        Quantity = Quantity,
+        SupplierDiscountPercent = SupplierDiscountPercent,
+        OverriddenUnitPrice = OverriddenUnitPrice,
+        IsQuantityOverridden = IsQuantityOverridden,
+        IsBelowTheLine = IsBelowTheLine,
+        Derivation = Derivation,
+        DerivationFactor = DerivationFactor,
+        SheetAreaM2 = SheetAreaM2,
+        SortOrder = SortOrder
+    };
+
+    /// <summary>
     /// Sets a quantity that follows from the job rather than from the estimator.
     /// Used by the calculator before totals are computed. A quantity the estimator
     /// has typed over is left alone.

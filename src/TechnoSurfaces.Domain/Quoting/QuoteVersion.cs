@@ -154,6 +154,32 @@ public class QuoteVersion
     public void Seal() => IsSealed = true;
 
     /// <summary>
+    /// A new, open version that starts as a copy of this one. Every line keeps the
+    /// price, origin, quantity, override and discount it carries here, and nothing
+    /// is priced again, so a catalogue change since this version cannot move the
+    /// revision's starting figures (Task 1 5.1.3). This version is read, never
+    /// written.
+    /// </summary>
+    public QuoteVersion CreateRevision(int versionNo, string createdByUserId)
+    {
+        if (versionNo <= VersionNo)
+            throw new ArgumentOutOfRangeException(nameof(versionNo), $"A revision of version {VersionNo} must have a higher number.");
+
+        var revision = new QuoteVersion(versionNo, createdByUserId, MarkupPercent, VatRate)
+        {
+            TransportAmount = TransportAmount
+        };
+
+        foreach (var line in _costingLines)
+            revision._costingLines.Add(line.CopyForRevision());
+
+        foreach (var line in _quotationLines)
+            revision._quotationLines.Add(line.CopyForRevision());
+
+        return revision;
+    }
+
+    /// <summary>
     /// Records the standing wording and brand warranties this version is approved
     /// with. Called once, immediately before the version is approved and sealed, so
     /// the quotation it was issued with can always be reproduced exactly. Refused
