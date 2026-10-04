@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<IQuoteQueries>(sp => sp.GetRequiredService<QuoteQueries>());
         services.AddScoped<ILapsedQuotes>(sp => sp.GetRequiredService<QuoteQueries>());
         services.AddScoped<IQuoteWorkflowService, QuoteWorkflowService>();
+        services.AddScoped<IQuotationGenerationService, QuotationGenerationService>();
 
         return services;
     }

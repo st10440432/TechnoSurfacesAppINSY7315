@@ -78,7 +78,7 @@ public sealed class QuoteWorkflowServiceTests : IAsyncLifetime
         var queries = new QuoteQueries(db, calculator);
         var service = new QuoteWorkflowService(
             new QuoteRepository(db), queries, queries, new CustomerRepository(db),
-            new QuoteTermsRecorder(new QuotationTermsReader(db)), new SignedIn(userId), _time);
+            new QuoteTermsRecorder(new QuotationTermsReader(db)), calculator, new SignedIn(userId), _time);
         return await act(service);
     }
 
@@ -90,12 +90,19 @@ public sealed class QuoteWorkflowServiceTests : IAsyncLifetime
         return result.Quote!.Id;
     }
 
-    private async Task AddLineAsync(int quoteId)
+    /// <summary>
+    /// Prices the quote at 3 hours of sanding (R300, R441 with 47% markup) and writes
+    /// the customer quotation line to match, as an estimator would before submitting.
+    /// </summary>
+    private async Task AddLineAsync(int quoteId, bool withQuotationLine = true)
     {
         await using var db = new TechnoSurfacesDbContext(_options);
         var quote = await new QuoteRepository(db).GetAsync(quoteId);
-        quote!.CurrentVersion!.AddCostingLine(
+        var version = quote!.CurrentVersion!;
+        version.AddCostingLine(
             CostingLine.ForRate(_sandingRateItemId, "Sanding time", 100m, "Rate card: Sanding time", 3m, isBelowTheLine: false));
+        if (withQuotationLine)
+            version.AddQuotationLine(new QuotationLine("Kitchen countertop, fabricate and install", 441m, "Kitchen"));
         await db.SaveChangesAsync();
     }
 
@@ -217,6 +224,30 @@ public sealed class QuoteWorkflowServiceTests : IAsyncLifetime
         var version = (await ReadAsync(id)).CurrentVersion!;
         Assert.True(version.IsSealed);
         Assert.NotEmpty(version.Terms);
+    }
+
+    [Fact]
+    public async Task A_quote_is_not_approved_until_the_quotation_adds_up_to_the_costing()
+    {
+        var id = await CreateAsync(Md);
+        await AddLineAsync(id, withQuotationLine: false);
+
+        var noLines = await AsAsync(Md, s => s.ApproveAsync(id));
+
+        await using (var db = new TechnoSurfacesDbContext(_options))
+        {
+            var quote = await new QuoteRepository(db).GetAsync(id);
+            quote!.CurrentVersion!.AddQuotationLine(new QuotationLine("Kitchen", 400m));
+            await db.SaveChangesAsync();
+        }
+
+        var mismatch = await AsAsync(Md, s => s.ApproveAsync(id));
+
+        Assert.Equal(WorkflowOutcome.NotAllowed, noLines.Outcome);
+        Assert.Equal(WorkflowOutcome.NotAllowed, mismatch.Outcome);
+        Assert.Contains("R400.00", mismatch.Problem);
+        Assert.Contains("R441.00", mismatch.Problem);
+        Assert.Equal(QuoteStatus.Draft, (await ReadAsync(id)).Status);
     }
 
     [Fact]

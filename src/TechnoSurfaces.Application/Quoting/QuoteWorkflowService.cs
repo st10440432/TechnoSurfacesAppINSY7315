@@ -1,4 +1,6 @@
+using System.Globalization;
 using TechnoSurfaces.Application.Auditing;
+using TechnoSurfaces.Application.Costing;
 using TechnoSurfaces.Application.Customers;
 using TechnoSurfaces.Domain;
 using TechnoSurfaces.Domain.Quoting;
@@ -44,8 +46,9 @@ public interface IQuoteWorkflowService
     Task<WorkflowResult> SubmitAsync(int quoteId, CancellationToken ct = default);
 
     /// <summary>
-    /// Approves a pending quote, or the Managing Director's own draft. Records the
-    /// standing terms and warranties on the version in the same save, then seals it.
+    /// Approves a pending quote, or the Managing Director's own draft. Refused until
+    /// the quotation lines add up to the costing total (US-10). Records the standing
+    /// terms and warranties on the version in the same save, then seals it.
     /// Corrections (US-18) are made through the costing sheet and details before this.
     /// </summary>
     Task<WorkflowResult> ApproveAsync(int quoteId, CancellationToken ct = default);
@@ -69,6 +72,7 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
     private readonly ILapsedQuotes _lapsed;
     private readonly ICustomerRepository _customers;
     private readonly IQuoteTermsRecorder _terms;
+    private readonly IQuoteCalculationService _calculator;
     private readonly ICurrentUser _user;
     private readonly TimeProvider _time;
 
@@ -78,6 +82,7 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
         ILapsedQuotes lapsed,
         ICustomerRepository customers,
         IQuoteTermsRecorder terms,
+        IQuoteCalculationService calculator,
         ICurrentUser user,
         TimeProvider time)
     {
@@ -86,6 +91,7 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
         _lapsed = lapsed;
         _customers = customers;
         _terms = terms;
+        _calculator = calculator;
         _user = user;
         _time = time;
     }
@@ -189,6 +195,8 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
                 return "A draft can be approved directly only by its author. Submit it for approval first.";
             if (quote.CurrentVersion?.CostingLines.Count is not > 0)
                 return "A quote with no costing lines has nothing to approve.";
+            if (QuotationMismatch(quote.CurrentVersion!) is { } mismatch)
+                return mismatch;
 
             // The terms and warranties the version is issued with, recorded in the
             // same save as the approval (US-21, US-22).
@@ -291,6 +299,26 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
     }
 
     private static WorkflowResult NotAllowed(string problem) => new(WorkflowOutcome.NotAllowed, Problem: problem);
+
+    /// <summary>
+    /// US-10: the customer quotation is generated from the costing and its total
+    /// equals the costing total. Checked before approval, because approval seals the
+    /// version and the quotation can no longer be corrected after it.
+    /// </summary>
+    private string? QuotationMismatch(QuoteVersion version)
+    {
+        if (version.QuotationLines.Count == 0)
+            return "Write the customer quotation lines before the quote is approved.";
+
+        var quotation = version.QuotationSubtotalExVat();
+        var costing = _calculator.Calculate(version).TotalExVat;
+        return quotation == costing
+            ? null
+            : $"The quotation lines add up to R{Money(quotation)} but the costing total is R{Money(costing)}. " +
+              "Correct the quotation lines so they match before approving.";
+    }
+
+    private static string Money(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 
     // ---- Input rules. Lengths match the columns in QuoteConfiguration. ----
 

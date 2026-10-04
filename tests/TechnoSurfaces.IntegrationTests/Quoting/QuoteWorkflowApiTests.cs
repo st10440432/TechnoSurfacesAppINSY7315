@@ -40,6 +40,10 @@ public sealed class QuoteWorkflowApiTests
 
     private static string Status(JsonElement quote) => quote.GetProperty("status").GetString()!;
 
+    /// <summary>
+    /// A quote priced at 3 hours of sanding (R300, R441 with 47% markup), with the
+    /// customer quotation line written to match.
+    /// </summary>
     private async Task<int> CreatePricedQuoteAsync(ApiSession author)
     {
         var (customerId, contactId, sanding) = await SeededIdsAsync();
@@ -57,6 +61,10 @@ public sealed class QuoteWorkflowApiTests
 
         var line = await author.PostAsync($"/api/quotes/{id}/lines", new { type = "rate", rateItemId = sanding, quantity = 3m });
         Assert.Equal(HttpStatusCode.Created, line.StatusCode);
+
+        var quotationLine = await author.PostAsync($"/api/quotes/{id}/quotation-lines",
+            new { room = "Kitchen", description = "Countertop, fabricate and install", amountExVat = 441m });
+        Assert.Equal(HttpStatusCode.Created, quotationLine.StatusCode);
         return id;
     }
 
@@ -80,11 +88,30 @@ public sealed class QuoteWorkflowApiTests
         Assert.Contains(queue.EnumerateArray(), q => q.GetProperty("id").GetInt32() == id);
         Assert.Equal(HttpStatusCode.Forbidden, (await estimator.PostAsync($"/api/quotes/{id}/approve")).StatusCode);
 
-        // The Managing Director corrects the pending quote, then approves it.
+        // The Managing Director corrects the pending quote. The new markup moves the
+        // costing total, so approval is refused until the quotation matches (US-10).
         var corrected = await md.PutAsync($"/api/quotes/{id}/costing", new { markupPercent = 45m });
         Assert.Equal(HttpStatusCode.OK, corrected.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await md.PostAsync($"/api/quotes/{id}/approve")).StatusCode);
+
+        var check = await JsonAsync(await md.GetAsync($"/api/quotes/{id}/quotation/check"));
+        Assert.Equal(435m, check.GetProperty("costingTotalExVat").GetDecimal());
+        var lineId = (await JsonAsync(await md.GetAsync($"/api/quotes/{id}/quotation"))).GetProperty("lines")[0].GetProperty("id").GetInt32();
+        var fixedLine = await md.PutAsync($"/api/quotes/{id}/quotation-lines/{lineId}",
+            new { room = "Kitchen", description = "Countertop, fabricate and install", amountExVat = 435m });
+        Assert.Equal(HttpStatusCode.OK, fixedLine.StatusCode);
+
         var approved = await md.PostAsync($"/api/quotes/{id}/approve");
         Assert.Equal("Approved", Status(await JsonAsync(approved)));
+
+        // The issued document: the customer's figures, none of the costing.
+        var quotation = await md.GetAsync($"/api/quotes/{id}/quotation");
+        var document = await quotation.Content.ReadAsStringAsync();
+        Assert.Contains("\"isIssued\":true", document);
+        Assert.Contains("\"totalIncVat\":500.25", document);
+        Assert.DoesNotContain("Sanding time", document);
+        Assert.DoesNotContain("markup", document, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Rate card", document);
 
         // Sent by the estimator; accepted by the Managing Director only.
         Assert.Equal("Sent", Status(await JsonAsync(await estimator.PostAsync($"/api/quotes/{id}/send"))));
@@ -100,6 +127,20 @@ public sealed class QuoteWorkflowApiTests
         var versions = await JsonAsync(await estimator.GetAsync($"/api/quotes/{id}/versions"));
         Assert.Equal(2, versions.GetArrayLength());
         Assert.True(versions[0].GetProperty("isSealed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Another_estimator_cannot_write_the_quotation_lines()
+    {
+        var estimator = await AsAsync(AppFactory.EstimatorEmail);
+        var otherEstimator = await AsAsync(OtherEstimatorEmail);
+        var id = await CreatePricedQuoteAsync(estimator);
+
+        var response = await otherEstimator.PostAsync($"/api/quotes/{id}/quotation-lines",
+            new { description = "Extra", amountExVat = 10m });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await otherEstimator.GetAsync($"/api/quotes/{id}/quotation")).StatusCode);
     }
 
     [Fact]
