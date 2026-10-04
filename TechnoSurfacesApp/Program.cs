@@ -129,6 +129,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(Policies.CanViewAuditTrail, p => p.RequireRole(Roles.ManagingDirector));
     options.AddPolicy(Policies.CanEditQuote, p => p.AddRequirements(new EditQuoteRequirement()));
     options.AddPolicy(Policies.CanReopenQuote, p => p.AddRequirements(new ReopenQuoteRequirement()));
+
+    // Recording the Pastel invoice is for the Managing Director only (US-25, team decision).
+    options.AddPolicy(Policies.CanRecordInvoice, p => p.RequireRole(Roles.ManagingDirector));
 });
 builder.Services.AddSingleton<IAuthorizationHandler, EditQuoteHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, ReopenQuoteHandler>();
