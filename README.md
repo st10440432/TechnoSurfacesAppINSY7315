@@ -94,12 +94,15 @@ This section records the security controls committed to in Task 1 8, where each 
  | Price change writes an `AuditEntry` with user and time | Unit test, `AuditInterceptorTests` |
  | Audit trail filters and a quote's change history | Unit test, `AuditTrailServiceTests` |
  | Anonymous request redirects to sign-in | Integration test, `PlatformTests` |
- | Estimator posts to the price editor: refused | Enforced by `CanEditCatalogue`; no automated HTTP test yet |
+ | Estimator posts to the price editor: refused | Integration test, `SecurityTests` |
  | Estimator approves a quote: refused | Integration test, `QuoteWorkflowApiTests` (403) |
- | Deactivated user signs in: refused | Enforced in `SignInService`; no automated test yet |
+ | Deactivated user signs in: refused | Integration test, `SecurityTests` |
  | Post without an antiforgery token: rejected | Enforced globally; integration test `CostingApiTests` covers the API header |
  | Registration route does not exist | Integration test, `PlatformTests` |
  | MD changes to terms and bank details are audited | Unit test, `QuotationTermsMaintenanceTests` |
+ | Estimator opens MD-only screens: refused | Integration test, `SecurityTests` |
+ | Five wrong passwords lock the account | Integration test, `SecurityTests` |
+ | MD price change audited through the real screen | Integration test, `SecurityTests` |
 
  Integration tests run in CI against a throwaway SQL Server database (`tests/TechnoSurfaces.IntegrationTests`).
 
@@ -111,7 +114,7 @@ This section records the security controls committed to in Task 1 8, where each 
 | Activation link for new accounts | Replaced | A temporary password plus a forced change does the same job without email |
 | Least-privilege database login | Deferred | The app connects as the SQL server administrator. A contained user with read/write rights only is the fix |
 | Change history on prototype quotes | Empty until real quotes | The quote screens still read prototype data, so the panel shows no history until they read the database |
-| Inline scripts allowed by the CSP | Partial | Views use inline `<script>` blocks and `onchange`/`onsubmit` handlers. Moving them to `.js` files would let the CSP drop `'unsafe-inline'` and block injected scripts |
+| Inline scripts allowed by the CSP | Partial | Views use inline `<script>` blocks and `onchange`/`onsubmit` handlers. Moving them to `.js` files would let the CSP drop `'unsafe-inline'` and block injected scripts|
 
 Built by Brett James (ST10440287), Kallan Jones (ST10445389), Morgan Gibbon
 (ST10439398), Amaan Tesfaye (ST10287107) and Matteo Nusca (ST10440432)
