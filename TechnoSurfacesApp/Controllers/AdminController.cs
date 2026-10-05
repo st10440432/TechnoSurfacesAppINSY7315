@@ -23,7 +23,7 @@ public class AdminController : AppController
     private readonly IUserAdminService _users;
     private readonly IAuditTrailService _audit;
 
-    public AdminController(DemoSession session, IUserAdminService users, IAuditTrailService audit) : base(session)
+    public AdminController(IUserAdminService users, IAuditTrailService audit)
     {
         _users = users;
         _audit = audit;

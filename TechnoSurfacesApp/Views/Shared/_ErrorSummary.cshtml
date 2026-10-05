@@ -1,0 +1,43 @@
+@*
+    The list of problems at the top of a form posted back with errors. It takes
+    focus when the page loads, so a keyboard or screen reader user hears what went
+    wrong first, and each problem links to its field.
+*@
+@{
+    // A form can give its field order, so the list reads in the same order as the page.
+    var order = ViewData["ErrorOrder"] as string[] ?? [];
+    int Position(string key) { var at = Array.IndexOf(order, key); return at < 0 ? int.MaxValue : at; }
+
+    var problems = ViewData.ModelState
+        .Where(e => e.Value is { Errors.Count: > 0 })
+        .OrderBy(e => Position(e.Key))
+        .SelectMany(e => e.Value!.Errors.Select(err => (Key: e.Key,
+            Message: string.IsNullOrEmpty(err.ErrorMessage) ? "This value is not valid." : err.ErrorMessage)))
+        .ToList();
+}
+@if (problems.Count > 0)
+{
+    <div class="notice notice-alert error-summary" role="alert" tabindex="-1" data-focus-on-load aria-labelledby="error-summary-title">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div>
+            <h2 class="error-summary-title" id="error-summary-title">
+                @(problems.Count == 1 ? "There is one thing to correct" : $"There are {problems.Count} things to correct")
+            </h2>
+            <ul>
+                @foreach (var p in problems)
+                {
+                    <li>
+                        @if (string.IsNullOrEmpty(p.Key))
+                        {
+                            @p.Message
+                        }
+                        else
+                        {
+                            <a href="#@FieldErrors.ControlIdFor(p.Key)">@p.Message</a>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}

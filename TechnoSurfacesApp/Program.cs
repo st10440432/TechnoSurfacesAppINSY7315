@@ -139,6 +139,7 @@ builder.Services.AddSingleton<IAuthorizationHandler, ReopenQuoteHandler>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISignInService, SignInService>();
 builder.Services.AddScoped<TechnoSurfaces.Services.DemoSession>();
+builder.Services.AddScoped<SignedInUser>();
 builder.Services.AddPlatformHealthChecks();
 builder.Services.AddSignInRateLimiting();
 

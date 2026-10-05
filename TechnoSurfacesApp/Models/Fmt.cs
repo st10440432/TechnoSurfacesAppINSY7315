@@ -38,6 +38,18 @@ public static class Fmt
     /// <summary>16 Aug 2026</summary>
     public static string Date(DateTime d) => d.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
 
+    /// <summary>16 Aug 2026, for the domain's calendar dates.</summary>
+    public static string Date(DateOnly d) => d.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>Two decimals for area, which is how the costing sheet shows square metres.</summary>
+    public static string Sqm(decimal value) => value.ToString("N2", Za) + " m²";
+
+    /// <summary>
+    /// A number for an input's value attribute. Browsers read a number input with a
+    /// full stop, so this never follows the regional decimal comma.
+    /// </summary>
+    public static string Input(decimal value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+
     /// <summary>16 Aug 2026, 14:32</summary>
     public static string DateTimeShort(DateTime d) => d.ToString("dd MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
 }

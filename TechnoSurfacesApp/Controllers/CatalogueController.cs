@@ -20,7 +20,7 @@ public class CatalogueController : AppController
 {
     private readonly ICatalogueService _catalogue;
 
-    public CatalogueController(DemoSession session, ICatalogueService catalogue) : base(session)
+    public CatalogueController(ICatalogueService catalogue)
         => _catalogue = catalogue;
 
     public async Task<IActionResult> Index(int? supplierId, int? productLineId,
