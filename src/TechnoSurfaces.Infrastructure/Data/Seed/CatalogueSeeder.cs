@@ -27,9 +27,13 @@ public static class CatalogueSeeder
     /// </summary>
     private const string InventedStaronCodePrefix = "STARON-";
 
+    /// <summary>The date of the Max on Top list the catalogue was seeded from.</summary>
+    private static readonly DateOnly MaxOnTopListDate = new(2026, 8, 3);
+
     public static async Task SeedAsync(TechnoSurfacesDbContext db, CancellationToken ct = default)
     {
         await ClearInventedStaronCodesAsync(db, ct);
+        await CorrectMaxOnTopPricesAsync(db, ct);
 
         if (await db.Suppliers.AnyAsync(ct)) return;
 
@@ -59,6 +63,39 @@ public static class CatalogueSeeder
             colour.SupplierCode = "";
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// An earlier version of this seeder took Max on Top's price per sheet, which the
+    /// list shows rounded to the rand, and worked back to a price per square metre a
+    /// few cents off the list's own figure. This puts the list figure back on a
+    /// database seeded before. Only a price still dated from the list and within a
+    /// rand of its figure is changed; a price the Managing Director has entered since
+    /// is left alone. The change goes through EF Core, so the audit trail records it.
+    /// </summary>
+    private static async Task CorrectMaxOnTopPricesAsync(TechnoSurfacesDbContext db, CancellationToken ct)
+    {
+        var listed = MaxOnTopPricesPerSqm();
+        var prices = await db.MaterialPrices
+            .Include(p => p.Colour)
+            .Where(p => p.Colour != null
+                     && p.Colour.ProductLine!.Supplier!.Name == "Max on Top"
+                     && p.EffectiveFrom == MaxOnTopListDate)
+            .ToListAsync(ct);
+
+        var corrected = 0;
+        foreach (var price in prices)
+        {
+            if (!listed.TryGetValue(price.Colour!.SupplierCode, out var perSqm)) continue;
+            var difference = Math.Abs(price.PricePerSqm - perSqm);
+            if (difference == 0m || difference >= 1m) continue;
+
+            price.PricePerSqm = perSqm;
+            corrected++;
+        }
+
+        if (corrected > 0)
+            await db.SaveChangesAsync(ct);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -123,6 +160,22 @@ public static class CatalogueSeeder
             ColourId = colour.Id,
             SheetSizeId = size.Id,
             PricePerSqm = MaterialPrice.PerSqmFromSheetPrice(sheetPrice, size),
+            EffectiveFrom = from,
+            CapturedAtUtc = DateTime.UtcNow
+        });
+
+    /// <summary>
+    /// Adds a colour's price as the supplier publishes it per square metre. Max on Top
+    /// lists a whole-rand price per square metre; its price per sheet is that times the
+    /// sheet's area, so it is the per-square-metre figure that is stored.
+    /// </summary>
+    private static void AddColourPricePerSqm(
+        TechnoSurfacesDbContext db, Colour colour, SheetSize size, decimal perSqm, DateOnly from)
+        => db.MaterialPrices.Add(new MaterialPrice
+        {
+            ColourId = colour.Id,
+            SheetSizeId = size.Id,
+            PricePerSqm = perSqm,
             EffectiveFrom = from,
             CapturedAtUtc = DateTime.UtcNow
         });
@@ -271,9 +324,63 @@ public static class CatalogueSeeder
 
     // -------------------------------------------------- 3. Max on Top (by item)
 
+    /// <summary>
+    /// The Max on Top list of 3 August 2026: code, colour, product line, sheet size and
+    /// the price per square metre as the list gives it. The price per sheet on the list
+    /// is this times the sheet's area.
+    /// </summary>
+    private static readonly (string Code, string Name, string Line, string Size, decimal PerSqm)[] MaxOnTopList =
+    {
+        ("GAVONITE4312472", "Alaskan Stone 4312", "pure12", "p12_3658x760", 2983m),
+        ("WSOLIDSURFACE8206", "Alpine Shimmer 8206", "pure12", "p12_3680x760", 2983m),
+        ("WSOLIDSURFACE9015", "Arctica 9015", "pure12", "p12_3680x760", 1670m),
+        ("WSOLIDSURFACE90156", "Arctica 9015 6mm", "pure6", "p6_2440x1220", 1239m),
+        ("WSOLIDSURFACE5230", "Aspen 5230", "pure12", "p12_3680x760", 1670m),
+        ("WWSOLIDSURF5230920", "Aspen 5230 920", "pure12", "p12_3680x920", 1670m),
+        ("WSOLIDSURFACE7502", "Avalanche 7502", "pure12", "p12_3680x760", 2075m),
+        ("WSOLIDSURFACE8010", "Bone 8010", "pure12", "p12_3680x760", 1670m),
+        ("GAVONITE7830472", "Bronze 7830", "pure12", "p12_3658x760", 2983m),
+        ("GAVONITE8106472", "Cameo White 8106", "pure12", "p12_3680x760", 1670m),
+        ("WSOLIDSURFACE9137", "Casablanca 9137", "pure12", "p12_3680x760", 1750m),
+        ("GAVONITE8292472", "Cloud 8292", "pure12", "p12_3680x760", 1750m),
+        ("WSOLIDSURFACE8240", "Eclipse 8240", "pure12", "p12_3680x760", 1800m),
+        ("WSOLIDSURFACE8248", "Fuego 8248", "pure12", "p12_3680x760", 1670m),
+        ("WSOLIDSURFACE80167", "Glacier White 8016", "pure12", "p12_3680x760", 1427m),
+        ("WSOLIDSURFACE8016", "Glacier White 8016 920", "pure12", "p12_3680x920", 1427m),
+        ("WSOLIDSURFACE80166", "Glacier White 8016 6mm", "pure6", "p6_2440x920", 1019m),
+        ("WSOLIDSURFACE7849", "Industrial 7849", "pure12", "p12_3680x760", 2075m),
+        ("GAVONITE7711472", "Jurassic 7711", "pure12", "p12_3658x760", 2983m),
+        ("WSOLIDSURFACE9117", "Kokoura 9117", "pure12", "p12_3680x760", 2075m),
+        ("GAVONITE7810472", "Malt 7810", "pure12", "p12_3680x760", 2385m),
+        ("WSOLIDSURFACE8268", "Mango 8268", "pure12", "p12_3680x760", 1800m),
+        ("WSOLIDSURFACE7842", "New Concrete 7842", "pure12", "p12_3680x760", 2075m),
+        ("GAVONITE8090472", "Snowfall 8090", "pure12", "p12_3680x760", 2983m),
+        ("WSOLIDSURFACE7820", "Starshine 7820", "pure12", "p12_3680x760", 2075m),
+
+        ("WSOLIDSURFACE2501", "Simply Altitude 2501", "modified12", "m12_3680x760", 1950m),
+        ("WSOLIDSURFACE2028", "Simply Arctica 2028", "modified12", "m12_3680x760", 1450m),
+        ("WSOLIDSURFACELM106", "Simply Dusk LM106", "modified12", "m12_3680x760", 1550m),
+        ("GAVONITERMS8968", "Simply Grey Terrazzo 8968", "modified12", "m12_3680x760", 2196m),
+        ("WSOLIDSURFACE8961", "Simply Light Cement 8961", "modified12", "m12_3680x760", 1550m),
+        ("WSOLIDSURFACE8969", "Simply Marbled Grey 8969", "modified12", "m12_3680x760", 2542m),
+        ("WSOLIDSURFACE3522", "Simply Marble Whisp 3522", "modified12", "m12_3680x760", 2542m),
+        ("WSOLIDSURFACE8904", "Simply Morning Mist 8904", "modified12", "m12_3680x760", 1950m),
+        ("WSOLIDSURFACE8967", "Simply Speckled Creme 8967", "modified12", "m12_3680x760", 1450m),
+        ("WSOLIDSURFACE8905", "Simply Summit 8905", "modified12", "m12_3680x920", 2542m),
+        ("WSOLIDSURFACE8960", "Simply White 8960", "modified12", "m12_3680x760", 1037m),
+
+        ("FG25207W2630W42", "GetaCore Snowdrift GC2252", "getacore3", "g3_2040x1250", 1929m),
+        ("FGC4107W2630W42", "GetaCore Dusk GC4143", "getacore3", "g3_2040x1250", 1929m),
+        ("FG01107W2630W42", "GetaCore Glacier White GC2011", "getacore3", "g3_2040x1250", 1530m),
+        ("FT24407W2630W42", "GetaCore Terrazzo Pebble CGT244", "getacore3", "g3_2040x1250", 2279m)
+    };
+
+    private static Dictionary<string, decimal> MaxOnTopPricesPerSqm() =>
+        MaxOnTopList.ToDictionary(r => r.Code, r => r.PerSqm);
+
     private static async Task SeedMaxOnTopAsync(TechnoSurfacesDbContext db, CancellationToken ct)
     {
-        var dated = new DateOnly(2026, 8, 3);
+        var dated = MaxOnTopListDate;
         var supplier = await AddSupplierAsync(db, "Max on Top", null, PricingStructure.Item, dated,
             adhesive: 130.00m, "Orders under 5 sheets incur R1 050 ex VAT.", ct);
 
@@ -291,59 +398,23 @@ public static class CatalogueSeeder
         var m12_3680x920 = await AddSizeAsync(db, modified12, 3680, 920, ct);
         var g3_2040x1250 = await AddSizeAsync(db, getacore3, 2040, 1250, ct);
 
-        // (code, colour, product line, sheet size, price per sheet)
-        var rows = new (string Code, string Name, ProductLine Line, SheetSize Size, decimal Sheet)[]
+        var lines = new Dictionary<string, ProductLine>
         {
-            ("GAVONITE4312472", "Alaskan Stone 4312", pure12, p12_3658x760, 8293m),
-            ("WSOLIDSURFACE8206", "Alpine Shimmer 8206", pure12, p12_3680x760, 8343m),
-            ("WSOLIDSURFACE9015", "Arctica 9015", pure12, p12_3680x760, 4671m),
-            ("WSOLIDSURFACE90156", "Arctica 9015 6mm", pure6, p6_2440x1220, 3688m),
-            ("WSOLIDSURFACE5230", "Aspen 5230", pure12, p12_3680x760, 4671m),
-            ("WWSOLIDSURF5230920", "Aspen 5230 920", pure12, p12_3680x920, 5654m),
-            ("WSOLIDSURFACE7502", "Avalanche 7502", pure12, p12_3680x760, 5803m),
-            ("WSOLIDSURFACE8010", "Bone 8010", pure12, p12_3680x760, 4671m),
-            ("GAVONITE7830472", "Bronze 7830", pure12, p12_3658x760, 8293m),
-            ("GAVONITE8106472", "Cameo White 8106", pure12, p12_3680x760, 4671m),
-            ("WSOLIDSURFACE9137", "Casablanca 9137", pure12, p12_3680x760, 4894m),
-            ("GAVONITE8292472", "Cloud 8292", pure12, p12_3680x760, 4894m),
-            ("WSOLIDSURFACE8240", "Eclipse 8240", pure12, p12_3680x760, 5034m),
-            ("WSOLIDSURFACE8248", "Fuego 8248", pure12, p12_3680x760, 4671m),
-            ("WSOLIDSURFACE80167", "Glacier White 8016", pure12, p12_3680x760, 3991m),
-            ("WSOLIDSURFACE8016", "Glacier White 8016 920", pure12, p12_3680x920, 4831m),
-            ("WSOLIDSURFACE80166", "Glacier White 8016 6mm", pure6, p6_2440x920, 2287m),
-            ("WSOLIDSURFACE7849", "Industrial 7849", pure12, p12_3680x760, 5803m),
-            ("GAVONITE7711472", "Jurassic 7711", pure12, p12_3658x760, 8293m),
-            ("WSOLIDSURFACE9117", "Kokoura 9117", pure12, p12_3680x760, 5803m),
-            ("GAVONITE7810472", "Malt 7810", pure12, p12_3680x760, 6670m),
-            ("WSOLIDSURFACE8268", "Mango 8268", pure12, p12_3680x760, 5034m),
-            ("WSOLIDSURFACE7842", "New Concrete 7842", pure12, p12_3680x760, 5803m),
-            ("GAVONITE8090472", "Snowfall 8090", pure12, p12_3680x760, 8343m),
-            ("WSOLIDSURFACE7820", "Starshine 7820", pure12, p12_3680x760, 5803m),
-
-            ("WSOLIDSURFACE2501", "Simply Altitude 2501", modified12, m12_3680x760, 5454m),
-            ("WSOLIDSURFACE2028", "Simply Arctica 2028", modified12, m12_3680x760, 4055m),
-            ("WSOLIDSURFACELM106", "Simply Dusk LM106", modified12, m12_3680x760, 4335m),
-            ("GAVONITERMS8968", "Simply Grey Terrazzo 8968", modified12, m12_3680x760, 6142m),
-            ("WSOLIDSURFACE8961", "Simply Light Cement 8961", modified12, m12_3680x760, 4335m),
-            ("WSOLIDSURFACE8969", "Simply Marbled Grey 8969", modified12, m12_3680x760, 7109m),
-            ("WSOLIDSURFACE3522", "Simply Marble Whisp 3522", modified12, m12_3680x760, 7109m),
-            ("WSOLIDSURFACE8904", "Simply Morning Mist 8904", modified12, m12_3680x760, 5454m),
-            ("WSOLIDSURFACE8967", "Simply Speckled Creme 8967", modified12, m12_3680x760, 4055m),
-            ("WSOLIDSURFACE8905", "Simply Summit 8905", modified12, m12_3680x920, 8606m),
-            ("WSOLIDSURFACE8960", "Simply White 8960", modified12, m12_3680x760, 2900m),
-
-            ("FG25207W2630W42", "GetaCore Snowdrift GC2252", getacore3, g3_2040x1250, 4919m),
-            ("FGC4107W2630W42", "GetaCore Dusk GC4143", getacore3, g3_2040x1250, 4919m),
-            ("FG01107W2630W42", "GetaCore Glacier White GC2011", getacore3, g3_2040x1250, 3902m),
-            ("FT24407W2630W42", "GetaCore Terrazzo Pebble CGT244", getacore3, g3_2040x1250, 5811m)
+            ["pure12"] = pure12, ["pure6"] = pure6, ["modified12"] = modified12, ["getacore3"] = getacore3
+        };
+        var sizes = new Dictionary<string, SheetSize>
+        {
+            ["p12_3680x760"] = p12_3680x760, ["p12_3658x760"] = p12_3658x760, ["p12_3680x920"] = p12_3680x920,
+            ["p6_2440x1220"] = p6_2440x1220, ["p6_2440x920"] = p6_2440x920,
+            ["m12_3680x760"] = m12_3680x760, ["m12_3680x920"] = m12_3680x920, ["g3_2040x1250"] = g3_2040x1250
         };
 
-        foreach (var (code, name, line, size, sheet) in rows)
+        foreach (var (code, name, line, size, perSqm) in MaxOnTopList)
         {
-            var colour = new Colour { ProductLineId = line.Id, Name = name, SupplierCode = code };
+            var colour = new Colour { ProductLineId = lines[line].Id, Name = name, SupplierCode = code };
             db.Colours.Add(colour);
             await db.SaveChangesAsync(ct);
-            AddItemPrice(db, colour, size, sheet, dated);
+            AddColourPricePerSqm(db, colour, sizes[size], perSqm, dated);
         }
 
         await db.SaveChangesAsync(ct);
