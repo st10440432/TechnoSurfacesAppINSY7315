@@ -67,7 +67,8 @@ public class CatalogueController : AppController
     /// One material in one sheet size: its price now, every earlier price, and, for the
     /// Managing Director, the form that starts a new price from a date.
     /// </summary>
-    public async Task<IActionResult> Price(int colourId, int sheetSizeId, CancellationToken ct)
+    public async Task<IActionResult> Price(int colourId, int sheetSizeId,
+        [FromServices] ICatalogueBrowser browser, CancellationToken ct)
     {
         var row = (await _catalogue.GetCatalogueAsync(Today, ct))
             .FirstOrDefault(r => r.ColourId == colourId && r.SheetSizeId == sheetSizeId);
@@ -82,11 +83,25 @@ public class CatalogueController : AppController
             ? await _catalogue.GetPriceHistoryAsync(null, band, sheetSizeId, ct)
             : await _catalogue.GetPriceHistoryAsync(colourId, null, sheetSizeId, ct);
 
+        // The sheet's own area, so an earlier price per m² converts to the per-sheet
+        // figure a quote was charged. A retired colour is no longer listed by the
+        // browser, so its area is worked back from today's price instead.
+        var area = (await browser.SheetSizesAsync(colourId, ct))?.FirstOrDefault(s => s.Id == sheetSizeId)?.AreaM2
+            ?? (row.PricePerSqm is > 0 && row.PricePerSheet is { } sheet ? sheet / row.PricePerSqm.Value : (decimal?)null);
+
+        // Task 1 2.4: the quotes that use this material and the price each one locked
+        // in, so the Managing Director can see a change today does not move them.
+        var quotes = row.PriceBandId is int bandId
+            ? await _catalogue.GetQuotesUsingPriceAsync(null, bandId, sheetSizeId, ct)
+            : await _catalogue.GetQuotesUsingPriceAsync(colourId, null, sheetSizeId, ct);
+
         SetPage(row.Colour, "catalogue", new Crumb("Data"), new Crumb("Material catalogue", Url.Action(nameof(Index))));
         return View(new PriceVm
         {
             Row = row,
             History = history,
+            AreaM2 = area,
+            Quotes = quotes,
             CanEdit = await CanAsync(Policies.CanEditCatalogue),
             Today = Today
         });
@@ -126,6 +141,127 @@ public class CatalogueController : AppController
     public async Task<IActionResult> RetireProductLine(int productLineId) =>
         Outcome(await _catalogue.RetireProductLineAsync(productLineId),
             "Product line retired", "It stays on quotes already made, but cannot be chosen on new ones.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> ReinstateColour(int colourId) =>
+        Outcome(await _catalogue.ReinstateColourAsync(colourId),
+            "Colour reinstated", "It can be chosen on new quotes again.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> ReinstateProductLine(int productLineId) =>
+        Outcome(await _catalogue.ReinstateProductLineAsync(productLineId),
+            "Product line reinstated", "Its colours that are not retired can be chosen on new quotes again.");
+
+    // ======================================================================
+    //  Suppliers and what they sell (NFR-10): add, correct, retire and
+    //  reinstate. Everyone can read these screens; only the Managing
+    //  Director changes them, and every change is audited.
+    // ======================================================================
+
+    public async Task<IActionResult> Suppliers(CancellationToken ct)
+    {
+        SetPage("Suppliers", "catalogue", new Crumb("Data"), new Crumb("Material catalogue", Url.Action(nameof(Index))));
+        return View(new SuppliersVm
+        {
+            Suppliers = await _catalogue.GetSuppliersAsync(ct),
+            CanEdit = await CanAsync(Policies.CanEditCatalogue),
+            Today = Today
+        });
+    }
+
+    public async Task<IActionResult> Supplier(int id, CancellationToken ct)
+    {
+        var supplier = await _catalogue.GetSupplierAsync(id, ct);
+        if (supplier is null)
+        {
+            Flash("error", "Supplier not found", "Choose the supplier from the list instead.");
+            return RedirectToAction(nameof(Suppliers));
+        }
+
+        SetPage(supplier.Name, "catalogue", new Crumb("Data"),
+            new Crumb("Material catalogue", Url.Action(nameof(Index))), new Crumb("Suppliers", Url.Action(nameof(Suppliers))));
+        return View(new SupplierVm
+        {
+            Supplier = supplier,
+            Brands = await _catalogue.GetBrandsAsync(ct),
+            CanEdit = await CanAsync(Policies.CanEditCatalogue),
+            Today = Today
+        });
+    }
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> AddSupplier(SupplierForm form)
+    {
+        var result = ModelState.IsValid
+            ? await _catalogue.AddSupplierAsync(ToInput(form))
+            : CatalogueResult.Fail(FirstError());
+
+        if (!result.Succeeded)
+        {
+            Flash("error", "Not saved", result.Error);
+            return RedirectToAction(nameof(Suppliers));
+        }
+
+        Flash("success", "Supplier added", "Add its product lines, sheet sizes and colours, then their prices.");
+        return RedirectToAction(nameof(Supplier), new { id = result.Id });
+    }
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> UpdateSupplier(int supplierId, SupplierForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.UpdateSupplierAsync(supplierId, ToInput(form))
+                : CatalogueResult.Fail(FirstError()),
+            "Supplier saved", "A new price list date clears the warning about an old list.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> AddProductLine(ProductLineForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.AddProductLineAsync(form.SupplierId, form.Name!, form.ThicknessMm!.Value, form.BrandId)
+                : CatalogueResult.Fail(FirstError()),
+            "Product line added", "Add its sheet sizes and colours next.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> AddSheetSize(SheetSizeForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.AddSheetSizeAsync(form.ProductLineId, form.LengthMm!.Value, form.WidthMm!.Value)
+                : CatalogueResult.Fail(FirstError()),
+            "Sheet size added", "Give each colour a price at this size from its price history.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> AddPriceBand(PriceBandForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.AddPriceBandAsync(form.ProductLineId, form.Code!, form.Name ?? "")
+                : CatalogueResult.Fail(FirstError()),
+            "Price band added", "Put colours in the band, then give the band its price.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> AddColour(ColourForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.AddColourAsync(form.ProductLineId, ToInput(form))
+                : CatalogueResult.Fail(FirstError()),
+            "Colour added", "A colour in a band takes the band's price. Any other colour needs its own price, set from its price history.");
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanEditCatalogue)]
+    public async Task<IActionResult> UpdateColour(ColourForm form) =>
+        Outcome(ModelState.IsValid
+                ? await _catalogue.UpdateColourAsync(form.ColourId, ToInput(form))
+                : CatalogueResult.Fail(FirstError()),
+            "Colour saved", "Quotes already made keep the description and price they were made with.");
+
+    private static SupplierInput ToInput(SupplierForm f) =>
+        new(f.Name!, f.TradingAs, f.PricingStructure!.Value, f.PriceListDated!.Value, f.AdhesivePrice, f.DeliveryTerms);
+
+    private static ColourInput ToInput(ColourForm f) =>
+        new(f.Name!, f.SupplierCode, f.Range, f.PriceBandId);
 
     // Quotation terms and brand warranties (US-12, US-13): the same policy, since
     // the MD maintains everything printed on a quotation.
@@ -175,7 +311,7 @@ public class CatalogueController : AppController
         // A Referer header can be forged, so only a local page is accepted.
         var back = Request.Headers.Referer.ToString();
         return Url.IsLocalUrl(back) ? Redirect(back)
-            : Uri.TryCreate(back, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host
+            : Uri.TryCreate(back, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host && Url.IsLocalUrl(uri.PathAndQuery)
                 ? Redirect(uri.PathAndQuery)
                 : RedirectToAction(nameof(Index));
     }
@@ -201,13 +337,42 @@ public sealed class CatalogueVm
     public bool AnyFilter => Supplier is not null || Search is not null || IncludeRetired;
 }
 
+public sealed class SuppliersVm
+{
+    public IReadOnlyList<SupplierRow> Suppliers { get; init; } = [];
+    public bool CanEdit { get; init; }
+    public DateOnly Today { get; init; }
+
+    public bool IsStale(DateOnly listDated) => Today.DayNumber - listDated.DayNumber > CatalogueController.StaleAfterDays;
+}
+
+public sealed class SupplierVm
+{
+    public SupplierDetail Supplier { get; init; } = null!;
+    public IReadOnlyList<BrandRow> Brands { get; init; } = [];
+    public bool CanEdit { get; init; }
+    public DateOnly Today { get; init; }
+
+    public bool IsStale => Today.DayNumber - Supplier.PriceListDated.DayNumber > CatalogueController.StaleAfterDays;
+}
+
 public sealed class PriceVm
 {
     public CatalogueRow Row { get; init; } = null!;
     public IReadOnlyList<PricePeriodRow> History { get; init; } = [];
+
+    /// <summary>Costing lines priced from this colour or band at this size, with the price each kept.</summary>
+    public IReadOnlyList<QuoteUsingPrice> Quotes { get; init; } = [];
     public bool CanEdit { get; init; }
     public DateOnly Today { get; init; }
 
     /// <summary>A band price applies to every colour in the band.</summary>
     public bool IsBandPrice => Row.PriceBandId is not null;
+
+    /// <summary>The sheet's area in m², when it is known.</summary>
+    public decimal? AreaM2 { get; init; }
+
+    /// <summary>A price per m² as the per-sheet figure, rounded as MaterialPrice.PricePerSheet rounds it.</summary>
+    public decimal? PerSheet(decimal pricePerSqm) =>
+        AreaM2 is { } area ? decimal.Round(pricePerSqm * area, 2, MidpointRounding.AwayFromZero) : null;
 }

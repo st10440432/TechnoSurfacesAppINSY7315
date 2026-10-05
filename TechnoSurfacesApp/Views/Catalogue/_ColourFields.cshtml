@@ -1,0 +1,41 @@
+@model (TechnoSurfaces.Application.Catalogue.ColourDetail? Colour, TechnoSurfaces.Application.Catalogue.ProductLineDetail Line, bool PricesByBand, string Prefix)
+@*
+    The fields of a colour, for adding one and for correcting one. A band-priced
+    supplier's colour must be put in one of its product line's bands, because that is
+    where its price is held; an item-priced colour has no band.
+*@
+@{
+    var c = Model.Colour;
+    var p = Model.Prefix;
+}
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="@p-name">Colour <span class="req" aria-hidden="true">*</span></label>
+        <input class="input" id="@p-name" name="Name" maxlength="120" required value="@c?.Name" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label class="label" for="@p-code">Supplier code <span class="optional">optional</span></label>
+        <input class="input mono" id="@p-code" name="SupplierCode" maxlength="60" value="@c?.SupplierCode" autocomplete="off"
+               aria-describedby="@p-code-hint" />
+        <span class="hint" id="@p-code-hint">As on the supplier's list. Leave it empty if the list gives none.</span>
+    </div>
+</div>
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="@p-range">Range <span class="optional">optional</span></label>
+        <input class="input" id="@p-range" name="Range" maxlength="60" value="@c?.Range" autocomplete="off" />
+    </div>
+    @if (Model.PricesByBand)
+    {
+        <div class="field">
+            <label class="label" for="@p-band">Price band <span class="req" aria-hidden="true">*</span></label>
+            <select class="select" id="@p-band" name="PriceBandId" required>
+                <option value="">Choose the band from the supplier's list</option>
+                @foreach (var b in Model.Line.Bands)
+                {
+                    <option value="@b.Id" selected="@(c?.PriceBandId == b.Id)">@b.Code@(b.Name == b.Code ? "" : $" ({b.Name})")</option>
+                }
+            </select>
+        </div>
+    }
+</div>
