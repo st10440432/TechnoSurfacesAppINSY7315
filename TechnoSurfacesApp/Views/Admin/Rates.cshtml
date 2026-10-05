@@ -1,138 +1,114 @@
-﻿@model TechnoSurfacesApp.Controllers.RatesVm
+@model TechnoSurfacesApp.Controllers.RatesVm
+@*
+    The rate card (US-06, US-23): labour, consumables, wood and extras, held once and
+    used on every quote. A new rate starts on a date, so quotes already made keep the
+    rate they were made with. Only the Managing Director changes a rate.
+*@
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Rate card</h2>
-        <p>One central rate card, applied to every quote regardless of material</p>
+        <h1>Rate card</h1>
+        <p>The labour, consumable and extra rates every quote uses. Change a rate here once and new quotes pick it up.</p>
     </div>
-    <div class="page-head-actions">
-        @if (Model.CanEdit)
-        {
-            <button class="btn btn-primary" type="button">
-                <svg class="ico ico-sm"><use href="#i-plus" /></svg> Add rate item
-            </button>
-        }
-    </div>
-</div>
-
-<div class="notice notice-warn">
-    <svg class="ico"><use href="#i-alert" /></svg>
-    <div>
-        <strong>Rates shown are indicative placeholders.</strong>
-        The client confirmed every rand value in the sample spreadsheet is not real; the real
-        fabrication, labour and consumable rates are still to be confirmed. The line items, units
-        and derivation rules below are real &mdash; they come from the structure of the client's own
-        costing sheet.
-    </div>
-</div>
+</header>
 
 @if (!Model.CanEdit)
 {
-    <div class="notice notice-info">
-        <svg class="ico"><use href="#i-info" /></svg>
-        <div>Rates are visible to everyone. Only the Managing Director can change them.</div>
-    </div>
+    <partial name="_ReadOnlyNote" model="@("Only the Managing Director changes rates. You can see every rate the costing sheet uses.")" />
 }
 
-<div class="notice notice-good">
-    <svg class="ico"><use href="#i-check-circle" /></svg>
-    <div>
-        <strong>Held once, applied everywhere.</strong>
-        The spreadsheet this replaces duplicated this rate card on twelve separate material sheets.
-        A price rise had to be typed twelve times, and nothing flagged a sheet that was missed.
-    </div>
-</div>
-
-@foreach (var (group, rows) in Model.Groups)
+@foreach (var (category, rows) in Model.Groups)
 {
-    <div class="card">
+    var id = "rates-" + category.ToLowerInvariant();
+    <section class="card mb-section" aria-labelledby="@id">
         <div class="card-head">
-            <h3>@Model.GroupName(group)</h3>
+            <h2 id="@id">@Words.Humanise(category)</h2>
             <span class="spacer"></span>
-            <span class="badge">@rows.Count line@(rows.Count == 1 ? "" : "s")</span>
+            <span class="muted small">@rows.Count item@(rows.Count == 1 ? "" : "s")</span>
         </div>
         <div class="table-wrap">
             <table class="data stack">
+                <caption class="sr-only">@Words.Humanise(category) rates</caption>
                 <thead>
                     <tr>
-                        <th>Line item</th>
-                        <th>Unit</th>
-                        <th class="right">Rate</th>
-                        <th>Quantity source</th>
-                        <th>Rate rule</th>@if (Model.CanEdit) {
-                        <th></th>
-                    }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var r in rows)
-                {
-                    <tr>
-                        <td data-label="Line item">
-                            <span class="strong">@r.Name</span>
-                            @if (r.IsDerived)
-                            {
-                                <span class="badge badge-sage">Derived</span>
-                            }
-                        </td>
-                        <td data-label="Unit" class="small muted">@r.Unit</td>
-                        <td data-label="Rate" class="right strong">@Fmt.Rand(r.Rate)</td>
-                        <td data-label="Quantity source" class="small">
-                            @(r.DerivationNote ?? (r.IsDerived ? "Computed" : "Entered by the estimator"))
-                        </td>
-                        <td data-label="Rate rule">
-                            @if (r.RateRule is not null)
-                            {
-                                <span class="rate-rule">@r.RateRule</span>
-                            }
-                            else
-                            {
-                                <span class="muted small">&mdash;</span>
-                            }
-                        </td>
+                        <th scope="col">Item</th>
+                        <th scope="col">Charged</th>
+                        <th scope="col" class="right">Rate, ex VAT</th>
+                        <th scope="col">Since</th>
                         @if (Model.CanEdit)
                         {
-                            <td data-label="" class="right">
-                                <button class="btn btn-ghost btn-sm" type="button">
-                                    <svg class="ico ico-sm"><use href="#i-edit" /></svg>
-                                </button>
-                            </td>
+                            <th scope="col"><span class="sr-only">Change</span></th>
                         }
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</div>
+                </thead>
+                <tbody>
+                    @foreach (var r in rows)
+                    {
+                        var derived = Model.DerivedAmount(r);
+                        <tr>
+                            <td data-label="Item">
+                                <span class="strong">@r.Name</span>
+                                @if (r.Supplier is not null)
+                                {
+                                    <span class="sub">For @r.Supplier material</span>
+                                }
+                                @if (r.IsDerived)
+                                {
+                                    <span class="sub">@((r.Multiplier ?? 1m) == 1m ? $"Same rate as {r.DerivedFrom}" : $"Worked out as {Fmt.Qty(r.Multiplier!.Value)} times {r.DerivedFrom}")</span>
+                                }
+                            </td>
+                            <td data-label="Charged">@Words.Unit(r.Unit)</td>
+                            <td data-label="Rate, ex VAT" class="right num">
+                                @if (r.Amount is { } amount)
+                                {
+                                    <span class="strong">@Fmt.Rand(amount)</span>
+                                }
+                                else if (derived is { } worked)
+                                {
+                                    <span class="strong">@Fmt.Rand(worked)</span>
+                                }
+                                else if (r.AwaitingClientFigure)
+                                {
+                                    <span class="badge badge-warn">Not supplied yet</span>
+                                }
+                            </td>
+                            <td data-label="Since" class="nowrap">@(r.From is { } from ? Fmt.Date(from) : r.IsDerived ? "Follows its base rate" : "")</td>
+                            @if (Model.CanEdit)
+                            {
+                                <td data-label="Change" class="right">
+                                    @if (!r.IsDerived)
+                                    {
+                                        var formId = $"rate-{r.RateItemId}-{r.SupplierId}";
+                                        <details class="disclosure">
+                                            <summary class="btn btn-ghost btn-sm">
+                                                <svg class="ico ico-sm" aria-hidden="true"><use href="#i-edit" /></svg>
+                                                Change<span class="sr-only"> the rate for @r.Name@(r.Supplier is null ? "" : $", {r.Supplier}")</span>
+                                            </summary>
+                                            <form class="disclosure-body row-edit" method="post" asp-controller="Catalogue" asp-action="SetRate">
+                                                <input type="hidden" name="RateItemId" value="@r.RateItemId" />
+                                                <input type="hidden" name="SupplierId" value="@r.SupplierId" />
+                                                <div class="field">
+                                                    <label class="label" for="@formId-amount">New rate</label>
+                                                    <span class="input-group">
+                                                        <span class="addon before" aria-hidden="true">R</span>
+                                                        <input class="input input-num" id="@formId-amount" name="Amount" type="number" step="0.01" min="0.01"
+                                                               required inputmode="decimal" value="@(r.Amount is { } a ? Fmt.Input(a) : "")" />
+                                                    </span>
+                                                </div>
+                                                <div class="field">
+                                                    <label class="label" for="@formId-from">Starts on</label>
+                                                    <input class="input" id="@formId-from" name="EffectiveFrom" type="date" required value="@Model.Today.ToString("yyyy-MM-dd")" />
+                                                </div>
+                                                <button type="submit" class="btn btn-primary">Save the rate</button>
+                                            </form>
+                                        </details>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
 }
-
-<div class="card">
-    <div class="card-head"><h3>Rate relationships</h3></div>
-    <div class="card-body">
-        <p class="small" style="margin-top:0">
-            Some rates are never stored independently &mdash; they are calculated from another rate
-            so the two cannot drift apart:
-        </p>
-        <div class="check-row">
-            <span class="check-dot check-ok"><svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-check" /></svg></span>
-            <span class="check-body">
-                <span class="check-title">Overtime = normal rate &times; 1,5</span>
-                <span class="check-detail">Applies to both fabrication rates. Change the normal rate and overtime follows.</span>
-            </span>
-        </div>
-        <div class="check-row">
-            <span class="check-dot check-ok"><svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-check" /></svg></span>
-            <span class="check-body">
-                <span class="check-title">Installation normal rate = fabrication no-backsplash normal rate</span>
-                <span class="check-detail">Held as one number, not typed twice.</span>
-            </span>
-        </div>
-        <div class="check-row">
-            <span class="check-dot check-ok"><svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-check" /></svg></span>
-            <span class="check-body">
-                <span class="check-title">Installation overtime rate = fabrication overtime rate</span>
-                <span class="check-detail">Same reasoning &mdash; one relationship instead of a second copy.</span>
-            </span>
-        </div>
-    </div>
-</div>

@@ -1,169 +1,55 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+@* The layout for pages a signed-out visitor can reach: sign in, password reset,
+   account activation and the error page. It reads nothing about the user, so it
+   renders even when no one is signed in. *@
+<!DOCTYPE html>
+<html lang="en-ZA">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@ViewData["Title"] &middot; Techno Surfaces</title>
     <link rel="icon" type="image/png" href="~/img/logo.png" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <style>
-            .auth {
-                min-height: 100vh;
-                display: grid;
-                grid-template-columns: 1.05fr 1fr;
-            }
-
-            .auth-brand {
-                background: linear-gradient(158deg, var(--ts-navy) 0%, #143458 58%, #1b4a72 100%);
-                color: #fff;
-                padding: 54px 58px;
-                display: flex;
-                flex-direction: column;
-                position: relative;
-                overflow: hidden;
-            }
-
-                .auth-brand::after {
-                    content: "";
-                    position: absolute;
-                    right: -140px;
-                    bottom: -170px;
-                    width: 460px;
-                    height: 460px;
-                    border-radius: 50%;
-                    background: radial-gradient(circle, rgba(122,154,78,.34), transparent 68%);
-                }
-
-                .auth-brand > * {
-                    position: relative;
-                    z-index: 1;
-                }
-
-            .auth-headline {
-                font-size: 2.05rem;
-                font-weight: 680;
-                line-height: 1.22;
-                letter-spacing: -.022em;
-                margin: auto 0 0;
-                max-width: 20ch;
-            }
-
-            .auth-sub {
-                color: #a9c0d8;
-                margin-top: 15px;
-                font-size: .95rem;
-                max-width: 40ch;
-            }
-
-            .auth-points {
-                margin: 34px 0 auto;
-                padding: 0;
-                list-style: none;
-            }
-
-                .auth-points li {
-                    display: flex;
-                    gap: 11px;
-                    align-items: flex-start;
-                    color: #c6d6e6;
-                    font-size: .875rem;
-                    padding: 7px 0;
-                }
-
-                .auth-points .ico {
-                    color: var(--ts-sage);
-                    margin-top: 1px;
-                }
-
-            .auth-foot {
-                color: #7b96b4;
-                font-size: .75rem;
-                border-top: 1px solid rgba(255,255,255,.12);
-                padding-top: 17px;
-            }
-
-            .auth-panel {
-                display: grid;
-                place-items: center;
-                padding: 40px 26px;
-                background: var(--surface);
-            }
-
-            .auth-form {
-                width: 100%;
-                max-width: 372px;
-            }
-
-                .auth-form h1 {
-                    font-size: 1.5rem;
-                    margin-bottom: 6px;
-                }
-
-                .auth-form .lede {
-                    color: var(--ink-3);
-                    font-size: .875rem;
-                    margin-bottom: 26px;
-                }
-
-            @@media (max-width: 900px) {
-                .auth {
-                    grid-template-columns: 1fr;
-                }
-
-                .auth-brand {
-                    padding: 30px 24px;
-                }
-
-                .auth-headline {
-                    font-size: 1.5rem;
-                    margin-top: 24px;
-                }
-
-                .auth-points, .auth-foot {
-                    display: none;
-                }
-
-                .auth-panel {
-                    padding: 32px 22px 48px;
-                }
-            }
-    </style>
 </head>
 <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
     <partial name="_Icons" />
 
     <div class="auth">
-        <section class="auth-brand">
-            <div style="border:none;padding:0">
-                <span class="brand-logo-sm">
-                    <img src="~/img/logo.png" alt="Techno Surfaces" />
-                </span>
-            </div>
-
-            <h2 class="auth-headline">Every price traced to its source.</h2>
-            <p class="auth-sub">
-                Supplier catalogue, costing sheet and customer quotation in one place &mdash;
-                so a wrong number cannot pass for a right one.
-            </p>
-
-            <ul class="auth-points">
-                <li><svg class="ico ico-sm"><use href="#i-check" /></svg> Live supplier pricing across all five suppliers</li>
-                <li><svg class="ico ico-sm"><use href="#i-check" /></svg> Quotes keep the price they were created with</li>
-                <li><svg class="ico ico-sm"><use href="#i-check" /></svg> Cost prices never reach a customer document</li>
-                <li><svg class="ico ico-sm"><use href="#i-check" /></svg> Full audit trail of every change</li>
-            </ul>
-
-            <div class="auth-foot">
-                Techno Surfaces (Pty) Ltd &middot; Epping 2, Cape Town
-            </div>
-        </section>
-
-        <section class="auth-panel">
+        <main class="auth-panel" id="main" tabindex="-1">
             <div class="auth-form">
                 @RenderBody()
             </div>
-        </section>
+        </main>
+
+        <aside class="auth-brand" aria-label="About the quoting system">
+            <span class="brand-logo-sm">
+                <img src="~/img/logo.png" alt="Techno Surfaces" />
+            </span>
+
+            <p class="auth-headline">Every price traced to its source.</p>
+            <p class="auth-sub">
+                Supplier catalogue, costing sheet and customer quotation in one place,
+                so a wrong number can never pass for a right one.
+            </p>
+
+            <ul class="auth-points">
+                <li><svg class="ico ico-sm" aria-hidden="true"><use href="#i-check" /></svg> Live pricing from all five suppliers</li>
+                <li><svg class="ico ico-sm" aria-hidden="true"><use href="#i-check" /></svg> Quotes keep the price they were created with</li>
+                <li><svg class="ico ico-sm" aria-hidden="true"><use href="#i-check" /></svg> Cost prices never reach a customer document</li>
+                <li><svg class="ico ico-sm" aria-hidden="true"><use href="#i-check" /></svg> A full record of every change</li>
+            </ul>
+
+            <p class="auth-foot">Techno Surfaces (Pty) Ltd &middot; Epping 2, Cape Town</p>
+        </aside>
     </div>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <div class="toasts" id="toasts-urgent" role="alert" aria-live="assertive"></div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/js/app.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

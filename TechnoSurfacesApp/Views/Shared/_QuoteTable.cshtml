@@ -1,0 +1,67 @@
+@model QuoteTable
+@{
+    var today = TechnoSurfaces.Application.Quoting.BusinessDate.Today(TimeProvider.System);
+}
+<div class="table-wrap">
+    <table class="data stack">
+        <caption class="sr-only">@Model.Caption</caption>
+        <thead>
+            <tr>
+                <th scope="col">Quote</th>
+                @if (Model.ShowCustomer) { <th scope="col">Customer</th> }
+                @if (Model.ShowAuthor) { <th scope="col">Estimator</th> }
+                <th scope="col">Status</th>
+                @if (Model.ShowWaiting) { <th scope="col" class="right">Waiting</th> }
+                @if (Model.ShowValidity) { <th scope="col">Valid until</th> }
+                <th scope="col" class="right">Total ex VAT</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var q in Model.Rows)
+            {
+                var waited = today.DayNumber - q.IssueDate.DayNumber;
+                <tr>
+                    <td data-label="Quote">
+                        @if (Model.LinkToReview)
+                        {
+                            <a class="row-link" asp-controller="Quotes" asp-action="Review" asp-route-id="@q.Id">@q.Reference</a>
+                        }
+                        else
+                        {
+                            <a class="row-link" asp-controller="Quotes" asp-action="Costing" asp-route-id="@q.Id">@q.Reference</a>
+                        }
+                        @if (q.VersionNo > 1)
+                        {
+                            <span class="badge" title="Revised after a counter offer">Version @q.VersionNo</span>
+                        }
+                        <span class="sub">@(q.Project ?? q.Site ?? "No project entered")</span>
+                    </td>
+                    @if (Model.ShowCustomer)
+                    {
+                        <td data-label="Customer">
+                            @q.CustomerName
+                            <span class="sub">For @q.ContactName</span>
+                        </td>
+                    }
+                    @if (Model.ShowAuthor) { <td data-label="Estimator">@q.AuthorName</td> }
+                    <td data-label="Status"><span class="@StatusText.Pill(q.Status)">@StatusText.Label(q.Status)</span></td>
+                    @if (Model.ShowWaiting)
+                    {
+                        <td data-label="Waiting" class="right">@waited day@(waited == 1 ? "" : "s")</td>
+                    }
+                    @if (Model.ShowValidity)
+                    {
+                        <td data-label="Valid until">
+                            @Fmt.Date(q.ValidUntil)
+                            @if (q.ExpiresSoon)
+                            {
+                                <span class="badge badge-warn stacked">@q.DaysRemaining day@(q.DaysRemaining == 1 ? "" : "s") left</span>
+                            }
+                        </td>
+                    }
+                    <td data-label="Total ex VAT" class="right strong">@Fmt.Rand(q.TotalExVat)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

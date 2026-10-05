@@ -1,13 +1,17 @@
-﻿@using TermSection = TechnoSurfaces.Domain.TermSection
+@using TermSection = TechnoSurfaces.Domain.TermSection
 @model TechnoSurfacesApp.Controllers.TermsVm
-
+@*
+    The standing wording on every customer quotation (US-12, US-13), kept in one place.
+    Each line saves on its own. An approved quote keeps the wording it was issued
+    with, so a change here only affects quotations from now on.
+*@
 @functions {
     private static string SectionName(TermSection s) => s switch
     {
         TermSection.Notes => "Notes",
         TermSection.LeadTimes => "Lead times",
         TermSection.Exclusions => "Exclusions",
-        TermSection.TermsAndConditions => "Terms & conditions",
+        TermSection.TermsAndConditions => "Terms and conditions",
         TermSection.Disclaimers => "Disclaimers",
         TermSection.Warranties => "Warranties",
         TermSection.PaymentTerms => "Payment terms",
@@ -16,197 +20,145 @@
     };
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Quotation terms</h2>
-        <p>Standing content carried by every customer quotation</p>
+        <h1>Quotation terms</h1>
+        <p>The wording printed on every customer quotation. A quote that is already approved keeps the wording it was issued with.</p>
     </div>
-    <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-controller="Quotes" asp-action="Index">
-            <svg class="ico ico-sm"><use href="#i-file" /></svg> See it on a quote
-        </a>
-    </div>
-</div>
-
-@if (TempData["CatalogueMessage"] is string message)
-{
-    <div class="notice notice-good" role="status" style="margin-bottom:18px">
-        <svg class="ico"><use href="#i-check-circle" /></svg>
-        <div><strong>@message</strong></div>
-    </div>
-}
-@if (TempData["CatalogueError"] is string error)
-{
-    <div class="notice notice-alert" role="alert" style="margin-bottom:18px">
-        <svg class="ico"><use href="#i-alert" /></svg>
-        <div>@error</div>
-    </div>
-}
+</header>
 
 @if (!Model.CanEdit)
 {
-    <div class="notice notice-alert">
-        <svg class="ico"><use href="#i-lock" /></svg>
-        <div>Only the Managing Director edits the standing terms.</div>
-    </div>
+    <partial name="_ReadOnlyNote" model="@("Only the Managing Director changes the quotation terms. This is the wording quotations print.")" />
 }
 
-<div class="notice notice-info">
-    <svg class="ico"><use href="#i-info" /></svg>
-    <div>
-        Each line is saved on its own and every change is recorded in the audit trail. A quote that
-        has been approved keeps the wording it was issued with, even if a line changes here later.
-    </div>
-</div>
-
 <div class="grid grid-main">
-    <div>
-        <div class="card">
-            <div class="card-head">
-                <svg class="ico" style="color:var(--ts-blue)"><use href="#i-file" /></svg>
-                <h2>Content</h2>
-            </div>
-            <div class="card-body">
-                @foreach (var section in Enum.GetValues<TermSection>())
-                {
-                    var active = Model.ActiveIn(section);
-                    var retired = Model.RetiredIn(section);
+    <div class="stack-gap">
+        @foreach (var part in Enum.GetValues<TermSection>())
+        {
+            var active = Model.ActiveIn(part);
+            var retired = Model.RetiredIn(part);
+            var key = part.ToString().ToLowerInvariant();
 
-                    <div class="term-block">
-                        <h4>@SectionName(section)</h4>
+            <part class="card" aria-labelledby="terms-@key">
+                <div class="card-head">
+                    <h2 id="terms-@key">@SectionName(part)</h2>
+                </div>
+                <div class="card-body">
+                    @if (part == TermSection.BankDetails && active.Count == 0)
+                    {
+                        <div class="notice notice-warn" role="note">
+                            <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+                            <div><strong>Bank details are not set.</strong> Quotations say so until they are added below.</div>
+                        </div>
+                    }
+                    else if (active.Count == 0)
+                    {
+                        <p class="muted">No lines in this section.</p>
+                    }
 
-                        @if (section == TermSection.BankDetails && active.Count == 0)
+                    @for (var i = 0; i < active.Count; i++)
+                    {
+                        var line = active[i];
+                        if (Model.CanEdit)
                         {
-                            <div class="notice notice-warn" style="margin-bottom:10px">
-                                <svg class="ico"><use href="#i-alert" /></svg>
-                                <div>
-                                    Bank details are not set, and quotations say so until they are entered here.
-                                    They are deliberately kept out of the code, because the repository is public.
+                            <div class="term-line">
+                                <form asp-controller="Catalogue" asp-action="UpdateTerm" method="post" id="term-@line.Id">
+                                    <input type="hidden" name="TermId" value="@line.Id" />
+                                    <label class="label" for="term-@line.Id-text">Line @(i + 1)</label>
+                                    <textarea class="input" id="term-@line.Id-text" name="Text" rows="2" maxlength="500" required>@line.Text</textarea>
+                                </form>
+                                <div class="btn-row btn-row-tight">
+                                    <button class="btn btn-secondary btn-sm" type="submit" form="term-@line.Id">
+                                        Save<span class="sr-only"> line @(i + 1) of @SectionName(part)</span>
+                                    </button>
+                                    <form asp-controller="Catalogue" asp-action="RetireTerm" method="post"
+                                          data-confirm="Retire this line?" data-confirm-label="Retire"
+                                          data-confirm-detail="It stops printing on new quotations. Approved quotes keep it.">
+                                        <input type="hidden" name="termId" value="@line.Id" />
+                                        <button class="btn btn-ghost btn-sm" type="submit">
+                                            Retire<span class="sr-only"> line @(i + 1) of @SectionName(part)</span>
+                                        </button>
+                                    </form>
                                 </div>
                             </div>
                         }
-                        else if (active.Count == 0)
+                        else
                         {
-                            <p class="muted small">No lines in this section.</p>
+                            <p class="term-text">@line.Text</p>
                         }
+                    }
 
-                        @foreach (var line in active)
-                        {
-                            if (Model.CanEdit)
-                            {
-                                <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
-                                    <form asp-controller="Catalogue" asp-action="UpdateTerm" method="post" style="display:flex;gap:8px;flex:1">
-                                        <input type="hidden" name="TermId" value="@line.Id" />
-                                        <textarea class="input" name="Text" rows="2" maxlength="500" required
-                                                  aria-label="@SectionName(section), line @line.SortOrder">@line.Text</textarea>
-                                        <button class="btn btn-secondary btn-sm" type="submit">Save</button>
-                                    </form>
-                                    <form asp-controller="Catalogue" asp-action="RetireTerm" method="post"
-                                          onsubmit="return confirm('Retire this line? It stops printing on new quotations. Approved quotes keep it.');">
-                                        <input type="hidden" name="termId" value="@line.Id" />
-                                        <button class="btn btn-ghost btn-sm" type="submit">Retire</button>
-                                    </form>
+                    @if (Model.CanEdit)
+                    {
+                        <form class="term-add" asp-controller="Catalogue" asp-action="AddTerm" method="post">
+                            <input type="hidden" name="Section" value="@(part)" />
+                            <div class="field">
+                                <label class="label" for="add-@key">Add a line to @SectionName(part)</label>
+                                <div class="field-row-action">
+                                    <input class="input" id="add-@key" name="Text" maxlength="500" required />
+                                    <button class="btn btn-secondary" type="submit">Add<span class="sr-only"> to @SectionName(part)</span></button>
                                 </div>
-                            }
-                            else
-                            {
-                                <p class="small" style="margin:0 0 6px">@line.Text</p>
-                            }
-                        }
+                            </div>
+                        </form>
+                    }
 
-                        @if (Model.CanEdit)
-                        {
-                            <form asp-controller="Catalogue" asp-action="AddTerm" method="post" style="display:flex;gap:8px;margin-top:4px">
-                                <input type="hidden" name="Section" value="@(section)" />
-                                <input class="input input-sm" name="Text" maxlength="500" required
-                                       placeholder="Add a line to @SectionName(section)"
-                                       aria-label="New line for @SectionName(section)" />
-                                <button class="btn btn-secondary btn-sm" type="submit">Add</button>
-                            </form>
-                        }
-
-                        @if (retired.Count > 0)
-                        {
-                            <details style="margin-top:6px">
-                                <summary class="tiny muted">@retired.Count retired line@(retired.Count == 1 ? "" : "s")</summary>
+                    @if (retired.Count > 0)
+                    {
+                        <details class="disclosure term-retired">
+                            <summary class="btn btn-ghost btn-sm">@retired.Count retired line@(retired.Count == 1 ? "" : "s")</summary>
+                            <ul>
                                 @foreach (var line in retired)
                                 {
-                                    <p class="tiny muted" style="margin:4px 0;text-decoration:line-through">@line.Text</p>
+                                    <li class="muted">@line.Text</li>
                                 }
-                            </details>
-                        }
-                    </div>
-                }
-            </div>
-        </div>
+                            </ul>
+                        </details>
+                    }
+                </div>
+            </part>
+        }
     </div>
 
-    <div>
-        <div class="card">
-            <div class="card-head"><h3>Warranty by brand</h3></div>
+    <div class="stack-gap">
+        <part class="card" aria-labelledby="brands-title">
+            <div class="card-head"><h2 id="brands-title">Warranty by brand</h2></div>
             <div class="card-body">
+                <p class="hint">A brand with no warranty here prints none on its quotations, rather than a guess. Clear both boxes to remove one.</p>
                 @if (Model.Brands.Count == 0)
                 {
-                    <p class="muted small">No brands in the catalogue yet.</p>
+                    <p class="muted">No brands in the catalogue yet.</p>
                 }
                 @foreach (var b in Model.Brands)
                 {
-                    <div style="margin-bottom:14px">
-                        <div class="strong">
-                            @b.Name
-                            <span class="tiny muted">&middot; @b.ProductLineCount product line@(b.ProductLineCount == 1 ? "" : "s")</span>
-                        </div>
+                    <div class="brand-warranty">
+                        <h3>@b.Name <span class="muted small">(@b.ProductLineCount product line@(b.ProductLineCount == 1 ? "" : "s"))</span></h3>
                         @if (Model.CanEdit)
                         {
-                            <form asp-controller="Catalogue" asp-action="SetBrandWarranty" method="post"
-                                  style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+                            <form class="row-edit" asp-controller="Catalogue" asp-action="SetBrandWarranty" method="post">
                                 <input type="hidden" name="BrandId" value="@b.Id" />
-                                <input class="input input-sm" name="MaterialWarranty" value="@b.MaterialWarranty" maxlength="60"
-                                       placeholder="Material, e.g. 10 years" aria-label="Material warranty for @b.Name"
-                                       style="flex:1;min-width:120px" />
-                                <input class="input input-sm" name="WorkmanshipWarranty" value="@b.WorkmanshipWarranty" maxlength="60"
-                                       placeholder="Workmanship, e.g. 1 year" aria-label="Workmanship warranty for @b.Name"
-                                       style="flex:1;min-width:120px" />
-                                <button class="btn btn-secondary btn-sm" type="submit">Save</button>
+                                <div class="field">
+                                    <label class="label" for="brand-@b.Id-material">Material</label>
+                                    <input class="input" id="brand-@b.Id-material" name="MaterialWarranty" value="@b.MaterialWarranty" maxlength="60" />
+                                </div>
+                                <div class="field">
+                                    <label class="label" for="brand-@b.Id-work">Workmanship</label>
+                                    <input class="input" id="brand-@b.Id-work" name="WorkmanshipWarranty" value="@b.WorkmanshipWarranty" maxlength="60" />
+                                </div>
+                                <button class="btn btn-secondary" type="submit">Save<span class="sr-only"> the @b.Name warranty</span></button>
                             </form>
                         }
                         else
                         {
-                            <div class="small">
+                            <p class="mb-0">
                                 @(b.HasWarranty
-                                    ? $"{b.MaterialWarranty} material, {b.WorkmanshipWarranty} workmanship"
-                                    : "No confirmed warranty, so none is printed")
-                            </div>
+                                    ? $"{b.MaterialWarranty} on the material, {b.WorkmanshipWarranty} on workmanship."
+                                    : "No warranty confirmed, so none is printed.")
+                            </p>
                         }
                     </div>
                 }
             </div>
-            <div class="card-foot">
-                <span class="tiny muted">
-                    A product line with no brand, or a brand with no confirmed warranty, prints no warranty
-                    rather than a guess. Clear both boxes to remove a warranty.
-                </span>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head"><h3>Where this appears</h3></div>
-            <div class="card-body" style="padding:6px 20px">
-                <div class="check-row">
-                    <span class="check-dot check-ok"><svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-file" /></svg></span>
-                    <span class="check-body">
-                        <span class="check-title">Customer quotation only</span>
-                        <span class="check-detail">Never on the internal costing sheet.</span>
-                    </span>
-                </div>
-                <div class="check-row">
-                    <span class="check-dot check-info"><svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-history" /></svg></span>
-                    <span class="check-body">
-                        <span class="check-title">Kept with each approved quote</span>
-                        <span class="check-detail">A quote keeps the wording it was approved with.</span>
-                    </span>
-                </div>
-            </div>
-        </div>
+        </part>
     </div>
 </div>

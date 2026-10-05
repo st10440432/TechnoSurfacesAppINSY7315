@@ -1,152 +1,112 @@
-﻿@model TechnoSurfacesApp.Controllers.RecordInvoiceVm
+@model TechnoSurfacesApp.Controllers.InvoiceVm
+@*
+    The Sage Pastel invoice recorded against an accepted quote (US-25). Pastel
+    raises the invoice; this records its number, date and amount beside what was
+    quoted, so the two can be reconciled. The form posts to the invoice API
+    through app.js.
+*@
 @{
     var q = Model.Quote;
+    var r = Model.Recorded;
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Record Pastel invoice</h2>
-        <p>@q.Ref &middot; @Db.CustomerName(q.CustomerId)</p>
+        <h1>Invoice record</h1>
+        <p>@q.Reference for @q.CustomerName. The invoice is raised in Sage Pastel and recorded here.</p>
     </div>
-    <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
-            <svg class="ico ico-sm"><use href="#i-arrow-left" /></svg> Costing sheet
-        </a>
-    </div>
-</div>
+</header>
 
 <partial name="_QuoteHeader" model="q" />
-
-<div class="notice notice-info">
-    <svg class="ico"><use href="#i-info" /></svg>
-    <div>
-        <strong>Pastel remains the book of record.</strong>
-        Tax invoices, VAT and sequential numbering stay in Sage Pastel Partner. This screen records
-        the invoice reference against the quote so the link from quote to invoice stays traceable.
-    </div>
-</div>
+<partial name="_QuoteTabs" model="q" />
 
 <div class="grid grid-main">
-    <div>
-        <div class="card">
+    @if (r is not null)
+    {
+        <section class="card" aria-labelledby="recorded-title">
             <div class="card-head">
-                <svg class="ico" style="color:var(--ts-blue)"><use href="#i-file" /></svg>
-                <h2>Invoice details</h2>
-                @if (Model.IsRecorded)
-                {
-                    <span class="spacer"></span>
-                    <span class="badge badge-sage">Recorded</span>
-                }
+                <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
+                <h2 id="recorded-title">Invoice @r.InvoiceNumber</h2>
             </div>
             <div class="card-body">
-                <div class="field-row field-row-2">
-                    <div class="field">
-                        <label class="label" for="invno">Pastel invoice number <span class="req">*</span></label>
-                        <input class="input" id="invno" value="@q.PastelInvoiceNo" placeholder="IN000000" />
-                        <div class="hint">As it appears on the Pastel document, e.g. IN114317</div>
-                    </div>
-                    <div class="field">
-                        <label class="label" for="invdate">Invoice date <span class="req">*</span></label>
-                        <input class="input" id="invdate" type="date"
-                               value="@(q.PastelInvoiceDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))" />
-                    </div>
-                </div>
-
-                <div class="field-row field-row-2">
-                    <div class="field">
-                        <label class="label" for="invamt">Invoice amount incl VAT <span class="req">*</span></label>
-                        <div class="input-group">
-                            <span class="addon" style="border-left:1px solid var(--line);border-right:none;border-radius:var(--r-sm) 0 0 var(--r-sm)">R</span>
-                            <input class="input input-num" id="invamt" type="number" step="0.01"
-                                   style="border-radius:0 var(--r-sm) var(--r-sm) 0"
-                                   value="@(q.PastelInvoiceAmount?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
-                        </div>
-                    </div>
-                    <div class="field">
-                        <label class="label" for="pastelacct">Pastel account code</label>
-                        <input class="input" id="pastelacct" value="@Db.GetCustomer(q.CustomerId)?.AccountCode" disabled />
-                        <div class="hint">From the customer record</div>
-                    </div>
-                </div>
-
-                <div class="field">
-                    <label class="label" for="invnote">Note</label>
-                    <textarea class="input" id="invnote" rows="2"
-                              placeholder="Anything worth recording about this invoice"></textarea>
-                </div>
-            </div>
-            <div class="card-foot">
-                <button class="btn btn-primary" type="button">
-                    @(Model.IsRecorded ? "Update invoice record" : "Record invoice")
-                </button>
-                <a class="btn btn-ghost" asp-action="Index">Cancel</a>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head"><h3>Quote to invoice</h3></div>
-            <div class="table-wrap">
-                <table class="data stack">
-                    <thead><tr><th>Figure</th><th class="right">Amount</th><th>Source</th></tr></thead>
-                    <tbody>
-                        <tr>
-                            <td data-label="Figure">Quoted total ex VAT</td>
-                            <td data-label="Amount" class="right">@Fmt.Rand(q.Total)</td>
-                            <td data-label="Source" class="small muted">Costing sheet</td>
-                        </tr>
-                        <tr>
-                            <td data-label="Figure">VAT @@ 15%</td>
-                            <td data-label="Amount" class="right">@Fmt.Rand(Math.Round(q.Total * 0.15m, 2))</td>
-                            <td data-label="Source" class="small muted">Calculated</td>
-                        </tr>
-                        <tr class="total-row">
-                            <td data-label="Figure">Quoted total incl VAT</td>
-                            <td data-label="Amount" class="right">@Fmt.Rand(Math.Round(q.Total * 1.15m, 2))</td>
-                            <td data-label="Source" class="small muted">Calculated</td>
-                        </tr>
-                        @if (Model.IsRecorded)
+                <dl class="facts">
+                    <dt>Invoice number</dt>
+                    <dd class="mono">@r.InvoiceNumber</dd>
+                    <dt>Invoice date</dt>
+                    <dd>@Fmt.Date(r.InvoiceDate)</dd>
+                    <dt>Invoiced, inc VAT</dt>
+                    <dd>@Fmt.Rand(r.AmountIncVat)</dd>
+                    <dt>Quoted, inc VAT</dt>
+                    <dd>@Fmt.Rand(r.QuotedTotalIncVat)</dd>
+                    <dt>Difference</dt>
+                    <dd>
+                        @if (r.Variance == 0)
                         {
-                            <tr>
-                                <td data-label="Figure">Invoiced (Pastel)</td>
-                                <td data-label="Amount" class="right strong">@Fmt.Rand(q.PastelInvoiceAmount!.Value)</td>
-                                <td data-label="Source" class="small muted">@q.PastelInvoiceNo &middot; @Fmt.Date(q.PastelInvoiceDate!.Value)</td>
-                            </tr>
-                            <tr class="grand-row">
-                                <td data-label="Figure">Variance</td>
-                                <td data-label="Amount" class="right">
-                                    @(Model.Variance >= 0 ? "+" : "\u2212")@Fmt.Rand(Math.Abs(Model.Variance))
-                                </td>
-                                <td data-label="Source" class="small">
-                                    @(Math.Abs(Model.Variance) < 1m ? "Matches the quote" : "Differs from the quote \u2014 worth checking")
-                                </td>
-                            </tr>
+                            <span class="badge badge-good">None. The invoice matches the quote.</span>
                         }
-                    </tbody>
-                </table>
+                        else
+                        {
+                            <span class="badge badge-warn">@Fmt.Rand(Math.Abs(r.Variance)) @(r.Variance > 0 ? "more" : "less") than quoted</span>
+                            <span class="sub">Usual when the job was re-measured on site or changed.</span>
+                        }
+                    </dd>
+                    <dt>Recorded</dt>
+                    <dd>@Fmt.DateTimeShort(TechnoSurfaces.Application.Auditing.AuditTime.ToLocal(r.RecordedAtUtc))</dd>
+                </dl>
             </div>
-        </div>
-    </div>
-
-    <div>
-        <div class="card totals">
-            <div class="card-head"><h3>Scope note</h3></div>
-            <div class="card-body">
-                <p class="small" style="margin-top:0">
-                    Generating the tax invoice was evaluated and left out of scope. Pastel is already
-                    licensed, is the accounting book of record, and produces a compliant invoice with
-                    sequential numbering &mdash; a legal requirement for VAT.
-                </p>
-                <p class="small">
-                    Live integration was also investigated and rejected: Pastel Partner is on-premise
-                    desktop software with SDK-gated access, which a cloud-hosted application cannot
-                    reach without disproportionate infrastructure.
-                </p>
-                <div class="totals-note">
-                    Customer records are seeded from a one-off Pastel export at cut-over, and the
-                    invoice reference is recorded here. That keeps traceability without coupling the
-                    two systems.
+        </section>
+    }
+    else if (Model.CanRecord)
+    {
+        <section class="card" aria-labelledby="record-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg>
+                <h2 id="record-title">Record the Pastel invoice</h2>
+            </div>
+            <form class="card-body" novalidate
+                  data-api-form data-method="POST" data-url="@Url.Content($"~/api/quotes/{q.Id}/invoice")"
+                  data-success="Invoice recorded" data-success-detail="It is now beside the quote, with any difference worked out.">
+                <div class="field-row field-row-3">
+                    <div class="field">
+                        <label class="label" for="invoiceNumber">Invoice number <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input mono" id="invoiceNumber" name="invoiceNumber" required autocomplete="off" aria-describedby="invoiceNumber-hint" />
+                        <span class="hint" id="invoiceNumber-hint">As printed on the Pastel invoice.</span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="invoiceDate">Invoice date <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" id="invoiceDate" name="invoiceDate" type="date" required />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="amountIncVat">Amount inc VAT <span class="req" aria-hidden="true">*</span></label>
+                        <span class="input-group">
+                            <span class="addon before" aria-hidden="true">R</span>
+                            <input class="input input-num" id="amountIncVat" name="amountIncVat" type="number" inputmode="decimal" min="0.01" step="any" required aria-describedby="amount-hint" />
+                        </span>
+                        <span class="hint" id="amount-hint">The quote came to @Fmt.Rand(q.Totals.TotalIncVat) including VAT.</span>
+                    </div>
                 </div>
+                <div class="btn-row">
+                    <button type="submit" class="btn btn-primary">Record the invoice</button>
+                </div>
+            </form>
+        </section>
+    }
+    else
+    {
+        <section class="card" aria-labelledby="not-yet-title">
+            <div class="empty">
+                <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+                <h2 id="not-yet-title">Not yet</h2>
+                <p>An invoice is recorded once the customer has accepted the quote. This quote is @StatusText.Label(q.Status).ToLowerInvariant().</p>
+                <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">Back to the costing sheet</a>
             </div>
+        </section>
+    }
+
+    <section class="card" aria-labelledby="why-title">
+        <div class="card-head"><h2 id="why-title">Why this is recorded</h2></div>
+        <div class="card-body small">
+            <p class="mb-0">Sage Pastel stays the book of record for invoices. Recording the number here links the quote to its invoice, so either can be found from the other, and shows any difference between what was quoted and what was invoiced.</p>
         </div>
-    </div>
+    </section>
 </div>

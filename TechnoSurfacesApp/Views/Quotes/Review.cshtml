@@ -1,224 +1,156 @@
-﻿@model TechnoSurfacesApp.Controllers.ReviewVm
+@model TechnoSurfacesApp.Controllers.ReviewVm
+@*
+    Review a quote before approving it (US-18, US-19). The checks say what is
+    ready and what is not; the costing is shown with where every price came from;
+    the changes made to the quote are listed. The Managing Director can correct the
+    costing or the quotation and then approve, without sending it back.
+*@
 @{
     var q = Model.Quote;
-    var groups = TechnoSurfacesApp.Controllers.CostingVm.Order;
-
-    string GroupName(RateGroup g) => g switch
-    {
-        RateGroup.Fabrication => "Fabrication",
-        RateGroup.Consumables => "Consumables",
-        RateGroup.Installation => "Installation",
-        RateGroup.WoodSubstrate => "Wood & substrate",
-        RateGroup.SinksHardware => "Sinks & hardware",
-        _ => "Below the line"
-    };
+    var a = Model.Actions;
+    var t = Model.Sheet.Totals;
+    var check = Model.Check;
+    var lines = Model.Sheet.Lines;
+    var changedPrices = lines.Count(l => l.HasPriceOverride);
+    var enteredPrices = lines.Count(l => l.PriceOrigin == TechnoSurfaces.Application.Quoting.CostingSheetService.EnteredOnQuoteOrigin);
+    var typedOver = lines.Count(l => l.IsQuantityOverridden);
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Review quote</h2>
-        <p>@q.Project &middot; submitted by @Db.UserName(q.OwnerUserId)</p>
+        <h1>Review quote</h1>
+        <p>@q.Reference for @q.CustomerName, submitted by @q.AuthorName.</p>
     </div>
     <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-action="Approvals">
-            <svg class="ico ico-sm"><use href="#i-arrow-left" /></svg> Queue
-        </a>
+        @if (a.CanEdit)
+        {
+            <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
+                <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg> Correct the costing
+            </a>
+        }
         <a class="btn btn-secondary" asp-action="Quotation" asp-route-id="@q.Id">
-            <svg class="ico ico-sm"><use href="#i-eye" /></svg> Customer view
+            <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> @(a.CanEdit ? "Correct the quotation" : "Customer quotation")
         </a>
     </div>
-</div>
+</header>
 
 <partial name="_QuoteHeader" model="q" />
+<partial name="_QuoteTabs" model="q" />
+
+@if (!a.IsManagingDirector)
+{
+    <partial name="_ReadOnlyNote" model="@("Only the Managing Director approves quotes. You can read the review, and any changes the Managing Director makes are listed here.")" />
+}
+else if (q.Status != "PendingApproval")
+{
+    <div class="notice notice-info" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+        <div>This quote is <strong>@StatusText.Label(q.Status).ToLowerInvariant()</strong>, so there is nothing to approve.</div>
+    </div>
+}
 
 <div class="grid grid-main">
-    <div>
-        <div class="card">
+    <div class="stack-gap">
+        <section class="card" aria-labelledby="checks-title">
             <div class="card-head">
-                <svg class="ico" style="color:var(--ts-sage)"><use href="#i-layers" /></svg>
-                <h2>Materials and resolved prices</h2>
+                <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
+                <h2 id="checks-title">Before approving</h2>
             </div>
-            <div class="table-wrap">
-                <table class="data stack">
-                    <thead>
-                        <tr>
-                            <th>Material</th>
-                            <th>Size</th>
-                            <th class="right">Sheets</th>
-                            <th class="right">m&sup2;</th>
-                            <th class="right">R/sheet</th>
-                            <th class="right">Disc</th>
-                            <th class="right">Line total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var m in q.MaterialLines)
+            <div class="card-body">
+                <ul class="check-list">
+                    <li class="check-row">
+                        @if (q.CostingLineCount > 0)
                         {
-                            <tr>
-                                <td data-label="Material">
-                                    <div class="strong">@m.ColourName</div>
-                                    <div class="tiny muted">
-                                        @m.SupplierName &middot; @m.ProductLineName
-                                        @if (m.BandCode is not null)
-                                        {
-                                            <span class="badge badge-band">@m.BandCode</span>
-                                        }
-                                    </div>
-                                    <div class="tiny muted">
-                                        @(string.IsNullOrEmpty(m.SupplierCode) ? "No supplier code" : m.SupplierCode)
-                                        &middot; price resolved @Fmt.Date(m.PriceResolvedAt)
-                                    </div>
-                                </td>
-                                <td data-label="Size" class="nowrap">@m.SizeLabel</td>
-                                <td data-label="Sheets" class="right">@Fmt.Qty(m.SheetsToOrder)</td>
-                                <td data-label="m&sup2;" class="right">@Fmt.Num(m.SquareMetres)</td>
-                                <td data-label="R/sheet" class="right">@Fmt.Rand(m.ResolvedPricePerSheet)</td>
-                                <td data-label="Disc" class="right">
-                                    @(m.SupplierDiscountPct > 0 ? Fmt.Pct(m.SupplierDiscountPct) : "\u2014")
-                                </td>
-                                <td data-label="Line total" class="right strong">@Fmt.Rand(m.LineTotal)</td>
-                            </tr>
+                            <span class="check-dot check-ok" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-check" /></svg></span>
+                            <span class="check-body">
+                                <span class="check-title">Costed</span>
+                                <span class="check-detail">@q.CostingLineCount line@(q.CostingLineCount == 1 ? "" : "s"), every one priced. A line without a price cannot be saved.</span>
+                            </span>
                         }
-                    </tbody>
-                    <tfoot>
-                        <tr class="total-row">
-                            <td colspan="6">Material subtotal</td>
-                            <td class="right">@Fmt.Rand(q.MaterialTotal)</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <svg class="ico" style="color:var(--ts-blue)"><use href="#i-calc" /></svg>
-                <h2>Cost breakdown by section</h2>
-            </div>
-            <div class="table-wrap">
-                <table class="data stack">
-                    <thead>
-                        <tr>
-                            <th>Section</th>
-                            <th class="right">Lines</th>
-                            <th class="right">Total</th>
-                            <th>Marked up</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var g in groups)
+                        else
                         {
-                            var rows = q.CostingLines.Where(l => l.Group == g && l.Quantity > 0).ToList();
-                            if (rows.Count == 0)
-                            {
-                                continue;
-                            }
-
-                            <tr>
-                                <td data-label="Section">
-                                    <div class="strong">@GroupName(g)</div>
-                                    <div class="tiny muted">
-                                        @string.Join(", ", rows.Take(3).Select(r => r.Name))@(rows.Count > 3 ? $" +{rows.Count - 3} more" : "")
-                                    </div>
-                                </td>
-                                <td data-label="Lines" class="right">@rows.Count</td>
-                                <td data-label="Total" class="right strong">@Fmt.Rand(rows.Sum(r => r.LineTotal))</td>
-                                <td data-label="Marked up">
-                                    @if (g == RateGroup.BelowTheLine)
-                                    {
-                                        <span class="badge badge-warn">No &mdash; cost recovery</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge badge-sage">Yes</span>
-                                    }
-                                </td>
-                            </tr>
+                            <span class="check-dot check-warn" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-alert" /></svg></span>
+                            <span class="check-body">
+                                <span class="check-title">Nothing costed</span>
+                                <span class="check-detail">The quote has no costing lines.</span>
+                            </span>
                         }
-                    </tbody>
-                </table>
-            </div>
-            <div class="card-foot">
-                <a class="btn btn-secondary btn-sm" asp-action="Costing" asp-route-id="@q.Id">
-                    Open full costing sheet
-                    <svg class="ico ico-sm"><use href="#i-chevron-right" /></svg>
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div>
-        <div class="card totals">
-            <div class="card-head"><h3>Pre-approval checks</h3></div>
-            <div class="card-body" style="padding:6px 20px">
-                @foreach (var c in Model.Checks)
-                {
-                    var icon = c.Level == "ok" ? "#i-check" : c.Level == "warn" ? "#i-alert" : "#i-info";
-                    <div class="check-row">
-                        <span class="check-dot check-@c.Level">
-                            <svg class="ico" style="width:11px;height:11px;flex-basis:11px">
-                                <use href="@icon" />
-                            </svg>
+                    </li>
+                    @if (check is not null)
+                    {
+                        <li><partial name="_QuotationCheck" model="check" /></li>
+                    }
+                    <li class="check-row">
+                        @if (changedPrices + enteredPrices + typedOver == 0)
+                        {
+                            <span class="check-dot check-ok" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-check" /></svg></span>
+                            <span class="check-body">
+                                <span class="check-title">Prices as listed</span>
+                                <span class="check-detail">Every price comes from a supplier's price list or the rate card, and no calculated quantity was typed over.</span>
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="check-dot check-info" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-info" /></svg></span>
+                            <span class="check-body">
+                                <span class="check-title">Worth a look</span>
+                                <span class="check-detail">
+                                    @string.Join(" ", new[]
+                                    {
+                                        changedPrices > 0 ? $"{changedPrices} rate{(changedPrices == 1 ? " was" : "s were")} changed for this quote." : null,
+                                        enteredPrices > 0 ? $"{enteredPrices} price{(enteredPrices == 1 ? " was" : "s were")} entered on the quote because the rate card has none." : null,
+                                        typedOver > 0 ? $"{typedOver} calculated quantit{(typedOver == 1 ? "y was" : "ies were")} typed over." : null
+                                    }.Where(s => s is not null))
+                                    They are marked in the costing below.
+                                </span>
+                            </span>
+                        }
+                    </li>
+                    <li class="check-row">
+                        <span class="check-dot @(q.ExpiresSoon ? "check-warn" : "check-ok")" aria-hidden="true">
+                            <svg class="ico ico-sm"><use href="#@(q.ExpiresSoon ? "i-alert" : "i-check")" /></svg>
                         </span>
                         <span class="check-body">
-                            <span class="check-title">@c.Title</span>
-                            <span class="check-detail">@c.Detail</span>
+                            <span class="check-title">Valid until @Fmt.Date(q.ValidUntil)</span>
+                            <span class="check-detail">@(q.ExpiresSoon ? $"Only {q.DaysRemaining} day{(q.DaysRemaining == 1 ? "" : "s")} left to send it." : $"{q.DaysRemaining} days left.")</span>
                         </span>
-                    </div>
-                }
+                    </li>
+                </ul>
             </div>
-        </div>
+        </section>
 
-        <div class="card">
-            <div class="card-head"><h3>Figures</h3></div>
+        <section class="card" aria-labelledby="costing-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-calc" /></svg>
+                <h2 id="costing-title">The costing</h2>
+                <span class="spacer"></span>
+                <span class="badge">For Techno Surfaces only</span>
+            </div>
+            <partial name="_MaterialLines" model="new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, false)" />
+            <partial name="_RateLines" model="new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, false)" />
+        </section>
+    </div>
+
+    <div class="stack-gap">
+        <section class="card" aria-labelledby="review-totals-title">
+            <div class="card-head"><h2 id="review-totals-title">Totals</h2></div>
             <div class="card-body">
-                <div class="totals-row">
-                    <span class="lbl">Sub total</span>
-                    <span class="val">@Fmt.Rand(q.SubTotal)</span>
-                </div>
-                <div class="totals-row">
-                    <span class="lbl">Markup @Fmt.Pct(q.MarkupPct)</span>
-                    <span class="val">@Fmt.Rand(q.MarkupAmount)</span>
-                </div>
-                <div class="totals-row">
-                    <span class="lbl">Below the line</span>
-                    <span class="val">@Fmt.Rand(q.BelowTheLineTotal)</span>
-                </div>
-                <div class="totals-row grand">
-                    <span class="lbl">Total</span>
-                    <span class="val">@Fmt.Rand(q.Total)</span>
-                </div>
-                <div class="totals-note">
-                    @Fmt.Area(q.TotalSqm) at <strong>@Fmt.Rand(q.RandPerSqm) per m&sup2;</strong>.
-                    Use this as the range check before approving.
-                            @await Component.InvokeAsync("QuoteChanges", new { reference = q.Ref })
-                </div>
+                <div class="totals-row"><span class="lbl">Sub total</span><span class="val">@Fmt.Rand(t.SubTotalExVat)</span></div>
+                <div class="totals-row"><span class="lbl">Markup @Fmt.Pct(t.MarkupPercent)</span><span class="val">@Fmt.Rand(t.MarkupAmount)</span></div>
+                <div class="totals-row"><span class="lbl">Cut-outs, grooves and transport</span><span class="val">@Fmt.Rand(t.BelowTheLineTotal)</span></div>
+                <div class="totals-row total-line"><span class="lbl">Total ex VAT</span><span class="val">@Fmt.Rand(t.TotalExVat)</span></div>
+                <div class="totals-row"><span class="lbl">VAT at @Fmt.Pct(t.VatRate * 100)</span><span class="val">@Fmt.Rand(t.VatAmount)</span></div>
+                <div class="totals-row grand"><span class="lbl">Total inc VAT</span><span class="val">@Fmt.Rand(t.TotalIncVat)</span></div>
+                <dl class="facts facts-tight">
+                    <dt>Total area</dt><dd>@Fmt.Sqm(t.TotalAreaM2)</dd>
+                    <dt>Sheets</dt><dd>@Fmt.Qty(t.TotalSheetCount)</dd>
+                    <dt>Rand per m², ex VAT</dt><dd>@(t.TotalAreaM2 > 0 ? Fmt.Rand(t.TotalExVat / t.TotalAreaM2) : "Not yet")</dd>
+                </dl>
             </div>
+        </section>
 
-            @if (Model.IsMd)
-            {
-                <div class="card-foot" style="display:block">
-                    <button class="btn btn-primary btn-block" type="button">
-                        <svg class="ico ico-sm"><use href="#i-check" /></svg> Approve quote
-                    </button>
-                    <a class="btn btn-secondary btn-block" asp-action="Costing" asp-route-id="@q.Id"
-                       style="margin-top:9px">
-                        <svg class="ico ico-sm"><use href="#i-edit" /></svg> Correct, then approve
-                    </a>
-                    <p class="hint" style="margin-top:10px;margin-bottom:0">
-                        Approving locks the quote against further estimator edits.
-                    </p>
-                </div>
-            }
-            else
-            {
-                <div class="card-foot">
-                    <span class="small muted">
-                        <svg class="ico ico-sm" style="vertical-align:-2px"><use href="#i-lock" /></svg>
-                        Only the Managing Director can approve.
-                    </span>
-                </div>
-            }
-        </div>
+        <partial name="_QuoteActions" model="new TechnoSurfacesApp.Controllers.QuoteActionBar(q, a, check)" />
+
+        @await Component.InvokeAsync("QuoteChanges", new { reference = q.Reference })
     </div>
 </div>

@@ -1,0 +1,39 @@
+@model TechnoSurfaces.Application.Customers.CustomerView?
+@*
+    The fields of a customer, for adding one and for changing one. The lengths
+    match the API's limits. Field names are the API's, so a validation error from
+    the server lands on the right field.
+*@
+<div class="field">
+    <label class="label" for="name">Company name <span class="req" aria-hidden="true">*</span></label>
+    <input class="input" id="name" name="name" maxlength="200" required value="@Model?.Name" autocomplete="organization" />
+</div>
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="accountCode">Pastel account code <span class="optional">optional</span></label>
+        <input class="input mono" id="accountCode" name="accountCode" maxlength="40" value="@Model?.AccountCode" aria-describedby="accountCode-hint" />
+        <span class="hint" id="accountCode-hint">As in Sage Pastel. No two customers can share one.</span>
+    </div>
+    <div class="field">
+        <label class="label" for="vatNumber">VAT number <span class="optional">optional</span></label>
+        <input class="input mono" id="vatNumber" name="vatNumber" maxlength="40" value="@Model?.VatNumber" />
+    </div>
+</div>
+<div class="field">
+    <label class="label" for="addressLine1">Address <span class="optional">optional</span></label>
+    <input class="input" id="addressLine1" name="addressLine1" maxlength="200" value="@Model?.AddressLine1" autocomplete="address-line1" />
+</div>
+<div class="field">
+    <label class="label" for="addressLine2">Address line 2 <span class="optional">optional</span></label>
+    <input class="input" id="addressLine2" name="addressLine2" maxlength="200" value="@Model?.AddressLine2" autocomplete="address-line2" />
+</div>
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="city">City <span class="optional">optional</span></label>
+        <input class="input" id="city" name="city" maxlength="100" value="@Model?.City" autocomplete="address-level2" />
+    </div>
+    <div class="field">
+        <label class="label" for="postalCode">Postal code <span class="optional">optional</span></label>
+        <input class="input" id="postalCode" name="postalCode" maxlength="20" value="@Model?.PostalCode" autocomplete="postal-code" />
+    </div>
+</div>

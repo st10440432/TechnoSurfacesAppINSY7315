@@ -1,162 +1,175 @@
-﻿@model TechnoSurfacesApp.Controllers.UsersVm
+@model TechnoSurfacesApp.Controllers.UsersVm
+@*
+    User accounts (US-26). There is no public registration: the Managing Director
+    creates every account and hands over a temporary password in person. Accounts are
+    deactivated, never deleted, so older quotes keep their author.
+*@
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Users</h2>
-        <p>@Model.ActiveCount active &middot; @Model.MdCount Managing Director &middot; @Model.EstimatorCount active estimator@(Model.EstimatorCount == 1 ? "" : "s")</p>
+        <h1>Users</h1>
+        <p>@Model.ActiveCount active account@(Model.ActiveCount == 1 ? "" : "s"): @Model.MdCount Managing Director and @Model.EstimatorCount estimator@(Model.EstimatorCount == 1 ? "" : "s").</p>
     </div>
-    <div class="page-head-actions">
-        @if (Model.CanManage)
-        {
-            <a class="btn btn-primary" href="#create-user">
-                <svg class="ico ico-sm"><use href="#i-plus" /></svg> Create user
-            </a>
-        }
-    </div>
-</div>
+</header>
 
 @if (TempData["UserMessage"] is string message)
 {
-    <div class="notice notice-good" role="status" style="margin-bottom:18px">
-        <svg class="ico"><use href="#i-check-circle" /></svg>
+    <div class="notice notice-good mb-section" role="status">
+        <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
         <div>
             <strong>@message</strong>
             @if (TempData["TemporaryPassword"] is string temporary)
             {
-                <div style="margin-top:8px">
-                    Temporary password:
-                    <code style="font-size:1.05rem;font-weight:700;padding:3px 10px;background:#fff;border:1px solid var(--line);border-radius:6px;letter-spacing:.05em;user-select:all">@temporary</code>
-                </div>
-                <div class="small" style="margin-top:6px">
-                    Give it to the user in person. It is shown only once, and they must change it when they first sign in.
-                </div>
+                <p class="mb-0">Temporary password: <code class="temp-password">@temporary</code></p>
+                <p class="mb-0 small">Give it to the person face to face. It is shown only this once, and they choose their own password when they first sign in.</p>
             }
         </div>
     </div>
 }
 @if (TempData["UserError"] is string error)
 {
-    <div class="notice notice-alert" role="alert" style="margin-bottom:18px">
-        <svg class="ico"><use href="#i-alert" /></svg>
-        <div>@error</div>
+    <div class="notice notice-alert mb-section" role="alert">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div><strong>Not saved.</strong> @error</div>
     </div>
 }
 
-<div class="notice notice-info">
-    <svg class="ico"><use href="#i-lock" /></svg>
-    <div>
-        <strong>There is no public registration.</strong>
-        Every account is created here by the Managing Director, who gives the new user a
-        temporary password in person. It must be changed at first sign-in. A deactivated
-        account is never deleted &mdash; historic quotes must keep their author.
-    </div>
-</div>
-
 <div class="grid grid-main">
-    <div>
-        <div class="card">
-            <div class="card-head"><h2>Accounts</h2></div>
-            <div class="table-wrap">
-                <table class="data stack">
-                    <thead>
+    <div class="stack-gap">
+    <section class="card" aria-labelledby="accounts-title">
+        <div class="card-head"><h2 id="accounts-title">Accounts</h2></div>
+        <div class="table-wrap">
+            <table class="data stack">
+                <caption class="sr-only">User accounts</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Person</th>
+                        <th scope="col">Role</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Last signed in</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in Model.Users)
+                    {
+                        var me = u.Id == Model.MyId;
                         <tr>
-                            <th>User</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Last sign-in</th>
-                            <th>Created</th>
-                            @if (Model.CanManage)
-                            {
-                                <th><span class="visually-hidden">Actions</span></th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var u in Model.Users)
-                        {
-                            <tr>
-                                <td data-label="User">
-                                    <div style="display:flex;align-items:center;gap:10px">
-                                        <span class="avatar @(u.Role == UserRole.Estimator ? "sage" : "")">@u.Initials</span>
-                                        <div>
-                                            <div class="strong small">
-                                                @u.FullName
-                                                @if (u.Id == Model.MyId)
-                                                {
-                                                    <span class="badge badge-sage">You</span>
-                                                }
-                                            </div>
-                                            <div class="tiny muted">@u.Email</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td data-label="Role">@u.RoleLabel</td>
-                                <td data-label="Status">
-                                    @if (!u.IsActive)
-                                    {
-                                        <span class="pill pill-draft">Deactivated</span>
-                                    }
-                                    else if (u.IsLockedOut)
-                                    {
-                                        <span class="pill pill-draft">Locked out</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="pill pill-accepted">Active</span>
-                                    }
-                                    @if (u.MustChangePassword)
-                                    {
-                                        <div class="tiny muted">Must set a password</div>
-                                    }
-                                </td>
-                                <td data-label="Last sign-in" class="small nowrap">
-                                    @(u.LastLogin.HasValue ? Fmt.DateTimeShort(u.LastLogin.Value) : "Never")
-                                </td>
-                                <td data-label="Created" class="small nowrap">@Fmt.Date(u.CreatedOn)</td>
+                            <td data-label="Person">
+                                <span class="strong">@u.FullName</span>
+                                @if (me) { <span class="badge badge-sage">You</span> }
+                                <span class="sub">@u.Email</span>
                                 @if (Model.CanManage)
                                 {
-                                    <td data-label="" class="right nowrap">
-                                        <form asp-action="ReissuePassword" method="post" style="display:inline">
+                                    <div class="btn-row btn-row-tight user-actions">
+                                        <form asp-action="ReissuePassword" method="post"
+                                              data-confirm="Issue a new temporary password for @u.FullName?"
+                                              data-confirm-detail="Their current password stops working. They choose a new one when they next sign in."
+                                              data-confirm-label="Issue password">
                                             <input type="hidden" name="userId" value="@u.Id" />
-                                            <button class="btn btn-secondary btn-sm" type="submit"
-                                                    aria-label="Reset password for @u.FullName">
-                                                Reset password
+                                            <button class="btn btn-secondary btn-sm" type="submit">
+                                                New password<span class="sr-only"> for @u.FullName</span>
                                             </button>
                                         </form>
-                                        @if (u.Id != Model.MyId)
+                                        @if (!me)
                                         {
-                                            <form asp-action="SetUserActive" method="post" style="display:inline;margin-left:6px">
+                                            <form asp-action="SetUserActive" method="post"
+                                                  data-confirm="@(u.IsActive ? "Deactivate" : "Reactivate") @u.FullName?"
+                                                  data-confirm-detail="@(u.IsActive ? "They can no longer sign in. Their quotes keep their name." : "They can sign in again with their existing password.")"
+                                                  data-confirm-label="@(u.IsActive ? "Deactivate" : "Reactivate")"
+                                                  data-confirm-tone="@(u.IsActive ? "danger" : "")">
                                                 <input type="hidden" name="userId" value="@u.Id" />
                                                 <input type="hidden" name="active" value="@(!u.IsActive)" />
-                                                <button class="btn btn-sm @(u.IsActive ? "btn-ghost" : "btn-secondary")" type="submit"
-                                                        aria-label="@(u.IsActive ? "Deactivate" : "Reactivate") @u.FullName">
-                                                    @(u.IsActive ? "Deactivate" : "Reactivate")
+                                                <button class="btn btn-ghost btn-sm" type="submit">
+                                                    @(u.IsActive ? "Deactivate" : "Reactivate")<span class="sr-only"> @u.FullName</span>
                                                 </button>
                                             </form>
                                         }
-                                    </td>
+                                    </div>
                                 }
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                            </td>
+                            <td data-label="Role">@u.RoleLabel</td>
+                            <td data-label="Status">
+                                @if (!u.IsActive)
+                                {
+                                    <span class="badge">Deactivated</span>
+                                }
+                                else if (u.IsLockedOut)
+                                {
+                                    <span class="badge badge-warn">Locked out</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-good">Active</span>
+                                }
+                                @if (u.MustChangePassword)
+                                {
+                                    <span class="sub">Has not chosen a password yet</span>
+                                }
+                            </td>
+                            <td data-label="Last signed in" class="nowrap">
+                                @(u.LastLogin.HasValue ? Fmt.DateTimeShort(u.LastLogin.Value) : "Never")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
+    </section>
+
+    <section class="card" aria-labelledby="who-title">
+        <div class="card-head"><h2 id="who-title">Who can do what</h2></div>
+        <div class="table-wrap">
+            <table class="data matrix">
+                <caption class="sr-only">What each role can do</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Action</th>
+                        <th scope="col">Managing Director</th>
+                        <th scope="col">Estimator</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        (string Label, string Md, string Est)[] rules =
+                        {
+                            ("Create quotes", "Yes", "Yes"),
+                            ("Change a draft quote", "Any quote", "Own drafts"),
+                            ("Approve quotes", "Yes", "No"),
+                            ("See every price", "Yes", "Yes"),
+                            ("Change prices and rates", "Yes", "No"),
+                            ("Manage user accounts", "Yes", "No"),
+                        };
+                    }
+                    @foreach (var r in rules)
+                    {
+                        <tr>
+                            <th scope="row">@r.Label</th>
+                            <td>@r.Md</td>
+                            <td>@r.Est</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
     </div>
 
-    <div>
+    <div class="stack-gap">
         @if (Model.CanManage)
         {
-            <div class="card" id="create-user" style="margin-bottom:18px">
-                <div class="card-head"><h3>Create user</h3></div>
-                <form asp-action="CreateUser" method="post" style="padding:16px">
+            <section class="card" id="create-user" aria-labelledby="create-title">
+                <div class="card-head">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                    <h2 id="create-title">Create an account</h2>
+                </div>
+                <form class="card-body" asp-action="CreateUser" method="post">
                     <div class="field">
                         <label class="label" for="FullName">Full name</label>
-                        <input class="input" id="FullName" name="FullName" required maxlength="200" />
+                        <input class="input" id="FullName" name="FullName" required maxlength="200" autocomplete="off" />
                     </div>
                     <div class="field">
                         <label class="label" for="Email">Email address</label>
-                        <input class="input" id="Email" name="Email" type="email" required maxlength="200" />
+                        <input class="input" id="Email" name="Email" type="email" required maxlength="200" autocomplete="off" />
                     </div>
                     <div class="field">
                         <label class="label" for="Role">Role</label>
@@ -165,45 +178,11 @@
                             <option value="ManagingDirector">Managing Director</option>
                         </select>
                     </div>
-                    <button class="btn btn-primary" type="submit">Create account</button>
+                    <p class="hint">There is no public sign-up. The system makes a temporary password for you to hand over.</p>
+                    <button class="btn btn-primary btn-block" type="submit">Create the account</button>
                 </form>
-            </div>
+            </section>
         }
 
-        <div class="card">
-            <div class="card-head"><h3>Permission matrix</h3></div>
-            <div class="perm-grid">
-                <div class="perm-row head">
-                    <div>Action</div><div>MD</div><div>Estimator</div>
-                </div>
-                @{
-                    (string Label, bool Md, bool Est)[] perms =
-                    {
-                        ("Create quotes", true, true),
-                        ("Own quotes need approval", false, true),
-                        ("Approve others' quotes", true, false),
-                        ("Edit any quote", true, false),
-                        ("Edit own draft quotes", true, true),
-                        ("View all pricing", true, true),
-                        ("Change material prices", true, false),
-                        ("Create user accounts", true, false),
-                    };
-                }
-                @foreach (var p in perms)
-                {
-                    <div class="perm-row">
-                        <div>@p.Label</div>
-                        <div><svg class="ico ico-sm @(p.Md ? "perm-yes" : "perm-no")"><use href="#i-check" /></svg></div>
-                        <div><svg class="ico ico-sm @(p.Est ? "perm-yes" : "perm-no")"><use href="#i-check" /></svg></div>
-                    </div>
-                }
-            </div>
-            <div class="card-foot">
-                <span class="tiny muted">
-                    All confirmed by the client. Everyone sees all pricing; only the MD approves,
-                    edits freely and changes prices.
-                </span>
-            </div>
-        </div>
     </div>
 </div>

@@ -1,0 +1,31 @@
+@model TechnoSurfacesApp.Controllers.QuoteActionBar
+@*
+    Beside the totals: whether the customer quotation adds up to the costing
+    (US-10), the next step, and the changes made to the quote (US-19). Rendered
+    with the page and again after every change.
+*@
+@{
+    var q = Model.Quote;
+    var check = Model.Check;
+}
+<div id="costing-side" class="stack-gap">
+    @if (check is not null)
+    {
+        <section class="card" aria-labelledby="quotation-check-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                <h2 id="quotation-check-title">Customer quotation</h2>
+            </div>
+            <div class="card-body">
+                <partial name="_QuotationCheck" model="check" />
+                <a class="btn btn-secondary btn-block" asp-action="Quotation" asp-route-id="@q.Id">
+                    @(Model.Actions.CanEdit ? "Write the customer quotation" : "Open the customer quotation")
+                </a>
+            </div>
+        </section>
+    }
+
+    <partial name="_QuoteActions" model="Model" />
+
+    @await Component.InvokeAsync("QuoteChanges", new { reference = q.Reference })
+</div>

@@ -1,149 +1,85 @@
-﻿@using TechnoSurfaces.Application.Auditing
 @model TechnoSurfacesApp.Controllers.AuditVm
+@*
+    The audit trail (NFR-04, US-19): every change to a quote, a price, a rate or an
+    account, written as a sentence, newest first. Entries cannot be edited or deleted.
+*@
+@{
+    var stories = ChangeStories.From(Model.Entries);
+}
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Audit trail</h2>
-        <p>
-            @Model.TotalMatching entr@(Model.TotalMatching == 1 ? "y" : "ies")@if (Model.AnyFilter) {
-            <text> matching your filters</text>
-        }
-        @if (Model.Truncated)
-        {
-            <text> &middot; showing the newest @Model.Entries.Count</text>
-        }
-    </p>
-</div>
-</div>
+        <h1>Audit trail</h1>
+        <p>Every change made in the system, newest first. Entries cannot be edited or deleted.</p>
+    </div>
+</header>
 
-<div class="notice notice-info">
-    <svg class="ico"><use href="#i-info" /></svg>
-    <div>
-        <strong>Why this matters more than it looks.</strong>
-        Approval has no rejection path &mdash; the Managing Director corrects an estimator's figures
-        and approves in one step, silently. This trail is the only place that correction becomes
-        visible to the person who wrote the quote. Entries cannot be edited or deleted.
-    </div>
-</div>
+<section class="card" aria-labelledby="audit-title">
+    <h2 class="sr-only" id="audit-title">Changes</h2>
 
-<div class="grid grid-3" style="margin-bottom:20px">
-    <div class="tile tile-accent">
-        <div class="tile-label">Matching entries</div>
-        <div class="tile-value">@Model.TotalMatching</div>
-        <div class="tile-note">insert-only, never edited</div>
-    </div>
-    <div class="tile tile-accent amber">
-        <div class="tile-label">Price &amp; rate changes</div>
-        <div class="tile-value">@Model.PriceChangeCount</div>
-        <div class="tile-note">of the rows shown</div>
-    </div>
-    <div class="tile tile-accent blue">
-        <div class="tile-label">Contributors</div>
-        <div class="tile-value">@Model.Users.Count</div>
-        <div class="tile-note">users with recorded changes</div>
-    </div>
-</div>
-
-<div class="card">
-    <form method="get" class="filterbar">
-        <select class="select" name="user" onchange="this.form.submit()" aria-label="User">
-            <option value="">All users</option>
-            @foreach (var u in Model.Users)
+    <form class="filters" method="get" asp-action="Audit" role="search" aria-label="Filter the audit trail" data-no-busy>
+        <div class="field">
+            <label class="label" for="user">Who</label>
+            <select class="select" id="user" name="user">
+                <option value="">Everyone</option>
+                @foreach (var u in Model.Users)
+                {
+                    <option value="@u.UserId" selected="@(Model.Filter.UserId == u.UserId)">@u.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="type">What was changed</label>
+            <select class="select" id="type" name="type">
+                <option value="">Everything</option>
+                @foreach (var t in Model.EntityTypes.OrderBy(ChangeStories.RecordName))
+                {
+                    <option value="@t" selected="@(Model.Filter.EntityName == t)">@ChangeStories.RecordName(t)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="from">From</label>
+            <input class="input" type="date" id="from" name="from" value="@Model.FromValue" />
+        </div>
+        <div class="field">
+            <label class="label" for="to">To</label>
+            <input class="input" type="date" id="to" name="to" value="@Model.ToValue" />
+        </div>
+        <div class="field check filter-check">
+            <input type="checkbox" id="priceOnly" name="priceOnly" value="true" checked="@Model.Filter.PriceOnly" />
+            <label for="priceOnly">Price and rate changes only</label>
+        </div>
+        <div class="btn-row">
+            <button type="submit" class="btn btn-secondary">Show changes</button>
+            @if (Model.AnyFilter)
             {
-                <option value="@u.UserId" selected="@(Model.Filter.UserId == u.UserId)">@u.Name</option>
+                <a class="btn btn-ghost" asp-action="Audit">Clear</a>
             }
-        </select>
-
-        <select class="select" name="type" onchange="this.form.submit()" aria-label="Entity type">
-            <option value="">All entity types</option>
-            @foreach (var t in Model.EntityTypes)
-            {
-                <option value="@t" selected="@(Model.Filter.EntityName == t)">@t</option>
-            }
-        </select>
-
-        <input class="input" type="date" name="from" value="@Model.FromValue" aria-label="From date" />
-        <input class="input" type="date" name="to" value="@Model.ToValue" aria-label="To date" />
-
-        <label class="check" style="margin:0">
-            <input type="checkbox" name="priceOnly" value="true"
-                   checked="@Model.Filter.PriceOnly" onchange="this.form.submit()" />
-            <span class="small">Price and rate changes only</span>
-        </label>
-
-        <button type="submit" class="btn btn-sm">Apply</button>
-
-        @if (Model.AnyFilter)
-        {
-            <a class="btn btn-ghost btn-sm" asp-action="Audit">Clear</a>
-        }
+        </div>
     </form>
 
-    @if (Model.Entries.Count == 0)
-    {
-        <div class="empty">
-            <svg class="ico"><use href="#i-history" /></svg>
-            <h3>Nothing matches</h3>
-            <p>@(Model.AnyFilter ? "Try widening the filters." : "No changes have been recorded yet.")</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data stack">
-                <thead>
-                    <tr>
-                        <th>When (SAST)</th>
-                        <th>Who</th>
-                        <th>Action</th>
-                        <th>Entity</th>
-                        <th>Change</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in Model.Entries)
-                    {
-                        <tr>
-                            <td data-label="When" class="small nowrap">@Fmt.DateTimeShort(a.ChangedAtLocal)</td>
-                            <td data-label="Who">
-                                <div style="display:flex;align-items:center;gap:7px">
-                                    <span class="avatar" style="width:22px;height:22px;flex-basis:22px;font-size:.56rem">
-                                        @string.Concat(a.UserName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => p[0]))
-                                    </span>
-                                    <span class="small">@a.UserName</span>
-                                </div>
-                            </td>
-                            <td data-label="Action" class="small">
-                                @a.Action
-                                @if (a.IsPriceChange)
-                                {
-                                    <span class="badge badge-warn">Price</span>
-                                }
-                            </td>
-                            <td data-label="Entity">
-                                <span class="badge">@a.EntityName</span>
-                                <div class="tiny muted" style="margin-top:2px">#@a.EntityKey</div>
-                            </td>
-                            <td data-label="Change" class="small">
-                                @if (a.IsDeletion)
-                                {
-                                    <span class="muted">Row removed</span>
-                                }
-                                else
-                                {
-                                    <span class="muted">@a.PropertyName:</span>
-                                    @if (a.OldValue is not null)
-                                    {
-                                        <span style="text-decoration:line-through;color:var(--ink-3)">@a.OldValue</span>
-                                        <span class="muted">&rarr;</span>
-                                    }
-                                    <strong>@a.NewValue</strong>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
+    <div class="card-body">
+        <p class="list-count" role="status">
+            @stories.Count change@(stories.Count == 1 ? "" : "s")@(Model.AnyFilter ? " match the filters" : "")@(Model.Truncated ? $", from the newest {Model.Entries.Count} recorded values" : "").
+        </p>
+
+        @if (stories.Count == 0)
+        {
+            <div class="empty">
+                <svg class="ico" aria-hidden="true"><use href="#i-history" /></svg>
+                <h3>Nothing matches</h3>
+                <p>@(Model.AnyFilter ? "Widen the dates or choose Everyone and Everything." : "No changes have been recorded yet.")</p>
+            </div>
+        }
+        else
+        {
+            <ol class="changes">
+                @foreach (var s in stories)
+                {
+                    <partial name="_ChangeStory" model="s" />
+                }
+            </ol>
+        }
+    </div>
+</section>

@@ -1,0 +1,125 @@
+/* ==========================================================================
+   Techno Surfaces design tokens
+
+   The single source of every colour, size and space in the interface. No other
+   stylesheet uses a raw colour value; they all refer to these names.
+
+   Colours were measured from the logo file and checked against WCAG 2.1. The
+   measurements and every contrast ratio are in docs/front-end/brand-and-colours.md.
+   ========================================================================== */
+
+:root {
+    /* ---- Brand, measured from the logo ---- */
+    --brand-navy:        #03376E;   /* inner swoosh. Carries text at 11.8:1 */
+    --brand-navy-dark:   #022A55;
+    --brand-navy-tint:   #E6EBF0;
+    --brand-green:       #A2B561;   /* outer swoosh. Accents only, never text */
+    --brand-green-ink:   #65713D;   /* the same hue darkened to 5.3:1 for text */
+    --brand-green-dark:  #525C31;
+    --brand-green-tint:  #EEF2E3;
+    --brand-blue:        #A5BBD7;   /* middle swoosh. Labels on navy, accents */
+    --brand-blue-ink:    #5E6B7B;
+    --brand-blue-tint:   #E8EEF5;
+
+    /* ---- Neutrals ---- */
+    --ink:               #16202E;   /* body text, 16.4:1 on white */
+    --ink-secondary:     #55606E;   /* hints and labels, 6.39:1 on white, 5.96:1 on the page */
+    --surface:           #FFFFFF;
+    --surface-sunken:    #F5F7FA;   /* page background */
+    --surface-raised:    #FAFBFC;   /* table headers, card footers */
+    --line:              #DDE3EA;   /* dividers, decorative only */
+    --line-strong:       #8A8A8A;   /* control edges, 3.45:1 on white */
+    --on-dark:           #FFFFFF;
+    --on-dark-muted:     #D6DEE8;
+
+    /* ---- Meaning. Every status also carries its written name ---- */
+    --state-draft-ink:       #4A5565;  --state-draft-bg:       #EEF0F3;
+    --state-pending-ink:     #8A5A00;  --state-pending-bg:     #FEF6E7;
+    --state-approved-ink:    #65713D;  --state-approved-bg:    #EEF2E3;
+    --state-sent-ink:        #5E6B7B;  --state-sent-bg:        #E8EEF5;
+    --state-accepted-ink:    #03376E;  --state-accepted-bg:    #E6EBF0;
+    --state-expired-ink:     #B42318;  --state-expired-bg:     #FEF3F2;
+
+    --danger:            #B42318;
+    --danger-bg:         #FEF3F2;
+    --danger-line:       #F2C4BF;
+    --warning:           #8A5A00;
+    --warning-bg:        #FEF6E7;
+    --warning-line:      #EDD3A1;
+    --success:           #65713D;
+    --success-bg:        #EEF2E3;
+    --success-line:      #CBD6AE;
+    --info:              #03376E;
+    --info-bg:           #E8EEF5;
+    --info-line:         #C3D2E4;
+
+    /* ---- Focus. Navy on light surfaces, logo green on the navy side menu ---- */
+    --focus-ring:        #03376E;
+    --focus-ring-on-dark:#A2B561;
+
+    /* ---- Type. rem based so text follows the browser zoom ---- */
+    --font:  "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono:  "Cascadia Mono", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
+
+    --text-xs:   0.8125rem;  /* 13px  captions */
+    --text-sm:   0.875rem;   /* 14px  hints, table headers */
+    --text-base: 1rem;       /* 16px  body, the browser default */
+    --text-md:   1.125rem;   /* 18px  card titles */
+    --text-lg:   1.3125rem;  /* 21px  section titles */
+    --text-xl:   1.75rem;    /* 28px  page titles */
+    --text-2xl:  2rem;       /* 32px  figures */
+
+    --weight-regular: 400;
+    --weight-medium:  600;
+    --weight-bold:    700;
+
+    --leading-tight:  1.25;
+    --leading-normal: 1.55;
+
+    /* ---- Space, on a 4px step ---- */
+    --space-1:  0.25rem;
+    --space-2:  0.5rem;
+    --space-3:  0.75rem;
+    --space-4:  1rem;
+    --space-5:  1.25rem;
+    --space-6:  1.5rem;
+    --space-8:  2rem;
+    --space-10: 2.5rem;
+
+    /* ---- Shape ---- */
+    --radius-sm: 6px;
+    --radius:    10px;
+    --radius-lg: 14px;
+    --radius-pill: 999px;
+
+    --shadow-sm: 0 1px 2px rgba(3, 55, 110, .06), 0 1px 3px rgba(3, 55, 110, .05);
+    --shadow:    0 2px 4px rgba(3, 55, 110, .06), 0 8px 20px rgba(3, 55, 110, .08);
+    --shadow-lg: 0 16px 40px rgba(3, 55, 110, .18);
+
+    /* ---- Layout ---- */
+    --sidebar-width: 16.5rem;
+    --topbar-height: 3.75rem;
+    --content-max:   90rem;
+
+    /* ---- Overlays on the navy side menu and behind dialogs ---- */
+    --overlay-hover:  rgba(255, 255, 255, .08);
+    --overlay-line:   rgba(255, 255, 255, .16);
+    --scrim:          rgba(2, 42, 85, .5);
+
+    --transition: 140ms ease;
+
+    /* ---- Bootstrap, pointed at the tokens so nothing renders in its default blue ---- */
+    --bs-body-font-family: var(--font);
+    --bs-body-font-size:   var(--text-base);
+    --bs-body-color:       var(--ink);
+    --bs-body-bg:          var(--surface-sunken);
+    --bs-primary:          var(--brand-navy);
+    --bs-primary-rgb:      3, 55, 110;
+    --bs-link-color:       var(--brand-navy);
+    --bs-link-color-rgb:   3, 55, 110;
+    --bs-link-hover-color: var(--brand-navy-dark);
+    --bs-border-color:     var(--line);
+    --bs-danger:           var(--danger);
+    --bs-danger-rgb:       180, 35, 24;
+    --bs-focus-ring-color: rgba(3, 55, 110, .35);
+}

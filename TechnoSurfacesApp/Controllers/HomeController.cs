@@ -1,58 +1,81 @@
 using Microsoft.AspNetCore.Mvc;
-using TechnoSurfacesApp.Data;
-using TechnoSurfacesApp.Models;
-using TechnoSurfaces.Services;
-using TechnoSurfacesApp.Controllers;
-using static System.Collections.Specialized.BitVector32;
-using TechnoSurfaces.Models;
+using TechnoSurfaces.Application.Auditing;
+using TechnoSurfaces.Application.Catalogue;
+using TechnoSurfaces.Application.Quoting;
+using TechnoSurfacesApp.Identity;
+using TechnoSurfacesApp.Services;
 
 namespace TechnoSurfacesApp.Controllers;
 
+/// <summary>
+/// The dashboard. The Managing Director lands on the approval queue, the one task
+/// only the Managing Director can do; an estimator lands on their own quotes.
+/// </summary>
 public class HomeController : AppController
 {
-    public HomeController(DemoSession session) : base(session) { }
+    private const int StaleAfterDays = 365;
+
+    private readonly IQuoteWorkflowService _workflow;
+    private readonly ICatalogueBrowser _catalogue;
+    private readonly IAuditTrailService _audit;
+    private readonly SignedInUser _me;
+
+    public HomeController(IQuoteWorkflowService workflow, ICatalogueBrowser catalogue,
+        IAuditTrailService audit, SignedInUser me)
+    {
+        _workflow = workflow;
+        _catalogue = catalogue;
+        _audit = audit;
+        _me = me;
+    }
 
     public IActionResult Index() => RedirectToAction(nameof(Dashboard));
 
-    public IActionResult Dashboard()
+    public async Task<IActionResult> Dashboard(CancellationToken ct)
     {
-        var me = Session.User;
+        var isManagingDirector = await CanAsync(Policies.CanApproveQuote);
+        var all = await _workflow.ListAsync(new QuoteListFilter(), ct);
+        var suppliers = await _catalogue.SuppliersAsync(ct);
 
         var vm = new DashboardVm
         {
-            User = me,
-            Pending = Db.QuotesAwaitingApproval,
-            MyQuotes = Db.QuotesOwnedBy(me.Id).Take(6).ToList(),
-            RecentActivity = Db.Audit.OrderByDescending(a => a.When).Take(8).ToList(),
-            AllQuotes = Db.Quotes,
-            StaleSuppliers = Db.Suppliers.Where(s => s.IsStale).ToList()
+            FirstName = (await _me.GetAsync()).FullName.Split(' ')[0],
+            IsManagingDirector = isManagingDirector,
+            AllQuotes = all,
+            MyQuotes = all.Where(q => q.AuthorId == _me.Id).ToList(),
+            Queue = isManagingDirector ? await _workflow.ApprovalQueueAsync(ct) : [],
+            StaleSuppliers = suppliers.Where(s => s.PriceListDated.AddDays(StaleAfterDays) < Today).ToList(),
+            SupplierCount = suppliers.Count,
+            Activity = await CanAsync(Policies.CanViewAuditTrail)
+                ? (await _audit.SearchAsync(new AuditFilter(), ct)).Rows.Take(8).ToList()
+                : []
         };
 
-        ViewData["Title"] = "Dashboard";
-        ViewData["Page"] = "dashboard";
+        SetPage("Dashboard", "dashboard");
         return View(vm);
     }
 }
 
-public class DashboardVm
+public sealed class DashboardVm
 {
-    public AppUser User { get; set; } = null!;
-    public List<Quote> Pending { get; set; } = new();
-    public List<Quote> MyQuotes { get; set; } = new();
-    public List<AuditEntry> RecentActivity { get; set; } = new();
-    public List<Quote> AllQuotes { get; set; } = new();
-    public List<Supplier> StaleSuppliers { get; set; } = new();
+    public string FirstName { get; init; } = "";
+    public bool IsManagingDirector { get; init; }
+    public IReadOnlyList<QuoteSummary> AllQuotes { get; init; } = [];
+    public IReadOnlyList<QuoteSummary> MyQuotes { get; init; } = [];
+    public IReadOnlyList<QuoteSummary> Queue { get; init; } = [];
+    public IReadOnlyList<SupplierOption> StaleSuppliers { get; init; } = [];
+    public int SupplierCount { get; init; }
+    public IReadOnlyList<AuditRow> Activity { get; init; } = [];
 
-    public int CountIn(QuoteStatus s) => AllQuotes.Count(q => q.Status == s);
+    /// <summary>The quotes the tiles count: every quote for the MD, their own for an estimator.</summary>
+    public IReadOnlyList<QuoteSummary> Scope => IsManagingDirector ? AllQuotes : MyQuotes;
 
-    public decimal OpenValue => AllQuotes
-        .Where(q => q.Status is QuoteStatus.Sent or QuoteStatus.Approved or QuoteStatus.PendingApproval)
-        .Sum(q => q.Total);
+    public int Count(string status) => Scope.Count(q => q.Status == status);
 
-    public decimal AcceptedValue => AllQuotes
-        .Where(q => q.Status is QuoteStatus.Accepted or QuoteStatus.Invoiced)
-        .Sum(q => q.Total);
+    public decimal Value(string status) => Scope.Where(q => q.Status == status).Sum(q => q.TotalExVat);
 
-    public int ExpiringSoon => AllQuotes
-        .Count(q => q.Status == QuoteStatus.Sent && q.DaysRemaining <= 7 && q.DaysRemaining >= 0);
+    public int ExpiringSoon => Scope.Count(q => q.ExpiresSoon);
+
+    /// <summary>The table under the tiles: the most recent quotes in scope.</summary>
+    public IReadOnlyList<QuoteSummary> Recent => Scope.Take(6).ToList();
 }

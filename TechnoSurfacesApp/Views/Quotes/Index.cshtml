@@ -1,138 +1,99 @@
-﻿@model TechnoSurfacesApp.Controllers.QuoteListVm
+@model TechnoSurfacesApp.Controllers.QuoteListVm
+@*
+    Every quote, filtered by status, customer, author or a search. The filters are
+    an ordinary GET form, so a filtered list has its own address that can be
+    bookmarked or shared, and it works without JavaScript.
+*@
+@{
+    var count = Model.Quotes.Count;
+}
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Quotes</h2>
-        <p>
-            @Model.Quotes.Count quote@(Model.Quotes.Count == 1 ? "" : "s")
-            @if (Model.AnyFilter)
-            {
-                <text>matching your filters</text>
-            }
-            &middot; @Fmt.Rand(Model.TotalValue) total value
-        </p>
+        <h1>Quotes</h1>
+        <p>Every quote, newest first. Open one to see its costing sheet.</p>
     </div>
     <div class="page-head-actions">
         <a class="btn btn-primary" asp-action="Create">
-            <svg class="ico ico-sm"><use href="#i-plus" /></svg> New quote
+            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> New quote
         </a>
     </div>
-</div>
+</header>
 
-<div class="card">
-    <form method="get" class="filterbar">
-        <div class="search">
-            <svg class="ico ico-sm"><use href="#i-search" /></svg>
-            <input class="input" name="q" value="@Model.Search"
-                   placeholder="Reference, customer, site or project" />
+<section class="card" aria-labelledby="list-title">
+    <h2 class="sr-only" id="list-title">Quote list</h2>
+
+    <form class="filterbar" method="get" asp-action="Index" role="search" aria-label="Filter the quotes" data-no-busy>
+        <div class="field search">
+            <label class="label" for="q">Search</label>
+            <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+            <input class="input" id="q" name="q" type="search" value="@Model.Search" aria-describedby="q-hint" />
+            <span class="sr-only" id="q-hint">Searches the reference, customer, site and project.</span>
         </div>
-
-        <select class="select" name="status" onchange="this.form.submit()">
-            <option value="">All statuses</option>
-            @foreach (var s in Enum.GetValues<QuoteStatus>())
+        <div class="field">
+            <label class="label" for="status">Status</label>
+            <select class="select" id="status" name="status" data-autosubmit>
+                <option value="">All statuses</option>
+                @foreach (var s in StatusText.All)
+                {
+                    <option value="@s" selected="@(Model.Status == s)">@StatusText.Label(s)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="customerId">Customer</label>
+            <select class="select" id="customerId" name="customerId" data-autosubmit>
+                <option value="">All customers</option>
+                @foreach (var c in Model.Customers)
+                {
+                    <option value="@c.Id" selected="@(Model.CustomerId == c.Id)">@c.Name@(c.IsActive ? "" : " (inactive)")</option>
+                }
+            </select>
+        </div>
+        <div class="field check filter-check">
+            <input type="checkbox" id="mine" name="mine" value="true" checked="@Model.Mine" data-autosubmit />
+            <label for="mine">Only my quotes</label>
+        </div>
+        <div class="btn-row">
+            <button type="submit" class="btn btn-secondary">Apply</button>
+            @if (Model.AnyFilter)
             {
-                <option value="@s" selected="@(Model.Status == s.ToString())">
-                    @(s == QuoteStatus.PendingApproval ? "Pending approval" : s.ToString())
-                </option>
+                <a class="btn btn-ghost" asp-action="Index">Clear filters</a>
             }
-        </select>
-
-        <select class="select" name="customerId" onchange="this.form.submit()">
-            <option value="">All customers</option>
-            @foreach (var c in Db.Customers.OrderBy(c => c.CompanyName))
-            {
-                <option value="@c.Id" selected="@(Model.CustomerId == c.Id)">@c.CompanyName</option>
-            }
-        </select>
-
-        <select class="select" name="ownerId" onchange="this.form.submit()">
-            <option value="">All estimators</option>
-            @foreach (var u in Db.Users)
-            {
-                <option value="@u.Id" selected="@(Model.OwnerId == u.Id)">@u.FullName</option>
-            }
-        </select>
-
-        <button class="btn btn-secondary btn-sm" type="submit">Apply</button>
-        @if (Model.AnyFilter)
-        {
-            <a class="btn btn-ghost btn-sm" asp-action="Index">Clear</a>
-        }
+        </div>
     </form>
 
-    @if (!Model.Quotes.Any())
+    <p class="list-count" role="status">
+        @if (Model.AnyFilter)
+        {
+            @:@count quote@(count == 1 ? "" : "s") match the filters.
+        }
+        else
+        {
+            @:@count quote@(count == 1 ? "" : "s").
+        }
+    </p>
+
+    @if (count == 0 && Model.AnyFilter)
     {
         <div class="empty">
-            <svg class="ico"><use href="#i-search" /></svg>
+            <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
             <h3>No quotes match</h3>
-            <p>Try widening the filters, or start a new quote.</p>
-            <a class="btn btn-primary" asp-action="Create">New quote</a>
+            <p>Try a different status or customer, or clear the filters to see every quote.</p>
+            <a class="btn btn-secondary" asp-action="Index">Clear filters</a>
+        </div>
+    }
+    else if (count == 0)
+    {
+        <div class="empty">
+            <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+            <h3>No quotes yet</h3>
+            <p>Start the first quote. The material prices fill in from the suppliers' own price lists.</p>
+            <a class="btn btn-primary" asp-action="Create">Start a quote</a>
         </div>
     }
     else
     {
-        <div class="table-wrap">
-            <table class="data stack">
-                <thead>
-                    <tr>
-                        <th>Reference</th>
-                        <th>Customer</th>
-                        <th>Site &amp; project</th>
-                        <th>Estimator</th>
-                        <th>Status</th>
-                        <th>Valid until</th>
-                        <th class="right">Total</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var q in Model.Quotes)
-                    {
-                        <tr>
-                            <td data-label="Reference">
-                                <a class="row-link" asp-action="Costing" asp-route-id="@q.Id">@q.Ref</a>
-                                @if (q.VersionNumber > 1)
-                                {
-                                    <span class="badge" title="Revised after a counter-offer">v@q.VersionNumber</span>
-                                }
-                                <div class="tiny muted">@Fmt.Date(q.IssueDate)</div>
-                            </td>
-                            <td data-label="Customer">@Db.CustomerName(q.CustomerId)</td>
-                            <td data-label="Site &amp; project">
-                                <div class="small">@q.Project</div>
-                                <div class="tiny muted">@q.Site</div>
-                            </td>
-                            <td data-label="Estimator">@Db.UserName(q.OwnerUserId)</td>
-                            <td data-label="Status">
-                                <span class="pill pill-@q.StatusKey">@q.StatusLabel</span>
-                            </td>
-                            <td data-label="Valid until">
-                                @Fmt.Date(q.ValidUntil)
-                                @if (q.Status == QuoteStatus.Sent && q.DaysRemaining is <= 7 and >= 0)
-                                {
-                                    <div><span class="badge badge-warn">@q.DaysRemaining days left</span></div>
-                                }
-                                else if (q.IsExpired && q.Status == QuoteStatus.Sent)
-                                {
-                                    <div><span class="badge badge-danger">Expired</span></div>
-                                }
-                            </td>
-                            <td data-label="Total" class="right strong">@Fmt.Rand(q.Total)</td>
-                            <td data-label="" class="right nowrap">
-                                <a class="btn btn-ghost btn-sm" asp-action="Costing" asp-route-id="@q.Id" title="Costing sheet">
-                                    <svg class="ico ico-sm"><use href="#i-calc" /></svg>
-                                </a>
-                                <a class="btn btn-ghost btn-sm" asp-action="Quotation" asp-route-id="@q.Id" title="Customer quotation">
-                                    <svg class="ico ico-sm"><use href="#i-eye" /></svg>
-                                </a>
-                                <a class="btn btn-ghost btn-sm" asp-action="Versions" asp-route-id="@q.Id" title="Version history">
-                                    <svg class="ico ico-sm"><use href="#i-history" /></svg>
-                                </a>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+        <partial name="_QuoteTable" model='new QuoteTable(Model.Quotes, "Quotes", ShowCustomer: Model.CustomerId is null)' />
     }
-</div>
+</section>

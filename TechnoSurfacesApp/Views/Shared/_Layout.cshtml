@@ -1,30 +1,50 @@
-﻿@{
-    var user = Session.User;
-    var isMd = Session.IsMd;
-    var page = (ViewData["Page"] as string) ?? "";
-    var crumb = ViewData["Crumb"] as string;
-    string Nav(string key) => page == key ? "nav-link active" : "nav-link";
-    string Tab(string key) => page == key ? "active" : "";
-    var pendingCount = ViewData["PendingCount"] as int? ?? 0;
+@using Microsoft.AspNetCore.Authorization
+@using TechnoSurfacesApp.Identity
+@inject IAuthorizationService Authorization
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    var me = await SignedInUser.GetAsync();
+    var page = ViewData["Page"] as string ?? "";
+
+    // The side menu asks the authorisation policies, not the role, so a screen hidden
+    // here is hidden by the same rule that guards it on the server.
+    async Task<bool> Can(string policy) => (await Authorization.AuthorizeAsync(User, policy)).Succeeded;
+    var canApprove = await Can(Policies.CanApproveQuote);
+    var canEditCatalogue = await Can(Policies.CanEditCatalogue);
+    var canManageUsers = await Can(Policies.CanManageUsers);
+    var canViewAudit = await Can(Policies.CanViewAuditTrail);
+    var showAdmin = canEditCatalogue || canManageUsers || canViewAudit;
+
+    var crumbs = ViewData["Crumbs"] as IEnumerable<Crumb>
+        ?? (ViewData["Crumb"] is string section
+            ? new[] { new Crumb(section), new Crumb(ViewData["Title"] as string ?? "") }
+            : new[] { new Crumb(ViewData["Title"] as string ?? "") });
+
+    string? Current(string key) => page == key ? "page" : null;
+    string NavClass(string key) => page == key ? "nav-link active" : "nav-link";
+
+    var flashTitle = TempData["FlashTitle"] as string;
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-ZA">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="request-verification-token" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
     <title>@ViewData["Title"] &middot; Techno Surfaces</title>
     <link rel="icon" type="image/png" href="~/img/logo.png" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
     <partial name="_Icons" />
 
     <div class="app">
+        <div class="sidebar-scrim" aria-hidden="true"></div>
 
-        <div class="sidebar-scrim" onclick="document.body.classList.remove('nav-open')"></div>
-
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="brand">
                 <span class="brand-logo">
                     <img src="~/img/logo.png" alt="Techno Surfaces" />
@@ -32,114 +52,162 @@
                 <span class="brand-tag">Quoting System</span>
             </div>
 
-            <nav class="nav">
-                <a class="@Nav("dashboard")" asp-controller="Home" asp-action="Dashboard">
-                    <svg class="ico"><use href="#i-grid" /></svg> Dashboard
+            <nav class="nav" aria-label="Main menu">
+                <a class="@NavClass("dashboard")" aria-current="@Current("dashboard")" asp-controller="Home" asp-action="Dashboard">
+                    <svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg> Dashboard
                 </a>
 
-                <div class="nav-group-label">Quoting</div>
-                <a class="@Nav("quotes")" asp-controller="Quotes" asp-action="Index">
-                    <svg class="ico"><use href="#i-file" /></svg> Quotes
+                <div class="nav-group-label" id="nav-quoting">Quoting</div>
+                <a class="@NavClass("quotes")" aria-current="@Current("quotes")" asp-controller="Quotes" asp-action="Index">
+                    <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Quotes
                 </a>
-                <a class="@Nav("new")" asp-controller="Quotes" asp-action="Create">
-                    <svg class="ico"><use href="#i-plus" /></svg> New quote
+                <a class="@NavClass("new")" aria-current="@Current("new")" asp-controller="Quotes" asp-action="Create">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> New quote
                 </a>
-                @if (isMd)
+                @if (canApprove)
                 {
-                    <a class="@Nav("approvals")" asp-controller="Quotes" asp-action="Approvals">
-                        <svg class="ico"><use href="#i-inbox" /></svg> Approvals
-                        @if (pendingCount > 0)
-                        {
-                            <span class="nav-count">@pendingCount</span>
-                        }
+                    <a class="@NavClass("approvals")" aria-current="@Current("approvals")" asp-controller="Quotes" asp-action="Approvals">
+                        <svg class="ico" aria-hidden="true"><use href="#i-inbox" /></svg> Approval queue
+                        @await Component.InvokeAsync("ApprovalCount")
                     </a>
                 }
 
                 <div class="nav-group-label">Data</div>
-                <a class="@Nav("customers")" asp-controller="Customers" asp-action="Index">
-                    <svg class="ico"><use href="#i-building" /></svg> Customers
+                <a class="@NavClass("customers")" aria-current="@Current("customers")" asp-controller="Customers" asp-action="Index">
+                    <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg> Customers
                 </a>
-                <a class="@Nav("catalogue")" asp-controller="Catalogue" asp-action="Index">
-                    <svg class="ico"><use href="#i-layers" /></svg> Material catalogue
+                <a class="@NavClass("catalogue")" aria-current="@Current("catalogue")" asp-controller="Catalogue" asp-action="Index">
+                    <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg> Material catalogue
                 </a>
 
-                @if (isMd)
+                @if (showAdmin)
                 {
-                    <div class="nav-group-label">Administration</div>
-                    <a class="@Nav("rates")" asp-controller="Admin" asp-action="Rates">
-                        <svg class="ico"><use href="#i-sliders" /></svg> Rate card
-                    </a>
-                    <a class="@Nav("users")" asp-controller="Admin" asp-action="Users">
-                        <svg class="ico"><use href="#i-users" /></svg> Users
-                    </a>
-                    <a class="@Nav("terms")" asp-controller="Admin" asp-action="Terms">
-                        <svg class="ico"><use href="#i-file" /></svg> Quotation terms
-                    </a>
-                    <a class="@Nav("audit")" asp-controller="Admin" asp-action="Audit">
-                        <svg class="ico"><use href="#i-history" /></svg> Audit trail
-                    </a>
+                    <div class="nav-group-label">Running the app</div>
+                    @if (canEditCatalogue)
+                    {
+                        <a class="@NavClass("rates")" aria-current="@Current("rates")" asp-controller="Admin" asp-action="Rates">
+                            <svg class="ico" aria-hidden="true"><use href="#i-sliders" /></svg> Rate card
+                        </a>
+                    }
+                    @if (canManageUsers)
+                    {
+                        <a class="@NavClass("users")" aria-current="@Current("users")" asp-controller="Admin" asp-action="Users">
+                            <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg> Users
+                        </a>
+                    }
+                    @if (canEditCatalogue)
+                    {
+                        <a class="@NavClass("terms")" aria-current="@Current("terms")" asp-controller="Admin" asp-action="Terms">
+                            <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Quotation terms
+                        </a>
+                    }
+                    @if (canViewAudit)
+                    {
+                        <a class="@NavClass("audit")" aria-current="@Current("audit")" asp-controller="Admin" asp-action="Audit">
+                            <svg class="ico" aria-hidden="true"><use href="#i-history" /></svg> Audit trail
+                        </a>
+                    }
                 }
             </nav>
         </aside>
 
         <div class="main">
             <header class="topbar">
-                <button class="btn btn-ghost btn-sm d-lg-none" style="padding:6px"
-                        onclick="document.body.classList.toggle('nav-open')" aria-label="Menu">
-                    <svg class="ico"><use href="#i-menu" /></svg>
+                <button type="button" class="btn btn-ghost btn-icon menu-toggle" data-nav-toggle
+                        aria-controls="sidebar" aria-expanded="false">
+                    <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
+                    <span class="sr-only">Open the main menu</span>
                 </button>
 
-                <div>
-                    @if (crumb is not null)
-                    {
-                        <div class="crumb">@crumb</div>
-                    }
-                    <h1>@ViewData["Title"]</h1>
-                </div>
+                <nav class="crumbs" aria-label="Breadcrumb">
+                    <ol>
+                        @{ var list = crumbs.ToList(); }
+                        @for (var i = 0; i < list.Count; i++)
+                        {
+                            var c = list[i];
+                            var last = i == list.Count - 1;
+                            <li>
+                                @if (!last && c.Url is not null)
+                                {
+                                    <a href="@c.Url">@c.Label</a>
+                                }
+                                else if (last)
+                                {
+                                    <span aria-current="page">@c.Label</span>
+                                }
+                                else
+                                {
+                                    <span>@c.Label</span>
+                                }
+                            </li>
+                        }
+                    </ol>
+                </nav>
 
                 <div class="topbar-spacer"></div>
 
-                <div class="userchip" title="@user.Email">
-                    <span class="avatar @(isMd ? "" : "sage")">@user.Initials</span>
+                <div class="userchip">
+                    <span class="avatar @(canApprove ? "" : "sage")" aria-hidden="true">@me.Initials</span>
                     <span>
-                        <span class="userchip-name">@user.FullName</span><br />
-                        <span class="userchip-role">@user.RoleLabel</span>
+                        <span class="userchip-name">@me.FullName</span>
+                        <span class="userchip-role">@me.RoleLabel</span>
                     </span>
                 </div>
 
-                <form asp-controller="Account" asp-action="Logout" method="post" class="no-print" style="margin:0">
-                    <button type="submit" class="btn btn-ghost btn-sm" title="Sign out" aria-label="Sign out" style="padding:7px">
-                        <svg class="ico"><use href="#i-logout" /></svg>
+                <form asp-controller="Account" asp-action="Logout" method="post" class="no-print" data-no-busy>
+                    <button type="submit" class="btn btn-ghost btn-icon">
+                        <svg class="ico" aria-hidden="true"><use href="#i-logout" /></svg>
+                        <span class="sr-only">Sign out</span>
                     </button>
                 </form>
             </header>
 
-            <main class="content">
+            <main class="content" id="main" tabindex="-1">
                 @RenderBody()
             </main>
         </div>
 
-        <nav class="mobile-bar no-print">
-            <a class="@Tab("dashboard")" asp-controller="Home" asp-action="Dashboard">
-                <svg class="ico"><use href="#i-grid" /></svg> Home
+        <nav class="mobile-bar no-print" aria-label="Quick menu">
+            <a class="@(page == "dashboard" ? "active" : "")" aria-current="@Current("dashboard")" asp-controller="Home" asp-action="Dashboard">
+                <svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg> Home
             </a>
-            <a class="@Tab("quotes")" asp-controller="Quotes" asp-action="Index">
-                <svg class="ico"><use href="#i-file" /></svg> Quotes
+            <a class="@(page == "quotes" ? "active" : "")" aria-current="@Current("quotes")" asp-controller="Quotes" asp-action="Index">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Quotes
             </a>
-            <a class="@Tab("new")" asp-controller="Quotes" asp-action="Create">
-                <svg class="ico"><use href="#i-plus" /></svg> New
+            <a class="@(page == "new" ? "active" : "")" aria-current="@Current("new")" asp-controller="Quotes" asp-action="Create">
+                <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> New quote
             </a>
-            <a class="@Tab("catalogue")" asp-controller="Catalogue" asp-action="Index">
-                <svg class="ico"><use href="#i-layers" /></svg> Materials
+            <a class="@(page == "catalogue" ? "active" : "")" aria-current="@Current("catalogue")" asp-controller="Catalogue" asp-action="Index">
+                <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg> Materials
             </a>
-            <a href="#" onclick="document.body.classList.toggle('nav-open');return false;">
-                <svg class="ico"><use href="#i-more" /></svg> More
-            </a>
+            <button type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false">
+                <svg class="ico" aria-hidden="true"><use href="#i-more" /></svg> Menu
+            </button>
         </nav>
     </div>
 
+    @* Results of actions. Errors are announced at once, everything else politely. *@
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <div class="toasts" id="toasts-urgent" role="alert" aria-live="assertive"></div>
+
+    @if (flashTitle is not null)
+    {
+        <div id="server-flash" hidden data-kind="@TempData["FlashKind"]" data-title="@flashTitle" data-message="@TempData["FlashMessage"]"></div>
+    }
+
+    <dialog class="dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+        <form method="dialog">
+            <div class="dialog-head"><h2 id="confirm-title" data-confirm-title>Are you sure?</h2></div>
+            <div class="dialog-body"><p data-confirm-message></p></div>
+            <div class="dialog-foot">
+                <button type="submit" class="btn btn-secondary" value="cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" value="ok" data-confirm-ok>Confirm</button>
+            </div>
+        </form>
+    </dialog>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/app.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
