@@ -1,59 +1,48 @@
-﻿@using TechnoSurfaces.Application.Auditing
+@using TechnoSurfaces.Application.Auditing
 @model IReadOnlyList<AuditRow>
+@*
+    US-19: what changed on this quote, by whom and when, written as sentences.
+    The newest few show straight away; the rest open on request.
+*@
+@{
+    var stories = ChangeStories.From(Model);
+    const int shown = 6;
+}
 
-<div class="card">
+<section class="card" aria-labelledby="changes-title">
     <div class="card-head">
-        <svg class="ico" style="color:var(--ink-3)"><use href="#i-history" /></svg>
-        <h3>Changes to this quote</h3>
+        <svg class="ico" aria-hidden="true"><use href="#i-history" /></svg>
+        <h2 id="changes-title">Changes to this quote</h2>
     </div>
 
-    @if (Model.Count == 0)
+    @if (stories.Count == 0)
     {
         <div class="card-body">
-            <p class="muted small" style="margin:0">No changes recorded yet.</p>
+            <p class="muted mb-0">No changes recorded yet.</p>
         </div>
     }
     else
     {
-        <div class="table-wrap">
-            <table class="data stack">
-                <thead>
-                    <tr><th>When (SAST)</th><th>Who</th><th>Change</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in Model)
-                    {
-                        <tr>
-                            <td data-label="When" class="small nowrap">@Fmt.DateTimeShort(a.ChangedAtLocal)</td>
-                            <td data-label="Who" class="small">@a.UserName</td>
-                            <td data-label="Change" class="small">
-                                <span class="badge">
-                                    @(a.EntityName switch
-                                    {
-                                        "CostingLine" => $"Line {a.EntityKey}",
-                                        "QuoteVersion" => "Version",
-                                        _ => "Quote"
-                                    })
-                                </span>
-                                @if (a.IsDeletion)
-                                {
-                                    <span class="muted">removed</span>
-                                }
-                                else
-                                {
-                                    <span class="muted">@a.PropertyName:</span>
-                                    @if (a.OldValue is not null)
-                                    {
-                                        <span style="text-decoration:line-through;color:var(--ink-3)">@a.OldValue</span>
-                                        <span class="muted">&rarr;</span>
-                                    }
-                                    <strong>@a.NewValue</strong>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        <div class="card-body">
+            <ol class="changes">
+                @foreach (var s in stories.Take(shown))
+                {
+                    <partial name="_ChangeStory" model="s" />
+                }
+            </ol>
+
+            @if (stories.Count > shown)
+            {
+                <details class="disclosure changes-more">
+                    <summary class="btn btn-ghost btn-sm">Show @(stories.Count - shown) earlier change@(stories.Count - shown == 1 ? "" : "s")</summary>
+                    <ol class="changes">
+                        @foreach (var s in stories.Skip(shown))
+                        {
+                            <partial name="_ChangeStory" model="s" />
+                        }
+                    </ol>
+                </details>
+            }
         </div>
     }
-</div>
+</section>
