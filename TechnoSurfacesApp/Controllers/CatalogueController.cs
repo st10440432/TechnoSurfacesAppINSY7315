@@ -67,7 +67,8 @@ public class CatalogueController : AppController
     /// One material in one sheet size: its price now, every earlier price, and, for the
     /// Managing Director, the form that starts a new price from a date.
     /// </summary>
-    public async Task<IActionResult> Price(int colourId, int sheetSizeId, CancellationToken ct)
+    public async Task<IActionResult> Price(int colourId, int sheetSizeId,
+        [FromServices] ICatalogueBrowser browser, CancellationToken ct)
     {
         var row = (await _catalogue.GetCatalogueAsync(Today, ct))
             .FirstOrDefault(r => r.ColourId == colourId && r.SheetSizeId == sheetSizeId);
@@ -82,17 +83,24 @@ public class CatalogueController : AppController
             ? await _catalogue.GetPriceHistoryAsync(null, band, sheetSizeId, ct)
             : await _catalogue.GetPriceHistoryAsync(colourId, null, sheetSizeId, ct);
 
-        SetPage(row.Colour, "catalogue", new Crumb("Data"), new Crumb("Material catalogue", Url.Action(nameof(Index))));
+        // The sheet's own area, so an earlier price per m² converts to the per-sheet
+        // figure a quote was charged. A retired colour is no longer listed by the
+        // browser, so its area is worked back from today's price instead.
+        var area = (await browser.SheetSizesAsync(colourId, ct))?.FirstOrDefault(s => s.Id == sheetSizeId)?.AreaM2
+            ?? (row.PricePerSqm is > 0 && row.PricePerSheet is { } sheet ? sheet / row.PricePerSqm.Value : (decimal?)null);
+
         // Task 1 2.4: the quotes that use this material and the price each one locked
         // in, so the Managing Director can see a change today does not move them.
         var quotes = row.PriceBandId is int bandId
             ? await _catalogue.GetQuotesUsingPriceAsync(null, bandId, sheetSizeId, ct)
             : await _catalogue.GetQuotesUsingPriceAsync(colourId, null, sheetSizeId, ct);
 
+        SetPage(row.Colour, "catalogue", new Crumb("Data"), new Crumb("Material catalogue", Url.Action(nameof(Index))));
         return View(new PriceVm
         {
             Row = row,
             History = history,
+            AreaM2 = area,
             Quotes = quotes,
             CanEdit = await CanAsync(Policies.CanEditCatalogue),
             Today = Today
@@ -303,7 +311,7 @@ public class CatalogueController : AppController
         // A Referer header can be forged, so only a local page is accepted.
         var back = Request.Headers.Referer.ToString();
         return Url.IsLocalUrl(back) ? Redirect(back)
-            : Uri.TryCreate(back, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host
+            : Uri.TryCreate(back, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host && Url.IsLocalUrl(uri.PathAndQuery)
                 ? Redirect(uri.PathAndQuery)
                 : RedirectToAction(nameof(Index));
     }
@@ -360,4 +368,11 @@ public sealed class PriceVm
 
     /// <summary>A band price applies to every colour in the band.</summary>
     public bool IsBandPrice => Row.PriceBandId is not null;
+
+    /// <summary>The sheet's area in m², when it is known.</summary>
+    public decimal? AreaM2 { get; init; }
+
+    /// <summary>A price per m² as the per-sheet figure, rounded as MaterialPrice.PricePerSheet rounds it.</summary>
+    public decimal? PerSheet(decimal pricePerSqm) =>
+        AreaM2 is { } area ? decimal.Round(pricePerSqm * area, 2, MidpointRounding.AwayFromZero) : null;
 }

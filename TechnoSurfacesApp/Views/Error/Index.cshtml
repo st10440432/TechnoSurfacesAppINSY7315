@@ -7,7 +7,7 @@
 <h1>Something went wrong</h1>
 
 <div class="notice notice-info" role="alert">
-    <svg class="ico"><use href="#i-alert" /></svg>
+    <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
     <div>
         <strong>The page could not be shown.</strong>
         Nothing you entered has been lost if it was saved before this page appeared.
@@ -18,9 +18,9 @@
 
 @if (Model.ShowRequestId)
 {
-    <p style="margin-top:18px">Reference: <code>@Model.RequestId</code></p>
+    <p class="mt-section">Reference: <code>@Model.RequestId</code></p>
 }
 
-<p style="margin-top:18px">
+<p class="mt-section">
     <a class="btn btn-secondary" href="/">Back to the start</a>
 </p>

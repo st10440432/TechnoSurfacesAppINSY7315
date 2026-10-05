@@ -46,7 +46,6 @@
                         <th scope="col">Person</th>
                         <th scope="col">Role</th>
                         <th scope="col">Status</th>
-                        <th scope="col">Last signed in</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -105,9 +104,6 @@
                                 {
                                     <span class="sub">Has not chosen a password yet</span>
                                 }
-                            </td>
-                            <td data-label="Last signed in" class="nowrap">
-                                @(u.LastLogin.HasValue ? Fmt.DateTimeShort(u.LastLogin.Value) : "Never")
                             </td>
                         </tr>
                     }
