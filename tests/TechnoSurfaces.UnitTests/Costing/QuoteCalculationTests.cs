@@ -161,7 +161,57 @@ public class QuoteCalculationTests
         var totals = _calculator.Calculate(version);
 
         Assert.Equal(8.3904m, totals.TotalAreaM2);         // 3 sheets x 2,7968
-        Assert.Equal(8.3904m, consumables.Quantity);
+        Assert.Equal(9m, consumables.Quantity);            // rounded up to a whole m²
+    }
+
+    [Theory]
+    [InlineData(19.5776, 20)]   // the costing sheet that prompted the rule
+    [InlineData(8.0001, 9)]     // any part of a unit counts as a whole one
+    [InlineData(12, 12)]        // a whole figure is left as it is
+    public void Sandpaper_and_consumables_round_up_to_a_whole_square_metre(decimal area, decimal expected)
+    {
+        var version = NewVersion();
+        version.AddCostingLine(Material(unitPrice: 1000m, quantity: 1m, sheetArea: area));
+        var consumables = Rate(unitPrice: 55m, quantity: 0m,
+            derivation: DerivationRule.FromTotalAreaM2, description: "Sandpaper & consumables");
+        version.AddCostingLine(consumables);
+
+        var totals = _calculator.Calculate(version);
+
+        Assert.Equal(area, totals.TotalAreaM2);             // the area itself is not rounded
+        Assert.Equal(expected, consumables.Quantity);
+    }
+
+    [Fact]
+    public void Silicon_rounds_up_to_a_whole_tube()
+    {
+        // 2,75 sheets at two per sheet is 5,5 tubes, charged as 6.
+        var version = NewVersion();
+        version.AddCostingLine(Material(unitPrice: 1000m, quantity: 2.75m));
+        var silicon = Rate(unitPrice: 55m, quantity: 0m,
+            derivation: DerivationRule.FromSheetCount, description: "Silicon + sealing", derivationFactor: 2m);
+        version.AddCostingLine(silicon);
+
+        _calculator.Calculate(version);
+
+        Assert.Equal(6m, silicon.Quantity);
+        Assert.Equal(330.00m, silicon.LineTotal());
+    }
+
+    [Fact]
+    public void A_rounded_quantity_the_estimator_typed_over_is_left_as_typed()
+    {
+        var version = NewVersion();
+        version.AddCostingLine(Material(unitPrice: 1000m, quantity: 1m, sheetArea: 2.7968m));
+        var consumables = Rate(unitPrice: 55m, quantity: 0m,
+            derivation: DerivationRule.FromTotalAreaM2, description: "Sandpaper & consumables");
+        version.AddCostingLine(consumables);
+        _calculator.Calculate(version);
+
+        version.ChangeQuantity(consumables, 2.5m);
+        _calculator.Calculate(version);
+
+        Assert.Equal(2.5m, consumables.Quantity);
     }
 
     [Fact]
