@@ -1,55 +1,37 @@
-﻿@{
+@*
+    How a new account is activated. The Managing Director creates the account and
+    gives the new user a temporary password. Signing in with it opens the screen to
+    choose their own password, which activates the account.
+*@
+@{
     Layout = "_AuthLayout";
-    ViewData["Title"] = "Activate account";
-    var done = ViewData["Done"] as bool? ?? false;
+    ViewData["Title"] = "Activate your account";
 }
 
-@if (!done)
-{
-    <h1>Set your password</h1>
-    <p class="lede">
-        Your account was created by <strong>Paul Schluter</strong>. Choose a password
-        to activate it.
-    </p>
+<h1>Activate your account</h1>
+<p class="lede">Your account was created by the Managing Director, who gave you a temporary password.</p>
 
-    <div class="card" style="background:#fafbfc;margin-bottom:20px">
-        <div class="card-body tight">
-            <div class="section-label">Account</div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
-                <span class="avatar sage">DN</span>
-                <div>
-                    <div class="strong small">Devan Naidoo</div>
-                    <div class="tiny muted">devan@technosurfaces.co.za &middot; Estimator</div>
-                </div>
-            </div>
-        </div>
-    </div>
+<ol class="steps">
+    <li>
+        <span class="step-no" aria-hidden="true">1</span>
+        <div><strong>Sign in with the temporary password.</strong> Use your work email address.</div>
+    </li>
+    <li>
+        <span class="step-no" aria-hidden="true">2</span>
+        <div><strong>Choose your own password.</strong> At least 12 characters, with a capital letter, a small letter and a number.</div>
+    </li>
+    <li>
+        <span class="step-no" aria-hidden="true">3</span>
+        <div><strong>You are in.</strong> From then on you sign in with your own password.</div>
+    </li>
+</ol>
 
-    <form asp-action="Activate" method="post">
-        <div class="field">
-            <label class="label" for="pw">New password <span class="req">*</span></label>
-            <input class="input" id="pw" name="password" type="password" required />
-            <div class="hint">At least 10 characters, with one number and one capital letter.</div>
-        </div>
+<a class="btn btn-primary btn-lg btn-block" asp-action="Login">
+    Sign in with the temporary password
+    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+</a>
 
-        <div class="field">
-            <label class="label" for="pw2">Confirm password <span class="req">*</span></label>
-            <input class="input" id="pw2" name="confirm" type="password" required />
-        </div>
-
-        <button class="btn btn-primary btn-lg btn-block" type="submit">
-            Activate account and sign in
-        </button>
-    </form>
-}
-else
-{
-    <div style="text-align:center">
-        <div class="avatar sage lg" style="margin:0 auto 16px;width:52px;height:52px;flex-basis:52px">
-            <svg class="ico ico-lg"><use href="#i-check" /></svg>
-        </div>
-        <h1>Account activated</h1>
-        <p class="lede">Your password is set. You can sign in now.</p>
-        <a class="btn btn-primary btn-block" asp-action="Login">Continue to sign in</a>
-    </div>
-}
+<div class="notice notice-info auth-note">
+    <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+    <div>No temporary password yet? Ask the Managing Director to issue one from the Users screen.</div>
+</div>
