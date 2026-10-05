@@ -58,9 +58,11 @@ Every one of the twenty screens was checked on 5 October 2026 at 375, 768 and 14
 
 | Screen | Lighthouse accessibility | Lighthouse performance | axe issues |
 |---|---|---|---|
-| Costing sheet | Not run yet | Not run yet | Not run yet |
-| Quote list | Not run yet | Not run yet | Not run yet |
-| Customer quotation | Not run yet | Not run yet | Not run yet |
+| Costing sheet | 100 | 100 | 0 |
+| Quote list | 100 | 100 | 0 |
+| Customer quotation | 100 | 100 | 0 |
+
+Lighthouse ran in Chrome in navigation mode for desktop. axe DevTools (axe-core 4.13.0, WCAG 2.1 AA) found no automatic, guided or manual issues.
 
 ## Security
 

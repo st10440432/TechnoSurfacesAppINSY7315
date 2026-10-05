@@ -80,12 +80,12 @@ At every width the same script was run in the page. It checks for exactly one ma
 
 ## Tool scores
 
-Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both are run on the three screens below, against the deployed app rather than a laptop, and every issue they report is fixed before the scores are recorded.
+Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both were run on 5 October 2026 on the three screens below, signed in as the Managing Director, against a local copy of the app with a test quote. Lighthouse ran in navigation mode for desktop. axe DevTools used axe-core 4.13.0 against WCAG 2.1 AA, and found no automatic, guided or manual issues on any of the three screens.
 
 | Screen | Lighthouse accessibility | Lighthouse performance | axe issues |
 |---|---|---|---|
-| Costing sheet | Not run yet | Not run yet | Not run yet |
-| Quote list | Not run yet | Not run yet | Not run yet |
-| Customer quotation | Not run yet | Not run yet | Not run yet |
+| Costing sheet | 100 | 100 | 0 |
+| Quote list | 100 | 100 | 0 |
+| Customer quotation | 100 | 100 | 0 |
 
 The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
