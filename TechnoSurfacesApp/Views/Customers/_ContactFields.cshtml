@@ -1,0 +1,29 @@
+@model (TechnoSurfaces.Application.Customers.ContactView? Contact, string Prefix)
+@*
+    The fields of a contact. The prefix keeps the ids unique when several contact
+    forms are on one page; the names are the API's.
+*@
+@{
+    var c = Model.Contact;
+    var p = Model.Prefix;
+}
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="@p-fullName">Full name <span class="req" aria-hidden="true">*</span></label>
+        <input class="input" id="@p-fullName" name="fullName" maxlength="200" required value="@c?.FullName" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label class="label" for="@p-position">Position <span class="optional">optional</span></label>
+        <input class="input" id="@p-position" name="position" maxlength="100" value="@c?.Position" autocomplete="off" />
+    </div>
+</div>
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="@p-email">Email <span class="optional">optional</span></label>
+        <input class="input" id="@p-email" name="email" type="email" maxlength="200" value="@c?.Email" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label class="label" for="@p-phone">Phone <span class="optional">optional</span></label>
+        <input class="input" id="@p-phone" name="phone" type="tel" maxlength="40" value="@c?.Phone" autocomplete="off" />
+    </div>
+</div>

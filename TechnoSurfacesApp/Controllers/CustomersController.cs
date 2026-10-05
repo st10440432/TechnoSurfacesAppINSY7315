@@ -1,117 +1,69 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using TechnoSurfacesApp.Data;
+using Microsoft.AspNetCore.Mvc;
+using TechnoSurfaces.Application.Customers;
+using TechnoSurfaces.Application.Quoting;
 using TechnoSurfacesApp.Models;
-using TechnoSurfaces.Services;
-using TechnoSurfacesApp.Controllers;
-using static System.Collections.Specialized.BitVector32;
-using TechnoSurfaces.Models;
 
 namespace TechnoSurfacesApp.Controllers;
 
 /// <summary>
-/// Customers and their contacts. Seeded from a one-off Pastel Customer Masterfile
-/// export at cut-over rather than a live integration.
+/// Customers and their contacts (US-15). Both roles keep them up to date, so these
+/// screens are never read only. The pages read through the customer service; every
+/// change is sent from the page to the /api/customers endpoints. Nothing is ever
+/// deleted: a customer or contact is deactivated, which takes it off the new quote
+/// form but keeps old quotes reading correctly.
 /// </summary>
 public class CustomersController : AppController
 {
-    public CustomersController(DemoSession session) : base(session) { }
+    private readonly ICustomerService _customers;
+    private readonly IQuoteWorkflowService _workflow;
 
-    public IActionResult Index(string? q)
+    public CustomersController(ICustomerService customers, IQuoteWorkflowService workflow)
     {
-        var list = Db.Customers.AsEnumerable();
+        _customers = customers;
+        _workflow = workflow;
+    }
 
-        if (!string.IsNullOrWhiteSpace(q))
-        {
-            var t = q.Trim();
-            list = list.Where(c =>
-                c.CompanyName.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                c.AccountCode.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                c.Contacts.Any(k => k.Name.Contains(t, StringComparison.OrdinalIgnoreCase)));
-        }
+    public async Task<IActionResult> Index(string? q, bool inactive, CancellationToken ct)
+    {
+        var search = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
 
-        ViewData["Title"] = "Customers";
-        ViewData["Page"] = "customers";
-        ViewData["Crumb"] = "Data";
-
+        SetPage("Customers", "customers");
         return View(new CustomerListVm
         {
-            Rows = list
-                .OrderBy(c => c.CompanyName)
-                .Select(c => new CustomerRow(c, Db.Quotes.Where(x => x.CustomerId == c.Id).ToList()))
-                .ToList(),
-            Search = q,
-            CanManage = Session.IsMd
+            Customers = await _customers.ListAsync(search, inactive, ct),
+            Search = search,
+            IncludeInactive = inactive
         });
     }
 
-    public IActionResult Details(int id)
+    public async Task<IActionResult> Details(int id, CancellationToken ct)
     {
-        var customer = Db.GetCustomer(id);
-        if (customer is null) return RedirectToAction(nameof(Index));
+        var result = await _customers.GetAsync(id, ct);
+        if (result.Outcome != CustomerOutcome.Ok)
+        {
+            Flash("error", "Customer not found", $"There is no customer {id}. Choose one from the list instead.");
+            return RedirectToAction(nameof(Index));
+        }
 
-        ViewData["Title"] = customer.CompanyName;
-        ViewData["Page"] = "customers";
-        ViewData["Crumb"] = "Data \u203A Customers";
-
+        var customer = result.Customer!;
+        SetPage(customer.Name, "customers", new Crumb("Customers", Url.Action(nameof(Index))));
         return View(new CustomerDetailVm
         {
             Customer = customer,
-            Quotes = Db.Quotes
-                .Where(x => x.CustomerId == id)
-                .OrderByDescending(x => x.IssueDate)
-                .ToList(),
-            CanManage = Session.IsMd
+            Quotes = await _workflow.ListAsync(new QuoteListFilter(CustomerId: id), ct)
         });
     }
 }
 
-// ==========================================================================
-//  View models
-// ==========================================================================
-
-public class CustomerRow
+public sealed class CustomerListVm
 {
-    public CustomerRow(Customer customer, List<Quote> quotes)
-    {
-        Customer = customer;
-        Quotes = quotes;
-    }
-
-    public Customer Customer { get; }
-    public List<Quote> Quotes { get; }
-
-    public decimal TotalValue => Quotes.Sum(q => q.Total);
-
-    public decimal WonValue => Quotes
-        .Where(q => q.Status is QuoteStatus.Accepted or QuoteStatus.Invoiced)
-        .Sum(q => q.Total);
-
-    public DateTime? LastQuoted => Quotes.Any() ? Quotes.Max(q => q.IssueDate) : null;
+    public IReadOnlyList<CustomerSummary> Customers { get; init; } = [];
+    public string? Search { get; init; }
+    public bool IncludeInactive { get; init; }
 }
 
-public class CustomerListVm
+public sealed class CustomerDetailVm
 {
-    public List<CustomerRow> Rows { get; set; } = new();
-    public string? Search { get; set; }
-    public bool CanManage { get; set; }
-
-    public int TotalContacts => Rows.Sum(r => r.Customer.Contacts.Count);
-    public decimal TotalValue => Rows.Sum(r => r.TotalValue);
-}
-
-public class CustomerDetailVm
-{
-    public Customer Customer { get; set; } = null!;
-    public List<Quote> Quotes { get; set; } = new();
-    public bool CanManage { get; set; }
-
-    public decimal TotalValue => Quotes.Sum(q => q.Total);
-
-    public decimal WonValue => Quotes
-        .Where(q => q.Status is QuoteStatus.Accepted or QuoteStatus.Invoiced)
-        .Sum(q => q.Total);
-
-    public int OpenCount => Quotes.Count(q =>
-        q.Status is QuoteStatus.Draft or QuoteStatus.PendingApproval
-                 or QuoteStatus.Approved or QuoteStatus.Sent);
+    public CustomerView Customer { get; init; } = null!;
+    public IReadOnlyList<QuoteSummary> Quotes { get; init; } = [];
 }

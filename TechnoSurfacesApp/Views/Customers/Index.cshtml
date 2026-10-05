@@ -1,91 +1,114 @@
-﻿@model TechnoSurfacesApp.Controllers.CustomerListVm
+@model TechnoSurfacesApp.Controllers.CustomerListVm
+@*
+    The customer list (US-15), searchable by name or Pastel account code, with a
+    form to add a customer. Adding posts to /api/customers through app.js and
+    opens the new customer.
+*@
+@{
+    var count = Model.Customers.Count;
+    var filtered = Model.Search is not null;
+}
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Customers</h2>
-        <p>@Model.Rows.Count customers &middot; @Model.TotalContacts contacts &middot; @Fmt.Rand(Model.TotalValue) quoted</p>
+        <h1>Customers</h1>
+        <p>The companies quotes are billed to, and the people they are addressed to.</p>
     </div>
-    <div class="page-head-actions">
-        @if (Model.CanManage)
+</header>
+
+<div class="grid grid-main">
+    <section class="card" aria-labelledby="customers-title">
+        <h2 class="sr-only" id="customers-title">Customer list</h2>
+        <form class="filterbar" method="get" asp-action="Index" role="search" aria-label="Find a customer" data-no-busy>
+            <div class="field search">
+                <label class="label" for="q">Search</label>
+                <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+                <input class="input" id="q" name="q" type="search" value="@Model.Search" aria-describedby="q-hint" />
+                <span class="sr-only" id="q-hint">Searches the company name and the Pastel account code.</span>
+            </div>
+            <div class="field check filter-check">
+                <input type="checkbox" id="inactive" name="inactive" value="true" checked="@Model.IncludeInactive" data-autosubmit />
+                <label for="inactive">Include inactive customers</label>
+            </div>
+            <div class="btn-row">
+                <button type="submit" class="btn btn-secondary">Search</button>
+                @if (filtered || Model.IncludeInactive)
+                {
+                    <a class="btn btn-ghost" asp-action="Index">Clear</a>
+                }
+            </div>
+        </form>
+
+        <p class="list-count" role="status">@count customer@(count == 1 ? "" : "s")@(filtered ? $" match \"{Model.Search}\"" : "").</p>
+
+        @if (count == 0)
         {
-            <button class="btn btn-primary" type="button">
-                <svg class="ico ico-sm"><use href="#i-plus" /></svg> Add customer
-            </button>
+            <div class="empty">
+                <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg>
+                <h3>@(filtered ? "No customers match" : "No customers yet")</h3>
+                <p>@(filtered ? "Check the spelling, or search by the Pastel account code instead." : "Add the first customer with the form beside this list.")</p>
+            </div>
         }
-    </div>
-</div>
-
-<div class="notice notice-info">
-    <svg class="ico"><use href="#i-info" /></svg>
-    <div>
-        Customer records are seeded from a <strong>one-off Pastel Customer Masterfile export</strong>
-        at cut-over. Live integration with Pastel was investigated and rejected &mdash; it is
-        on-premise desktop software behind a licensed SDK.
-    </div>
-</div>
-
-<div class="card">
-    <form method="get" class="filterbar">
-        <div class="search">
-            <svg class="ico ico-sm"><use href="#i-search" /></svg>
-            <input class="input" name="q" value="@Model.Search" placeholder="Company, account code or contact" />
-        </div>
-        <button class="btn btn-secondary btn-sm" type="submit">Search</button>
-        @if (!string.IsNullOrWhiteSpace(Model.Search))
+        else
         {
-            <a class="btn btn-ghost btn-sm" asp-action="Index">Clear</a>
-        }
-    </form>
-
-    @if (Model.Rows.Count == 0)
-    {
-        <div class="empty">
-            <svg class="ico"><use href="#i-building" /></svg>
-            <h3>No customers match</h3>
-            <p>Try a different search term.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data stack">
-                <thead>
-                    <tr>
-                        <th>Company</th>
-                        <th>Account</th>
-                        <th>VAT no.</th>
-                        <th class="right">Contacts</th>
-                        <th class="right">Quotes</th>
-                        <th>Last quoted</th>
-                        <th class="right">Value quoted</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var r in Model.Rows)
-                    {
+            <div class="table-wrap">
+                <table class="data stack">
+                    <caption class="sr-only">Customers</caption>
+                    <thead>
                         <tr>
-                            <td data-label="Company">
-                                <a class="row-link" asp-action="Details" asp-route-id="@r.Customer.Id">
-                                    @r.Customer.CompanyName
-                                </a>
-                                <div class="tiny muted">@r.Customer.BillingAddress</div>
-                            </td>
-                            <td data-label="Account" class="mono tiny">@r.Customer.AccountCode</td>
-                            <td data-label="VAT no." class="mono tiny">@(r.Customer.VatNumber ?? "\u2014")</td>
-                            <td data-label="Contacts" class="right">@r.Customer.Contacts.Count</td>
-                            <td data-label="Quotes" class="right">@r.Quotes.Count</td>
-                            <td data-label="Last quoted" class="small nowrap">
-                                @(r.LastQuoted.HasValue ? Fmt.Date(r.LastQuoted.Value) : "\u2014")
-                            </td>
-                            <td data-label="Value quoted" class="right strong">@Fmt.Rand(r.TotalValue)</td>
-                            <td data-label="" class="right">
-                                <a class="btn btn-ghost btn-sm" asp-action="Details" asp-route-id="@r.Customer.Id">Open</a>
-                            </td>
+                            <th scope="col">Customer</th>
+                            <th scope="col">City</th>
+                            <th scope="col" class="right">Active contacts</th>
+                            <th scope="col">Status</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in Model.Customers)
+                        {
+                            <tr>
+                                <td data-label="Customer">
+                                    <a class="row-link" asp-action="Details" asp-route-id="@c.Id">@c.Name</a>
+                                    @if (!string.IsNullOrEmpty(c.AccountCode))
+                                    {
+                                        <span class="sub mono">@c.AccountCode</span>
+                                    }
+                                </td>
+                                <td data-label="City">@(c.City ?? "Not given")</td>
+                                <td data-label="Active contacts" class="right">
+                                    @c.ActiveContactCount
+                                    @if (c.ActiveContactCount == 0 && c.IsActive)
+                                    {
+                                        <span class="badge badge-warn stacked">Add a contact to quote</span>
+                                    }
+                                </td>
+                                <td data-label="Status">
+                                    @if (c.IsActive)
+                                    {
+                                        <span class="badge badge-good">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge">Inactive</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="card" aria-labelledby="add-customer-title">
+        <div class="card-head">
+            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+            <h2 id="add-customer-title">Add a customer</h2>
         </div>
-    }
+        <form class="card-body" novalidate data-api-form data-method="POST" data-url="@Url.Content("~/api/customers")"
+              data-redirect-to="@(Url.Content("~/Customers/Details/") + "{id}")"
+              data-success="Customer added" data-success-detail="Add the people quotes will be addressed to.">
+            <partial name="_CustomerFields" model="null" />
+            <button type="submit" class="btn btn-primary btn-block">Add the customer</button>
+        </form>
+    </section>
 </div>
