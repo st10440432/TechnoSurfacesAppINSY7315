@@ -645,6 +645,12 @@
 
     function gridRow(input) { return input.closest("[data-grid-row]"); }
 
+    // Rate items whose first line is being created, by rate item id. A second
+    // change to the same item while that request is out (a double click on the
+    // number box's arrows sends two) must not create a second line; it is held
+    // here and applied to the line the first request creates.
+    var creating = {};
+
     function afterGridChange(result, success) {
         if (result.ok) {
             saveSucceeded();
@@ -661,11 +667,22 @@
     }
 
     function saveGridQuantity(input) {
-        if (input.value === input.dataset.saved || input.dataset.inflight === input.value) return;
         var row = gridRow(input);
-        var name = row.dataset.name;
         var lineId = row.dataset.line;
+        var item = row.dataset.item;
         var raw = input.value.trim();
+
+        // The first line for this item is still being created: remember the newest
+        // quantity and let that request apply it, instead of creating a second line.
+        // Checked before anything else, because clearing the box while the line is
+        // being created matches the empty value the row started with.
+        if (!lineId && creating[item]) {
+            creating[item].latest = raw;
+            return;
+        }
+
+        if (input.value === input.dataset.saved || input.dataset.inflight === input.value) return;
+        var name = row.dataset.name;
         var removing = raw === "" || Number(raw) === 0;
 
         if (!removing) {
@@ -701,20 +718,68 @@
                 return afterGridChange(result, null);
             });
         } else {
-            var body = { type: "rate", rateItemId: Number(row.dataset.item), quantity: Number(raw) };
+            var body = { type: "rate", rateItemId: Number(item), quantity: Number(raw) };
             if (!resolved) body.unitPrice = Number(typedRate);
             // A rate typed over the card price before the quantity becomes an override once the line exists.
             var override = resolved && typedRate !== "" && Number(typedRate) !== Number(row.dataset.card) ? Number(typedRate) : null;
+            creating[item] = { latest: raw };
             request = TS.api("POST", api + "lines", body).then(function (result) {
-                if (result.ok && override !== null) {
-                    return TS.api("PUT", api + "lines/" + result.data.line.id, { unitPrice: override }).then(function (second) {
-                        return afterGridChange(second.ok ? second : result, null);
-                    });
+                if (!result.ok) {
+                    delete creating[item];
+                    return afterGridChange(result, null);
                 }
-                return afterGridChange(result, null);
+                var newLineId = result.data.line.id;
+                var withRate = override === null
+                    ? Promise.resolve(result)
+                    : TS.api("PUT", api + "lines/" + newLineId, { unitPrice: override }).then(function (second) {
+                        return second.ok ? second : result;
+                    });
+                return withRate
+                    .then(function (latest) { return applyHeldQuantity(item, newLineId, raw, latest); })
+                    .then(function (last) { return afterGridChange(last, null); })
+                    .then(function () { finishCreating(item, newLineId); });
             });
         }
         request.then(function () { delete input.dataset.inflight; row.classList.remove("is-saving"); });
+    }
+
+    /**
+     * Brings a newly created line up to the newest quantity typed while it was
+     * being created: changed, or taken off when the box was cleared. Repeats until
+     * nothing newer is waiting, and resolves with the last answer from the API.
+     */
+    function applyHeldQuantity(item, lineId, applied, lastResult) {
+        var held = creating[item];
+        if (!held || held.latest === applied) return Promise.resolve(lastResult);
+
+        var wanted = held.latest;
+        var gone = wanted === "" || Number(wanted) === 0;
+        if (!gone && (isNaN(Number(wanted)) || Number(wanted) < 0)) return Promise.resolve(lastResult);
+
+        var call = gone
+            ? TS.api("DELETE", api + "lines/" + lineId)
+            : TS.api("PUT", api + "lines/" + lineId, { quantity: Number(wanted) });
+
+        return call.then(function (result) {
+            if (!result.ok || gone) return result;
+            return applyHeldQuantity(item, lineId, wanted, result);
+        });
+    }
+
+    /**
+     * Ends the creation of an item's line once the sheet has been refreshed and the
+     * row knows its line. A quantity typed in the moment between the last save and
+     * the refresh is saved through the line's own quantity box.
+     */
+    function finishCreating(item, lineId) {
+        var held = creating[item];
+        delete creating[item];
+        if (!held) return;
+        var box = document.querySelector('#rate-lines input[data-line="' + lineId + '"][data-field="quantity"]');
+        if (box && held.latest !== "" && held.latest !== box.dataset.saved) {
+            box.value = held.latest;
+            saveLineField(box);
+        }
     }
 
     function checkGridRate(input) {
@@ -727,17 +792,31 @@
     function toggleCalculated(box) {
         var row = gridRow(box);
         var name = row.dataset.name;
+        // Locked until the sheet is refreshed, so a quick second click cannot add the
+        // line twice or try to remove a line that does not exist yet.
+        box.disabled = true;
         saving(+1);
         totalsBusy(true);
         row.classList.add("is-saving");
+        var saved = false;
         var request = box.checked
             ? TS.api("POST", api + "lines", { type: "rate", rateItemId: Number(row.dataset.item), quantity: 0 }).then(function (result) {
+                saved = result.ok;
                 return afterGridChange(result, { title: "Added to the costing", detail: name + ", with the quantity calculated from the materials." });
             })
             : TS.api("DELETE", api + "lines/" + row.dataset.line).then(function (result) {
+                saved = result.ok;
                 return afterGridChange(result, { title: "Removed from the costing", detail: name });
             });
-        request.then(function () { row.classList.remove("is-saving"); });
+        request.then(function () {
+            row.classList.remove("is-saving");
+            // The refresh replaces the box. If it is still here, put a failed change's
+            // tick back as it was and let it be tried again.
+            if (document.body.contains(box)) {
+                if (!saved) box.checked = !box.checked;
+                box.disabled = false;
+            }
+        });
     }
 
     root.addEventListener("change", function (e) {
