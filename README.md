@@ -6,6 +6,8 @@ Techno Surfaces (Pty) Ltd fabricates solid-surface countertops in Cape Town for 
 
 This web application replaces that sheet. The estimator picks a material by supplier, product line, colour and sheet size, and the price fills in from a single catalogue together with where it came from. A price that cannot be found is refused with a reason, never filled in as zero. The costing calculates itself, the customer quotation is written from it without any cost figures on it, and the Managing Director approves every estimator's quote before it goes out. Quotes keep the prices they were made with, every revision is kept as its own version, and every change to a price or a quote is recorded.
 
+When Loading the app. one might have to clear cache and cookies upon entering the login page to sign in (temporary issue will be fixed)
+
 | | |
 |---|---|
 | Production | https://tsqa-app-production.azurewebsites.net |
