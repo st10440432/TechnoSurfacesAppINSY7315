@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Catalogue;
+using TechnoSurfaces.Application.Costing;
 using TechnoSurfaces.Application.Customers;
 using TechnoSurfaces.Application.Pricing;
 using TechnoSurfaces.Application.Quoting;
@@ -209,12 +210,11 @@ public class QuotesController : AppController
         foreach (var item in items)
         {
             var card = PricePreviewResult.From(await _rates.ResolveAsync(item.Id, supplierId: null, issueDate, ct), issueDate);
-            var calculated = item.Derivation switch
-            {
-                "FromTotalAreaM2" => decimal.Round(sheet.Totals.TotalAreaM2 * item.DerivationFactor, 4),
-                "FromSheetCount" => decimal.Round(sheet.Totals.TotalSheetCount * item.DerivationFactor, 4),
-                _ => (decimal?)null
-            };
+            // The same rule the calculator applies, so the figure shown before the
+            // line is added is the one it is added with.
+            var calculated = Enum.TryParse<DerivationRule>(item.Derivation, out var rule)
+                ? QuoteCalculationService.DerivedQuantity(rule, item.DerivationFactor, sheet.Totals.TotalAreaM2, sheet.Totals.TotalSheetCount)
+                : null;
             rows.Add(new RateGridRow(item, card, calculated, rateLines.Where(l => l.RateItemId == item.Id).ToList()));
         }
 
