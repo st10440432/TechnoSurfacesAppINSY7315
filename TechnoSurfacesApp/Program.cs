@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -138,7 +138,6 @@ builder.Services.AddSingleton<IAuthorizationHandler, ReopenQuoteHandler>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISignInService, SignInService>();
-builder.Services.AddScoped<TechnoSurfaces.Services.DemoSession>();
 builder.Services.AddScoped<SignedInUser>();
 builder.Services.AddPlatformHealthChecks();
 builder.Services.AddSignInRateLimiting();
@@ -156,9 +155,6 @@ await DatabaseStartup.InitialiseAsync(app);
 await IdentitySeeder.SeedAsync(app.Services, app.Configuration, app.Logger,
     includeDevelopmentAccounts: app.Environment.IsDevelopment()
         || (app.Configuration.GetValue<bool>("Seed:DemoAccounts") && !app.Environment.IsProduction()));
-
-// Load the in-memory demo data the prototype screens still read from.
-TechnoSurfacesApp.Data.Db.Initialise();
 
 // Configure the HTTP request pipeline.
 app.UseSecurityHeaders();

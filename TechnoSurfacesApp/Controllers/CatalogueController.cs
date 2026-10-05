@@ -1,109 +1,90 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using TechnoSurfacesApp.Data;
-using TechnoSurfaces.Models;
-using TechnoSurfaces.Services;
-using TechnoSurfacesApp.Controllers;
-using TechnoSurfacesApp.Models;
-using static System.Collections.Specialized.BitVector32;
-using TechnoSurfacesApp.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Catalogue;
+using TechnoSurfacesApp.Identity;
+using TechnoSurfacesApp.Models;
 
 namespace TechnoSurfacesApp.Controllers;
 
 /// <summary>
-/// The material catalogue. Everyone can browse it and see pricing - the client
-/// was explicit that all staff see all prices. Only the Managing Director can
-/// change a price.
+/// The material catalogue and the price editor (US-23, US-24). Everyone can browse it
+/// and see every price, as the client confirmed. Only the Managing Director changes a
+/// price, and a change starts on a date rather than overwriting the old price, so a
+/// quote keeps the price it was made with.
 /// </summary>
 public class CatalogueController : AppController
 {
+    /// <summary>A price list older than this is flagged, so nobody quotes from it unknowingly.</summary>
+    public const int StaleAfterDays = 365;
+
     private readonly ICatalogueService _catalogue;
 
-    public CatalogueController(ICatalogueService catalogue)
-        => _catalogue = catalogue;
+    public CatalogueController(ICatalogueService catalogue) => _catalogue = catalogue;
 
-    public async Task<IActionResult> Index(int? supplierId, int? productLineId,
-        int? thickness, string? status, string? q)
+    public async Task<IActionResult> Index(string? supplier, string? q, bool retired, CancellationToken ct)
     {
-        var list = Db.Catalogue.AsEnumerable();
+        var today = Today;
+        var all = await _catalogue.GetCatalogueAsync(today, ct);
 
-        if (supplierId is > 0)
-            list = list.Where(c => c.SupplierId == supplierId);
-
-        if (productLineId is > 0)
-            list = list.Where(c => c.ProductLineId == productLineId);
-
-        if (thickness is > 0)
-            list = list.Where(c => c.ThicknessMm == thickness);
-
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<CatalogueStatus>(status, out var st))
-            list = list.Where(c => c.Status == st);
-
+        var rows = all.AsEnumerable();
+        if (!retired)
+            rows = rows.Where(r => !r.IsRetired);
+        if (!string.IsNullOrEmpty(supplier))
+            rows = rows.Where(r => r.Supplier == supplier);
         if (!string.IsNullOrWhiteSpace(q))
         {
-            var t = q.Trim();
-            list = list.Where(c =>
-                c.ColourName.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                c.SupplierCode.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                (c.Range ?? "").Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                (c.BandCode ?? "").Contains(t, StringComparison.OrdinalIgnoreCase));
+            var term = q.Trim();
+            rows = rows.Where(r =>
+                r.Colour.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                r.SupplierCode.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                r.ProductLine.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                (r.Band ?? "").Contains(term, StringComparison.OrdinalIgnoreCase));
         }
 
-        ViewData["Title"] = "Material catalogue";
-        ViewData["Page"] = "catalogue";
-        ViewData["Crumb"] = "Data";
-
+        SetPage("Material catalogue", "catalogue", new Crumb("Data"));
         return View(new CatalogueVm
         {
-            Entries = list
-                .OrderBy(c => Db.SupplierName(c.SupplierId))
-                .ThenBy(c => Db.ProductLineName(c.ProductLineId))
-                .ThenBy(c => c.ColourName)
-                .ThenByDescending(c => c.ThicknessMm)
+            Rows = rows.ToList(),
+            Suppliers = all.Select(r => r.Supplier).Distinct().Order().ToList(),
+            Supplier = supplier,
+            Search = string.IsNullOrWhiteSpace(q) ? null : q.Trim(),
+            IncludeRetired = retired,
+            StaleSuppliers = all
+                .Where(r => r.PriceFrom is { } from && today.DayNumber - from.DayNumber > StaleAfterDays)
+                .GroupBy(r => r.Supplier)
+                .Select(g => (g.Key, g.Max(r => r.PriceFrom!.Value)))
+                .OrderBy(s => s.Key)
                 .ToList(),
-            SupplierId = supplierId,
-            ProductLineId = productLineId,
-            Thickness = thickness,
-            Status = status,
-            Search = q,
-            CanEditPrices = await CanAsync(Policies.CanEditCatalogue)
+            Today = today
         });
     }
 
     /// <summary>
-    /// Price maintenance. Restricted to the Managing Director - the client
-    /// confirmed he is the only person who may change a material price.
+    /// One material in one sheet size: its price now, every earlier price, and, for the
+    /// Managing Director, the form that starts a new price from a date.
     /// </summary>
-    public async Task<IActionResult> Price(int id)
+    public async Task<IActionResult> Price(int colourId, int sheetSizeId, CancellationToken ct)
     {
-        var entry = Db.GetEntry(id);
-        if (entry is null) return RedirectToAction(nameof(Index));
+        var row = (await _catalogue.GetCatalogueAsync(Today, ct))
+            .FirstOrDefault(r => r.ColourId == colourId && r.SheetSizeId == sheetSizeId);
+        if (row is null)
+        {
+            Flash("error", "Material not found", "Choose the material from the catalogue instead.");
+            return RedirectToAction(nameof(Index));
+        }
 
-        // Quotes that already carry this material. Each holds the price it
-        // resolved at the time, which is why changing this price cannot
-        // retroactively alter them.
-        var usedBy = Db.Quotes
-            .Where(x => x.MaterialLines.Any(m => m.CatalogueEntryId == id))
-            .OrderByDescending(x => x.IssueDate)
-            .ToList();
+        // A band-priced supplier prices the band, not the colour.
+        var history = row.PriceBandId is int band
+            ? await _catalogue.GetPriceHistoryAsync(null, band, sheetSizeId, ct)
+            : await _catalogue.GetPriceHistoryAsync(colourId, null, sheetSizeId, ct);
 
-        ViewData["Title"] = "Material price";
-        ViewData["Page"] = "catalogue";
-        ViewData["Crumb"] = $"Data \u203A {Db.SupplierName(entry.SupplierId)}";
-
+        SetPage(row.Colour, "catalogue", new Crumb("Data"), new Crumb("Material catalogue", Url.Action(nameof(Index))));
         return View(new PriceVm
         {
-            Entry = entry,
-            Supplier = Db.GetSupplier(entry.SupplierId)!,
-            ProductLine = Db.GetProductLine(entry.ProductLineId)!,
+            Row = row,
+            History = history,
             CanEdit = await CanAsync(Policies.CanEditCatalogue),
-            UsedBy = usedBy,
-            History = Db.Audit
-                .Where(a => a.EntityType == "Catalogue" &&
-                            a.EntityRef.Contains(entry.ColourName, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(a => a.When)
-                .ToList()
+            Today = Today
         });
     }
 
@@ -120,7 +101,7 @@ public class CatalogueController : AppController
                 ? await _catalogue.SetMaterialPriceAsync(form.ColourId, form.PriceBandId, form.SheetSizeId,
                     form.PricePerSqm!.Value, form.EffectiveFrom!.Value)
                 : CatalogueResult.Fail(FirstError()),
-            "Price saved. Existing quotes keep the price they were created with.");
+            "Price saved", "Quotes already made keep the price they were made with.");
 
     [HttpPost]
     [Authorize(Policy = Policies.CanEditCatalogue)]
@@ -128,19 +109,19 @@ public class CatalogueController : AppController
         Outcome(ModelState.IsValid
                 ? await _catalogue.SetRateAsync(form.RateItemId, form.SupplierId, form.Amount!.Value, form.EffectiveFrom!.Value)
                 : CatalogueResult.Fail(FirstError()),
-            "Rate saved. It applies to new quotes from its effective date.");
+            "Rate saved", "New quotes use it from its start date. Quotes already made keep their rate.");
 
     [HttpPost]
     [Authorize(Policy = Policies.CanEditCatalogue)]
     public async Task<IActionResult> RetireColour(int colourId) =>
         Outcome(await _catalogue.RetireColourAsync(colourId),
-            "Colour retired. It stays on existing quotes but cannot be chosen on new ones.");
+            "Colour retired", "It stays on quotes already made, but cannot be chosen on new ones.");
 
     [HttpPost]
     [Authorize(Policy = Policies.CanEditCatalogue)]
     public async Task<IActionResult> RetireProductLine(int productLineId) =>
         Outcome(await _catalogue.RetireProductLineAsync(productLineId),
-            "Product line retired. It stays on existing quotes but cannot be chosen on new ones.");
+            "Product line retired", "It stays on quotes already made, but cannot be chosen on new ones.");
 
     // Quotation terms and brand warranties (US-12, US-13): the same policy, since
     // the MD maintains everything printed on a quotation.
@@ -151,7 +132,7 @@ public class CatalogueController : AppController
         Outcome(ModelState.IsValid
                 ? await _catalogue.AddTermAsync(form.Section, form.Text!)
                 : CatalogueResult.Fail(FirstError()),
-            "Line added. New quotations print it; approved quotes keep the wording they were issued with.");
+            "Line added", "New quotations print it. Approved quotes keep the wording they were issued with.");
 
     [HttpPost]
     [Authorize(Policy = Policies.CanEditCatalogue)]
@@ -159,13 +140,13 @@ public class CatalogueController : AppController
         Outcome(ModelState.IsValid
                 ? await _catalogue.UpdateTermAsync(form.TermId, form.Text!)
                 : CatalogueResult.Fail(FirstError()),
-            "Line saved. Approved quotes keep the wording they were issued with.");
+            "Line saved", "Approved quotes keep the wording they were issued with.");
 
     [HttpPost]
     [Authorize(Policy = Policies.CanEditCatalogue)]
     public async Task<IActionResult> RetireTerm(int termId) =>
         Outcome(await _catalogue.RetireTermAsync(termId),
-            "Line retired. It no longer prints on new quotations.");
+            "Line retired", "It no longer prints on new quotations.");
 
     [HttpPost]
     [Authorize(Policy = Policies.CanEditCatalogue)]
@@ -173,21 +154,26 @@ public class CatalogueController : AppController
         Outcome(ModelState.IsValid
                 ? await _catalogue.SetBrandWarrantyAsync(form.BrandId, form.MaterialWarranty, form.WorkmanshipWarranty)
                 : CatalogueResult.Fail(FirstError()),
-            "Warranty saved.");
+            "Warranty saved", "New quotations for this brand print it.");
 
     private string FirstError() =>
         ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).FirstOrDefault()
         ?? "Check the values entered.";
 
-    /// <summary>Shows the outcome on the page the change came from.</summary>
-    private IActionResult Outcome(CatalogueResult result, string success)
+    /// <summary>Shows the outcome as a message on the page the change came from.</summary>
+    private IActionResult Outcome(CatalogueResult result, string title, string detail)
     {
-        TempData[result.Succeeded ? "CatalogueMessage" : "CatalogueError"] =
-            result.Succeeded ? success : result.Error;
+        if (result.Succeeded)
+            Flash("success", title, detail);
+        else
+            Flash("error", "Not saved", result.Error);
 
         // A Referer header can be forged, so only a local page is accepted.
         var back = Request.Headers.Referer.ToString();
-        return Url.IsLocalUrl(back) ? Redirect(back) : RedirectToAction(nameof(Index));
+        return Url.IsLocalUrl(back) ? Redirect(back)
+            : Uri.TryCreate(back, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host
+                ? Redirect(uri.PathAndQuery)
+                : RedirectToAction(nameof(Index));
     }
 }
 
@@ -195,51 +181,29 @@ public class CatalogueController : AppController
 //  View models
 // ==========================================================================
 
-public class CatalogueVm
+public sealed class CatalogueVm
 {
-    public List<CatalogueEntry> Entries { get; set; } = new();
-    public int? SupplierId { get; set; }
-    public int? ProductLineId { get; set; }
-    public int? Thickness { get; set; }
-    public string? Status { get; set; }
-    public string? Search { get; set; }
-    public bool CanEditPrices { get; set; }
+    public IReadOnlyList<CatalogueRow> Rows { get; init; } = [];
+    public IReadOnlyList<string> Suppliers { get; init; } = [];
+    public string? Supplier { get; init; }
+    public string? Search { get; init; }
+    public bool IncludeRetired { get; init; }
 
-    public bool AnyFilter =>
-        SupplierId > 0 || ProductLineId > 0 || Thickness > 0 ||
-        !string.IsNullOrEmpty(Status) || !string.IsNullOrWhiteSpace(Search);
+    /// <summary>Suppliers whose newest price is over a year old, with that date.</summary>
+    public IReadOnlyList<(string Supplier, DateOnly NewestPrice)> StaleSuppliers { get; init; } = [];
 
-    /// <summary>Product lines for the filter, narrowed to the chosen supplier.</summary>
-    public List<ProductLine> ProductLineOptions =>
-        SupplierId is > 0
-            ? Db.ProductLinesFor(SupplierId.Value)
-            : Db.ProductLines.OrderBy(p => Db.SupplierName(p.SupplierId)).ThenBy(p => p.Name).ToList();
+    public DateOnly Today { get; init; }
 
-    public List<int> ThicknessOptions =>
-        Db.Catalogue.Select(c => c.ThicknessMm).Distinct().OrderByDescending(t => t).ToList();
-
-    public int StaleSupplierCount => Db.Suppliers.Count(s => s.IsStale);
+    public bool AnyFilter => Supplier is not null || Search is not null || IncludeRetired;
 }
 
-public class PriceVm
+public sealed class PriceVm
 {
-    public CatalogueEntry Entry { get; set; } = null!;
-    public Supplier Supplier { get; set; } = null!;
-    public ProductLine ProductLine { get; set; } = null!;
-    public bool CanEdit { get; set; }
-    public List<Quote> UsedBy { get; set; } = new();
-    public List<AuditEntry> History { get; set; } = new();
+    public CatalogueRow Row { get; init; } = null!;
+    public IReadOnlyList<PricePeriodRow> History { get; init; } = [];
+    public bool CanEdit { get; init; }
+    public DateOnly Today { get; init; }
 
-    /// <summary>Other sizes and thicknesses of the same colour, which price separately.</summary>
-    public List<CatalogueEntry> Siblings =>
-        Db.VariantsFor(Entry.ProductLineId, Entry.ColourName)
-          .Where(e => e.Id != Entry.Id)
-          .ToList();
-
-    /// <summary>
-    /// The price each quote resolved at. Where it differs from the current
-    /// catalogue price, that is the system working as intended.
-    /// </summary>
-    public decimal? ResolvedOn(Quote q) =>
-        q.MaterialLines.FirstOrDefault(m => m.CatalogueEntryId == Entry.Id)?.ResolvedPricePerSheet;
+    /// <summary>A band price applies to every colour in the band.</summary>
+    public bool IsBandPrice => Row.PriceBandId is not null;
 }

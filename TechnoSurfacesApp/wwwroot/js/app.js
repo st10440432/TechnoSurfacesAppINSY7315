@@ -451,6 +451,24 @@
         });
     }
 
+    // A form posted the normal way that needs a yes first, such as retiring a colour:
+    // <form method="post" data-confirm="Retire Aspen?" data-confirm-detail="..." data-confirm-tone="danger">
+    function wireConfirmForms() {
+        document.addEventListener("submit", function (e) {
+            var form = e.target;
+            if (!form.hasAttribute("data-confirm") || form.dataset.confirmed === "yes") return;
+            e.preventDefault();
+            confirmAction(form.dataset.confirm, form.dataset.confirmDetail, form.dataset.confirmLabel, form.dataset.confirmTone)
+                .then(function (yes) {
+                    if (!yes) return;
+                    form.dataset.confirmed = "yes";
+                    var button = form.querySelector('button[type="submit"]');
+                    if (button) busy(button, true);
+                    form.submit();
+                });
+        }, true);
+    }
+
     // Forms posted the normal way show a busy button while the page loads.
     function wireFormBusy() {
         document.addEventListener("submit", function (e) {
@@ -468,6 +486,7 @@
         wireApiForms();
         wireAutoSubmit();
         wirePrint();
+        wireConfirmForms();
         wireFormBusy();
         showStoredFlash();
         focusOnLoad();
