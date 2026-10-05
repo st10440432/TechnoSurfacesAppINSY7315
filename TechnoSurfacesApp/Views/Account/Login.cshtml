@@ -1,4 +1,9 @@
-﻿@model TechnoSurfacesApp.Models.LoginViewModel
+@model TechnoSurfacesApp.Models.LoginViewModel
+@*
+    Sign in (US-26, US-27). There is no registration page and no link to one:
+    accounts are created by the Managing Director. A field with a problem is
+    marked with aria-invalid and tied to its message by the field tag helpers.
+*@
 @{
     Layout = "_AuthLayout";
     ViewData["Title"] = "Sign in";
@@ -6,53 +11,47 @@
 }
 
 <h1>Sign in</h1>
-<p class="lede">Use the credentials issued to you by the Managing Director.</p>
+<p class="lede">Use the email address and password the Managing Director gave you.</p>
 
 @if (formError is not null)
 {
-    <div class="notice notice-alert" role="alert" style="margin-bottom:18px">
-        <svg class="ico"><use href="#i-alert" /></svg>
+    <div class="notice notice-alert" role="alert" tabindex="-1" data-focus-on-load>
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
         <div>@formError</div>
     </div>
 }
 
-<form asp-action="Login" method="post">
+<form asp-action="Login" method="post" novalidate>
     <input type="hidden" asp-for="ReturnUrl" />
 
     <div class="field">
         <label class="label" asp-for="Email"></label>
-        <input class="input" asp-for="Email" type="email" autocomplete="username"
-               placeholder="you@technosurfaces.co.za" />
-        <span class="hint" style="color:var(--danger)" asp-validation-for="Email"></span>
+        <input class="input" asp-for="Email" type="email" autocomplete="username" required />
+        <field-error for="Email" />
     </div>
 
     <div class="field">
         <label class="label" asp-for="Password"></label>
-        <input class="input" asp-for="Password" autocomplete="current-password" />
-        <span class="hint" style="color:var(--danger)" asp-validation-for="Password"></span>
-        <div class="hint">
-            <a asp-action="ForgotPassword">Forgotten your password?</a>
-        </div>
+        <input class="input" asp-for="Password" autocomplete="current-password" required />
+        <field-error for="Password" />
+        <a class="hint" asp-action="ForgotPassword">Forgotten your password?</a>
     </div>
 
-    <div class="field">
-        <label class="check">
-            <input asp-for="RememberMe" />
-            <span>Keep me signed in on this device</span>
-        </label>
+    <div class="field check">
+        <input asp-for="RememberMe" />
+        <label asp-for="RememberMe"></label>
     </div>
 
     <button class="btn btn-primary btn-lg btn-block" type="submit">
         Sign in
-        <svg class="ico ico-sm"><use href="#i-chevron-right" /></svg>
+        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-chevron-right" /></svg>
     </button>
 </form>
 
-<div class="notice notice-info" style="margin-top:26px">
-    <svg class="ico"><use href="#i-lock" /></svg>
+<div class="notice notice-info auth-note">
+    <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
     <div>
         <strong>Accounts are created by the Managing Director.</strong>
-        There is no public registration &mdash; if you need access, ask Paul to
-        create an account for you.
+        There is no public registration. If you need access, ask the Managing Director to create an account for you.
     </div>
 </div>

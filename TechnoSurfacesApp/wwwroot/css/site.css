@@ -228,7 +228,8 @@ img, svg { max-width: 100%; }
     border-bottom: 1px solid var(--line);
 }
 .topbar-spacer { flex: 1; }
-.menu-toggle { display: none; }
+/* .btn.menu-toggle, so the later .btn rule cannot show it on a desktop, where the side menu is always open */
+.btn.menu-toggle { display: none; }
 
 /* Breadcrumb */
 .crumbs ol {
@@ -433,7 +434,8 @@ img, svg { max-width: 100%; }
 
 .btn-sm    { min-height: 2.1rem; padding: 0.35rem 0.75rem; font-size: var(--text-xs); }
 .btn-lg    { min-height: 2.9rem; padding: 0.7rem 1.4rem; font-size: var(--text-base); }
-.btn-block { width: 100%; }
+/* A full-width button wraps a long label instead of pushing the page wider */
+.btn-block { width: 100%; white-space: normal; }
 .btn-icon  { min-width: 2.5rem; padding-left: 0; padding-right: 0; }
 .btn-sm.btn-icon { min-width: 2.1rem; }
 
@@ -987,7 +989,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
 .auth-steps { padding-left: var(--space-5); margin-bottom: var(--space-6); }
 .auth-steps li { margin-bottom: var(--space-2); line-height: var(--leading-normal); }
 .auth-action { margin-top: var(--space-6); }
-.brand-logo-sm { display: inline-block; padding: var(--space-4) var(--space-5); background: var(--surface); border-radius: var(--radius); }
+.brand-logo-sm { display: inline-block; align-self: flex-start; padding: var(--space-4) var(--space-5); background: var(--surface); border-radius: var(--radius); }
 .brand-logo-sm img { display: block; width: 16rem; max-width: 100%; height: auto; }
 
 /* ==========================================================================
@@ -1012,9 +1014,9 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
     body.nav-open .sidebar { transform: none; visibility: visible; }
     body.nav-open .sidebar-scrim { display: block; position: fixed; inset: 0; z-index: 35; background: var(--scrim); }
     .main { margin-left: 0; }
-    .menu-toggle { display: inline-flex; }
+    .btn.menu-toggle { display: inline-flex; }
     .grid-2, .grid-3, .field-row-3, .field-row-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .auth { grid-template-columns: 1fr; }
+    .auth { grid-template-columns: minmax(0, 1fr); }
     .auth-brand { padding: var(--space-6); }
     .auth-headline { margin-top: var(--space-6); font-size: 1.5rem; }
     .auth-points, .auth-foot { display: none; }
@@ -1400,6 +1402,24 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 #costing table.data th { white-space: normal; }
 #costing table.data .input-sm { width: 5.25rem; }
 #costing .input-group-sm { width: 6.75rem; }
+
+/* ==========================================================================
+   Sign-in screens: the note under a form and the secondary action
+   ========================================================================== */
+
+.auth-note { margin: var(--space-6) 0 0; }
+.auth-secondary { margin-top: var(--space-4); text-align: center; }
+
+/* On a phone the brand panel is a short band, so the form starts near the top of the screen */
+@media (max-width: 767.98px) {
+    .auth-brand { padding: var(--space-4) var(--space-4) var(--space-5); }
+    .auth-brand::after { display: none; }
+    .brand-logo-sm { padding: var(--space-2) var(--space-3); }
+    .brand-logo-sm img { width: 9rem; height: auto; }
+    .auth-headline { margin-top: var(--space-3); font-size: var(--text-md); }
+    .auth-sub { display: none; }
+    .auth-panel { padding: var(--space-6) var(--space-4); }
+}
 
 /* ==========================================================================
    Rate card grid on the costing sheet: a quantity box on every item

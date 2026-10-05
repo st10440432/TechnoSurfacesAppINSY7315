@@ -28,8 +28,9 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
     {
         typeof(MaterialPrice), typeof(RatePrice), typeof(Quote), typeof(QuoteVersion), typeof(CostingLine),
 
-        // US-23/24: retiring a colour or a product line is a catalogue change too.
-        typeof(Colour), typeof(ProductLine),
+        // US-23/24 and NFR-10: adding, correcting, retiring and reinstating catalogue
+        // entries are catalogue changes too.
+        typeof(Colour), typeof(ProductLine), typeof(Supplier), typeof(SheetSize), typeof(PriceBand),
 
         // US-26: creating, deactivating and reactivating an account.
         typeof(AppUser),
