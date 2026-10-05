@@ -96,6 +96,33 @@ public sealed class CostingApiTests
     }
 
     [Fact]
+    public async Task The_costing_is_copied_to_the_quotation_and_adds_up_to_the_costing_total()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var client = await SignedInAsync(AppFactory.EstimatorEmail);
+        await AddRateLineAsync(client, quoteId, await RateItemIdAsync("Sanding time"));
+
+        var response = await client.PostAsync($"/api/quotes/{quoteId}/quotation-lines/from-costing");
+        var check = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("check");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(check.GetProperty("matches").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Another_estimator_cannot_copy_the_costing_to_the_quotation()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var author = await SignedInAsync(AppFactory.EstimatorEmail);
+        await AddRateLineAsync(author, quoteId, await RateItemIdAsync("Sanding time"));
+        var other = await SignedInAsync(OtherEstimatorEmail);
+
+        var response = await other.PostAsync($"/api/quotes/{quoteId}/quotation-lines/from-costing");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task An_estimator_cannot_change_another_estimators_draft()
     {
         var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
