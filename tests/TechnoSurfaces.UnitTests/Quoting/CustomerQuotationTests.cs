@@ -287,15 +287,29 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         Assert.Collection(document!.Lines,
             material =>
             {
+                Assert.Equal("Material", material.Room);
                 Assert.Equal("Infinito material line", material.Description);
                 Assert.Equal(1m, material.Quantity);
                 Assert.Equal(1500m, material.AmountExVat);
             },
             rest =>
             {
+                Assert.Equal("Labour and extras", rest.Room);
                 Assert.Equal(QuotationGenerationService.OtherCostsDescription, rest.Description);
                 Assert.Equal(300m, rest.AmountExVat);
             });
+    }
+
+    [Fact]
+    public async Task Every_copied_material_carries_the_material_item()
+    {
+        var quoteId = await AddMaterialOnlyQuoteAsync("TS-QTN-ITEMS", 20m, 1000m, 2000m);
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(quoteId));
+
+        Assert.Equal(2, document!.Lines.Count);
+        Assert.All(document.Lines, line => Assert.Equal(QuotationGenerationService.MaterialItem, line.Room));
     }
 
     [Fact]

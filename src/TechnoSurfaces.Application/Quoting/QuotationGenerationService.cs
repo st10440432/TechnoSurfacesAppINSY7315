@@ -194,6 +194,16 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
     /// <summary>The description of the one line that carries everything but the materials.</summary>
     public const string OtherCostsDescription = "Labour, consumables and extras";
 
+    // The item printed beside each copied line: the part of the costing sheet the
+    // line comes from, so the customer reads which lines are material and which
+    // are the work. Either can be changed afterwards like any other line.
+
+    /// <summary>The item on a line copied from a material on the costing sheet.</summary>
+    public const string MaterialItem = "Material";
+
+    /// <summary>The item on the line that carries the labour, consumables and extras.</summary>
+    public const string OtherCostsItem = "Labour and extras";
+
     public async Task<QuotationResult> AddLinesFromCostingAsync(int quoteId, CancellationToken ct = default)
     {
         var (version, refused) = await OpenVersionAsync(quoteId, ct);
@@ -232,13 +242,13 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
 
         var sortOrder = version.QuotationLines.Count == 0 ? 0 : version.QuotationLines.Max(l => l.SortOrder);
         for (var i = 0; i < materials.Count; i++)
-            version.AddQuotationLine(new QuotationLine(materials[i].Description, amounts[i], quantity: materials[i].Quantity)
+            version.AddQuotationLine(new QuotationLine(materials[i].Description, amounts[i], MaterialItem, materials[i].Quantity)
             {
                 SortOrder = ++sortOrder
             });
 
         if (hasOtherCosts && remainder > 0)
-            version.AddQuotationLine(new QuotationLine(OtherCostsDescription, remainder) { SortOrder = ++sortOrder });
+            version.AddQuotationLine(new QuotationLine(OtherCostsDescription, remainder, OtherCostsItem) { SortOrder = ++sortOrder });
 
         await _quotes.SaveChangesAsync(ct);
         return new(QuotationOutcome.Ok, Check: Check(version));
