@@ -155,7 +155,8 @@ public class RatesVm
         if (row.DerivedFrom is null) return null;
         var source = Groups.SelectMany(g => g.Rows)
             .FirstOrDefault(r => r.Name == row.DerivedFrom && r.SupplierId == row.SupplierId && r.Amount is not null);
-        return source?.Amount is { } amount ? decimal.Round(amount * (row.Multiplier ?? 1m), 2) : null;
+        // Rounded as RateResolver rounds it, so the screen shows the figure a quote is charged.
+        return source?.Amount is { } amount ? decimal.Round(amount * (row.Multiplier ?? 1m), 2, MidpointRounding.AwayFromZero) : null;
     }
 }
 

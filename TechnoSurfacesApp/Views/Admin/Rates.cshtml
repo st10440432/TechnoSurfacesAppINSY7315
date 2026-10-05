@@ -17,6 +17,22 @@
     <partial name="_ReadOnlyNote" model="@("Only the Managing Director changes rates. You can see every rate the costing sheet uses.")" />
 }
 
+@{
+    var notSupplied = Model.Groups.Sum(g => g.Rows.Count(r => r.AwaitingClientFigure));
+}
+<div class="notice notice-warn" role="note">
+    <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+    <div>
+        <strong>These rates are not confirmed yet.</strong>
+        They are the sample figures from the client's costing workbook, which the client supplied to show the layout of a quote, not their real rates.
+        @if (notSupplied > 0)
+        {
+            <text>@notSupplied line@(notSupplied == 1 ? " has" : "s have") no figure at all, so the costing sheet asks for a price for each job.</text>
+        }
+        The Managing Director replaces each rate here once the real figures are known.
+    </div>
+</div>
+
 @foreach (var (category, rows) in Model.Groups)
 {
     var id = "rates-" + category.ToLowerInvariant();

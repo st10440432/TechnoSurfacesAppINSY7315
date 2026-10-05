@@ -6,7 +6,6 @@
 *@
 @{
     var r = Model.Row;
-    var area = r.PricePerSqm is > 0 && r.PricePerSheet is { } sheet ? sheet / r.PricePerSqm.Value : (decimal?)null;
 }
 
 <header class="page-head">
@@ -24,6 +23,14 @@
 @if (!Model.CanEdit)
 {
     <partial name="_ReadOnlyNote" model="@("Only the Managing Director changes material prices. You can see the current price and every earlier one.")" />
+}
+
+@if (r.IsRetired)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+        <div><strong>Retired.</strong> This material cannot be chosen on a new quote, so its price can no longer be changed. Quotes already made keep it and its price.</div>
+    </div>
 }
 
 <div class="grid grid-main">
@@ -86,7 +93,7 @@
                                     </td>
                                     <td data-label="Until" class="nowrap">@(p.To is { } to ? Fmt.Date(to) : "No end date")</td>
                                     <td data-label="Per m²" class="right num">@Fmt.Rand(p.PricePerSqm)</td>
-                                    <td data-label="Per sheet" class="right num">@(area is { } a ? Fmt.Rand(decimal.Round(p.PricePerSqm * a, 2)) : "")</td>
+                                    <td data-label="Per sheet" class="right num">@(Model.PerSheet(p.PricePerSqm) is { } perSheetThen ? Fmt.Rand(perSheetThen) : "")</td>
                                 </tr>
                             }
                         </tbody>
