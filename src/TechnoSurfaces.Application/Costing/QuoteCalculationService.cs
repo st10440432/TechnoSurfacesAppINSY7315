@@ -79,21 +79,28 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
 
         foreach (var line in version.CostingLines)
         {
-            switch (line.Derivation)
-            {
-                case DerivationRule.FromTotalAreaM2:
-                    line.SetDerivedQuantity(decimal.Round(totalArea * line.DerivationFactor, 4));
-                    break;
-                case DerivationRule.FromSheetCount:
-                    // Silicon and sealing carries a factor of two: two per sheet.
-                    line.SetDerivedQuantity(decimal.Round(totalSheets * line.DerivationFactor, 4));
-                    break;
-                case DerivationRule.Entered:
-                default:
-                    break;
-            }
+            if (DerivedQuantity(line.Derivation, line.DerivationFactor, totalArea, totalSheets) is { } quantity)
+                line.SetDerivedQuantity(quantity);
         }
     }
+
+    /// <summary>
+    /// The quantity a calculated rate line works out to, or null for a quantity the
+    /// estimator enters. Sandpaper and consumables follow the total area; silicon
+    /// and sealing follow the sheet count, two per sheet.
+    ///
+    /// Rounded up to a whole unit (team decision, 5 October 2026): consumables are
+    /// bought whole, so 19,58 m² of sandpaper is charged as 20 and 5,5 tubes of
+    /// silicon as 6. Rounding up rather than to the nearest unit means the job never
+    /// carries less than it uses. The costing sheet shows the same figure before the
+    /// line is added, so there is one rule in one place.
+    /// </summary>
+    public static decimal? DerivedQuantity(DerivationRule rule, decimal factor, decimal totalAreaM2, decimal totalSheets) => rule switch
+    {
+        DerivationRule.FromTotalAreaM2 => decimal.Ceiling(totalAreaM2 * factor),
+        DerivationRule.FromSheetCount => decimal.Ceiling(totalSheets * factor),
+        _ => null
+    };
 }
 
 /// <summary>

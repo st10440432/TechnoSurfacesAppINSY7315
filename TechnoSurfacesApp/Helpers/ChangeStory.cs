@@ -85,6 +85,8 @@ public static class ChangeStories
         "Colour" => "Colours",
         "ProductLine" => "Product lines",
         "Supplier" => "Suppliers",
+        "SheetSize" => "Sheet sizes",
+        "PriceBand" => "Price bands",
         "AppUser" => "User accounts",
         "Customer" => "Customers",
         "Contact" => "Contacts",
@@ -105,6 +107,9 @@ public static class ChangeStories
         "Brand" => "a brand warranty",
         "Colour" => "a colour",
         "ProductLine" => "a product line",
+        "Supplier" => "a supplier",
+        "SheetSize" => "a sheet size",
+        "PriceBand" => "a price band",
         "AppUser" => "a user account",
         "Customer" => "a customer",
         "Contact" => "a contact",
@@ -143,7 +148,11 @@ public static class ChangeStories
         if (group.Any(r => r.IsDeletion))
             return new(first.ChangedAtLocal, first.UserName, $"Removed {called}.", [], priced);
 
-        var visible = group.Where(r => !Hidden.Contains(r.PropertyName) && !r.PropertyName.EndsWith("Id", StringComparison.Ordinal)).ToList();
+        // The heading copied onto a version when it is approved repeats what the quote
+        // already says; the approval itself is told by the status change.
+        var visible = group.Where(r => !Hidden.Contains(r.PropertyName)
+            && !r.PropertyName.EndsWith("Id", StringComparison.Ordinal)
+            && !r.PropertyName.StartsWith("Issued", StringComparison.Ordinal)).ToList();
         var created = group.Count > 2 && group.All(r => r.OldValue is null);
 
         if (created)

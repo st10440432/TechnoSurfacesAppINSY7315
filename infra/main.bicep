@@ -8,8 +8,9 @@ param location string = resourceGroup().location
 
 param sqlAdminLogin string = 'tsadmin'
 
+@description('SQL admin password. Required on the first deployment, which creates the server. Not used when entraOnlyAuthentication is true.')
 @secure()
-param sqlAdminPassword string
+param sqlAdminPassword string = ''
 
 @description('Linux App Service runtime. Verified against az webapp list-runtimes --os-type linux --runtime dotnet.')
 param linuxRuntime string = 'DOTNETCORE|10.0'
@@ -34,6 +35,9 @@ param initialAdminPassword string = ''
 @description('Address that receives the availability alert and the budget alert.')
 param alertEmail string
 
+@description('Refuse SQL logins on the server, so only Microsoft Entra identities can connect. Turn on once both web apps report Healthy on the managed identity connection (staging and production share the server). Once on, every later deployment of either environment must also set it.')
+param entraOnlyAuthentication bool = false
+
 @description('Create the monthly budget. Set to false if the subscription does not support budgets.')
 param createBudget bool = true
 
@@ -53,6 +57,7 @@ var databaseName = 'tsqa-db-${environment}'
 var kvName = 'tsqa-kv-${unique}'
 var lawName = 'tsqa-log'
 var aiName = 'tsqa-ai-${environment}'
+var sqlIdentityName = 'tsqa-sql-identity'
 
 var sqlHostname = '${sqlServerName}${az.environment().suffixes.sqlServerHostname}'
 var appHostname = '${appName}.azurewebsites.net'
@@ -158,9 +163,51 @@ resource sql 'Microsoft.Sql/servers@2022-05-01-preview' = {
     version: '12.0'
     publicNetworkAccess: 'Disabled'
     minimalTlsVersion: '1.2'
-    administratorLogin: sqlAdminLogin
-    administratorLoginPassword: sqlAdminPassword
+    // While Entra-only authentication is on, the server refuses a write that
+    // carries the admin login and password (AadOnlyAuthenticationIsEnabled), so
+    // both are left out once it is on. The login stays on the server, unusable.
+    administratorLogin: entraOnlyAuthentication ? null : sqlAdminLogin
+    administratorLoginPassword: entraOnlyAuthentication ? null : sqlAdminPassword
   }
+}
+
+// -----------------------------------------------------------------------------
+// The identity the app connects to Azure SQL as (Task 1 7.3.3)
+// -----------------------------------------------------------------------------
+
+// One user-assigned identity, carried by both web apps and set as the server's
+// Microsoft Entra admin. The app signs in to SQL with a token for this identity,
+// so the connection string holds no password. It is user-assigned rather than each
+// app's own identity because the two environments share one server, which takes
+// one Entra admin, and because making it the admin needs no Microsoft Graph
+// permission or T-SQL run against a server that has no public endpoint.
+resource sqlIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: sqlIdentityName
+  location: location
+}
+
+resource sqlEntraAdmin 'Microsoft.Sql/servers/administrators@2022-05-01-preview' = {
+  parent: sql
+  name: 'ActiveDirectory'
+  properties: {
+    administratorType: 'ActiveDirectory'
+    login: sqlIdentity.name
+    sid: sqlIdentity.properties.principalId
+    tenantId: subscription().tenantId
+  }
+}
+
+// Off until both apps are confirmed on the managed identity connection. Turning it
+// on stops the SQL admin password working on the server at all.
+resource sqlEntraOnly 'Microsoft.Sql/servers/azureADOnlyAuthentications@2022-05-01-preview' = {
+  parent: sql
+  name: 'Default'
+  properties: {
+    azureADOnlyAuthentication: entraOnlyAuthentication
+  }
+  dependsOn: [
+    sqlEntraAdmin
+  ]
 }
 
 resource db 'Microsoft.Sql/servers/databases@2023-05-01-preview' = {
@@ -230,12 +277,13 @@ resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {
 
 // The connection string the app reads through its managed identity. Written
 // through Azure Resource Manager, so whoever deploys needs no Key Vault data
-// permission. The SQL password must not contain a semicolon or a quote.
+// permission. It holds no password: the app authenticates to SQL as the
+// user-assigned identity above, named by its client id (Task 1 7.3.3).
 resource connectionSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
   parent: kv
   name: 'app-connection-${environment}'
   properties: {
-    value: 'Server=tcp:${sqlHostname},1433;Initial Catalog=${databaseName};User ID=${sqlAdminLogin};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+    value: 'Server=tcp:${sqlHostname},1433;Initial Catalog=${databaseName};Authentication=Active Directory Managed Identity;User Id=${sqlIdentity.properties.clientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
   }
 }
 
@@ -316,16 +364,22 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
   name: appName
   location: location
   kind: 'app,linux'
-  // The app reads both secrets when it starts, so they must exist first.
+  // The app reads both secrets when it starts, and connects to SQL as the
+  // user-assigned identity, so they must exist first.
   dependsOn: [
+    sqlEntraAdmin
     connectionSecret
     demoPasswordSecret
     initialAdminEmailSecret
     initialAdminNameSecret
     initialAdminPasswordSecret
   ]
+  // System-assigned for the Key Vault references; user-assigned for Azure SQL.
   identity: {
-    type: 'SystemAssigned'
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${sqlIdentity.id}': {}
+    }
   }
   properties: {
     serverFarmId: plan.id
@@ -526,3 +580,5 @@ output sqlServerName string = sqlServerName
 output databaseName string = databaseName
 output sqlHostname string = sqlHostname
 output applicationInsightsName string = aiName
+output sqlIdentityName string = sqlIdentity.name
+output sqlIdentityClientId string = sqlIdentity.properties.clientId

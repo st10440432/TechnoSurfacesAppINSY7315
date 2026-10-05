@@ -88,7 +88,12 @@ public sealed record QuoteVersionSummary(
     bool IsSealed,
     decimal MarkupPercent,
     decimal TotalExVat,
-    decimal TotalIncVat);
+    decimal TotalIncVat,
+    DateTime? IssuedAtUtc = null,
+    string? IssuedByName = null)
+{
+    public bool IsIssued => IssuedAtUtc is not null;
+}
 
 public enum WorkflowOutcome
 {

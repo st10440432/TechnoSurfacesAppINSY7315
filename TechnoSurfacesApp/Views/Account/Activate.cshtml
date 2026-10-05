@@ -1,55 +1,38 @@
-﻿@{
+@*
+    Activating a new account (Task 1 8.2). Accounts are created by the Managing
+    Director, who hands over a temporary password; there is no self-registration
+    and no activation email. The first sign-in opens "Set your password", and no
+    other page opens until the user has chosen their own. This page explains the
+    steps; it collects nothing.
+*@
+@{
     Layout = "_AuthLayout";
-    ViewData["Title"] = "Activate account";
-    var done = ViewData["Done"] as bool? ?? false;
+    ViewData["Title"] = "Activate your account";
 }
 
-@if (!done)
-{
-    <h1>Set your password</h1>
-    <p class="lede">
-        Your account was created by <strong>Paul Schluter</strong>. Choose a password
-        to activate it.
-    </p>
+<a class="btn btn-ghost btn-sm auth-back" asp-action="Login">
+    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg> Back to sign in
+</a>
 
-    <div class="card" style="background:#fafbfc;margin-bottom:20px">
-        <div class="card-body tight">
-            <div class="section-label">Account</div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
-                <span class="avatar sage">DN</span>
-                <div>
-                    <div class="strong small">Devan Naidoo</div>
-                    <div class="tiny muted">devan@technosurfaces.co.za &middot; Estimator</div>
-                </div>
-            </div>
-        </div>
+<h1>Activate your account</h1>
+<p class="lede">
+    Your account is made by the Managing Director. You activate it by signing in once
+    with the temporary password they give you, then choosing your own.
+</p>
+
+<ol class="auth-steps">
+    <li>Get your temporary password from the Managing Director, in person.</li>
+    <li>Sign in with your work email address and the temporary password.</li>
+    <li>On <strong>Set your password</strong>, choose a password of at least 12 characters with an upper-case letter, a lower-case letter and a number.</li>
+    <li>From then on, sign in with your own password.</li>
+</ol>
+
+<div class="notice notice-info" role="note">
+    <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+    <div>
+        <strong>There is no public sign-up.</strong>
+        If you have not been given a temporary password, ask the Managing Director to create your account.
     </div>
+</div>
 
-    <form asp-action="Activate" method="post">
-        <div class="field">
-            <label class="label" for="pw">New password <span class="req">*</span></label>
-            <input class="input" id="pw" name="password" type="password" required />
-            <div class="hint">At least 10 characters, with one number and one capital letter.</div>
-        </div>
-
-        <div class="field">
-            <label class="label" for="pw2">Confirm password <span class="req">*</span></label>
-            <input class="input" id="pw2" name="confirm" type="password" required />
-        </div>
-
-        <button class="btn btn-primary btn-lg btn-block" type="submit">
-            Activate account and sign in
-        </button>
-    </form>
-}
-else
-{
-    <div style="text-align:center">
-        <div class="avatar sage lg" style="margin:0 auto 16px;width:52px;height:52px;flex-basis:52px">
-            <svg class="ico ico-lg"><use href="#i-check" /></svg>
-        </div>
-        <h1>Account activated</h1>
-        <p class="lede">Your password is set. You can sign in now.</p>
-        <a class="btn btn-primary btn-block" asp-action="Login">Continue to sign in</a>
-    </div>
-}
+<a class="btn btn-primary btn-lg btn-block auth-action" asp-action="Login">Sign in with your temporary password</a>

@@ -23,7 +23,15 @@ public sealed record CustomerQuotation(
 
     // False until the Managing Director enters the bank details. The document must
     // then say they are not set, rather than leave them out silently.
-    bool BankDetailsSet);
+    bool BankDetailsSet,
+
+    // False for an earlier version, read from the version history (US-21).
+    bool IsCurrentVersion = true,
+
+    // True when the heading is the one recorded when this version was issued. False
+    // for a version not issued yet, and for one issued before the heading was
+    // recorded, whose heading is the quote's as it stands now.
+    bool HeadingAsIssued = false);
 
 /// <summary>The heading block, in the order of the client's template.</summary>
 public sealed record QuotationHeader(

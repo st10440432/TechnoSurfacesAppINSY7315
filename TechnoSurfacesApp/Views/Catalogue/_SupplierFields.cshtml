@@ -1,0 +1,60 @@
+@model (TechnoSurfaces.Application.Catalogue.SupplierDetail? Supplier, DateOnly Today)
+@*
+    The fields of a supplier, for adding one and for changing one. How a supplier
+    prices cannot change once it has product lines, so the choice is fixed then.
+*@
+@{
+    var s = Model.Supplier;
+    var p = s is null ? "new-supplier" : $"supplier-{s.Id}";
+    var structureFixed = s is not null && s.ProductLines.Count > 0;
+}
+<div class="field">
+    <label class="label" for="@p-name">Name <span class="req" aria-hidden="true">*</span></label>
+    <input class="input" id="@p-name" name="Name" maxlength="120" required value="@s?.Name" autocomplete="off" />
+</div>
+<div class="field">
+    <label class="label" for="@p-trading">Trading as <span class="optional">optional</span></label>
+    <input class="input" id="@p-trading" name="TradingAs" maxlength="120" value="@s?.TradingAs" autocomplete="off"
+           aria-describedby="@p-trading-hint" />
+    <span class="hint" id="@p-trading-hint">The name on the letterhead, where it differs, such as Salvocorp Pty Ltd.</span>
+</div>
+<div class="field">
+    <label class="label" for="@p-structure">How it prices <span class="req" aria-hidden="true">*</span></label>
+    @if (structureFixed)
+    {
+        <input type="hidden" name="PricingStructure" value="@s!.PricingStructure" />
+        <select class="select" id="@p-structure" disabled aria-describedby="@p-structure-hint">
+            <option>@(s.PricesByBand ? "By price band" : "Each colour on its own")</option>
+        </select>
+        <span class="hint" id="@p-structure-hint">Fixed, because its product lines are already priced this way.</span>
+    }
+    else
+    {
+        <select class="select" id="@p-structure" name="PricingStructure" required aria-describedby="@p-structure-hint">
+            <option value="">Choose how the list prices</option>
+            <option value="Band" selected="@(s?.PricingStructure == TechnoSurfaces.Domain.PricingStructure.Band)">By price band: colours share a band's price</option>
+            <option value="Item" selected="@(s?.PricingStructure == TechnoSurfaces.Domain.PricingStructure.Item)">Each colour on its own</option>
+        </select>
+        <span class="hint" id="@p-structure-hint">As the supplier's price list does it. It cannot be changed once product lines are added.</span>
+    }
+</div>
+<div class="field-row field-row-2">
+    <div class="field">
+        <label class="label" for="@p-dated">Price list dated <span class="req" aria-hidden="true">*</span></label>
+        <input class="input" id="@p-dated" name="PriceListDated" type="date" required
+               value="@((s?.PriceListDated ?? Model.Today).ToString("yyyy-MM-dd"))" aria-describedby="@p-dated-hint" />
+        <span class="hint" id="@p-dated-hint">A list over a year old is flagged to everyone quoting from it.</span>
+    </div>
+    <div class="field">
+        <label class="label" for="@p-adhesive">Adhesive price</label>
+        <span class="input-group">
+            <span class="addon before" aria-hidden="true">R</span>
+            <input class="input input-num" id="@p-adhesive" name="AdhesivePrice" type="number" step="0.01" min="0"
+                   inputmode="decimal" value="@(s is null ? "0" : Fmt.Input(s.AdhesivePrice))" />
+        </span>
+    </div>
+</div>
+<div class="field">
+    <label class="label" for="@p-delivery">Delivery terms <span class="optional">optional</span></label>
+    <textarea class="input" id="@p-delivery" name="DeliveryTerms" rows="2" maxlength="500">@s?.DeliveryTerms</textarea>
+</div>

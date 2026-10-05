@@ -1,0 +1,86 @@
+@model TechnoSurfacesApp.Controllers.SuppliersVm
+@*
+    The suppliers in the catalogue (NFR-10). Each opens to its product lines, sheet
+    sizes, price bands and colours. Only the Managing Director adds or changes them;
+    everyone else reads them.
+*@
+
+<header class="page-head">
+    <div>
+        <h1>Suppliers</h1>
+        <p>Who Techno Surfaces buys material from, and what each one sells.</p>
+    </div>
+    <div class="page-head-actions">
+        <a class="btn btn-secondary" asp-action="Index">
+            <svg class="ico" aria-hidden="true"><use href="#i-arrow-left" /></svg> Back to the catalogue
+        </a>
+    </div>
+</header>
+
+@if (!Model.CanEdit)
+{
+    <partial name="_ReadOnlyNote" model="@("Only the Managing Director adds or changes suppliers and materials. You can see everything they sell.")" />
+}
+
+<div class="grid grid-main">
+    <section class="card" aria-labelledby="suppliers-title">
+        <div class="card-head">
+            <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg>
+            <h2 id="suppliers-title">Suppliers</h2>
+            <span class="spacer"></span>
+            <span class="badge">@Model.Suppliers.Count</span>
+        </div>
+        <div class="table-wrap">
+            <table class="data stack">
+                <caption class="sr-only">Suppliers and how each prices</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Supplier</th>
+                        <th scope="col">Prices</th>
+                        <th scope="col">Price list dated</th>
+                        <th scope="col" class="right">Product lines</th>
+                        <th scope="col" class="right">Colours</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Model.Suppliers)
+                    {
+                        <tr>
+                            <td data-label="Supplier">
+                                <a class="row-link" asp-action="Supplier" asp-route-id="@s.Id">@s.Name</a>
+                                @if (!string.IsNullOrEmpty(s.TradingAs))
+                                {
+                                    <span class="sub">Trading as @s.TradingAs</span>
+                                }
+                            </td>
+                            <td data-label="Prices">@(s.PricingStructure == "Band" ? "By price band" : "Each colour on its own")</td>
+                            <td data-label="Price list dated" class="nowrap">
+                                @Fmt.Date(s.PriceListDated)
+                                @if (Model.IsStale(s.PriceListDated))
+                                {
+                                    <span class="badge badge-warn stacked">Over a year old</span>
+                                }
+                            </td>
+                            <td data-label="Product lines" class="right">@s.ProductLineCount</td>
+                            <td data-label="Colours" class="right">@s.ColourCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (Model.CanEdit)
+    {
+        <section class="card" aria-labelledby="add-supplier-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                <h2 id="add-supplier-title">Add a supplier</h2>
+            </div>
+            <form class="card-body" method="post" asp-action="AddSupplier">
+                <partial name="_SupplierFields" model="@((TechnoSurfaces.Application.Catalogue.SupplierDetail?)null, Model.Today)" />
+                <button type="submit" class="btn btn-primary btn-block">Add the supplier</button>
+            </form>
+        </section>
+    }
+</div>

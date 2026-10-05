@@ -47,6 +47,21 @@ public sealed class QuoteCostingController : ControllerBase
             : Failure(result, quoteId);
     }
 
+    /// <summary>
+    /// GET /api/quotes/{quoteId}/versions/{versionNo}/costing: any version of the quote,
+    /// read only, as it was issued (US-21).
+    /// </summary>
+    [HttpGet("versions/{versionNo:int}/costing")]
+    [ProducesResponseType<CostingSheetDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> VersionCosting(int quoteId, int versionNo, CancellationToken ct)
+    {
+        var result = await _costing.GetVersionAsync(quoteId, versionNo, ct);
+        return result.Outcome == CostingOutcome.Ok
+            ? Ok(CostingSheetDto.From(result.Quote!, result.Version!, result.Totals!))
+            : Failure(result, quoteId);
+    }
+
     /// <summary>PUT /api/quotes/{quoteId}/costing: markup (US-07) and the transport amount.</summary>
     [HttpPut("costing")]
     [ProducesResponseType<QuoteTotals>(StatusCodes.Status200OK)]
@@ -173,6 +188,10 @@ public sealed class QuoteCostingController : ControllerBase
         CostingOutcome.QuoteNotFound => Problem(
             statusCode: StatusCodes.Status404NotFound, title: "Quote not found",
             detail: $"There is no quote {quoteId}."),
+
+        CostingOutcome.VersionNotFound => Problem(
+            statusCode: StatusCodes.Status404NotFound, title: "Version not found",
+            detail: result.Problem),
 
         CostingOutcome.LineNotFound => Problem(
             statusCode: StatusCodes.Status404NotFound, title: "Line not found",
