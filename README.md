@@ -49,6 +49,8 @@ This section records the security controls committed to in Task 1 8, where each 
 | `CanViewAuditTrail` | Managing Director | `/Admin/Audit` |
 | `CanApproveQuote` | Managing Director | Approval actions |
 | `CanEditQuote` | MD: any quote. Estimator: only their own quote, and only while it is a Draft | Resource-based handler (`Identity/EditQuoteHandler.cs`) |
+| `CanReopenQuote` | MD: any quote. Estimator: only a quote they created | Reopening after a counter-offer or lapse (`Identity/ReopenQuoteHandler.cs`) |
+| `CanRecordInvoice` | Managing Director | Recording the Pastel invoice reference (US-25) |
 
 - Estimators may view all pricing, a confirmed client decision, so viewing needs no policy.
 - A refused browser request shows an access-denied page. A refused `/api` call gets a 401 or 403 status instead of a redirect.
@@ -84,22 +86,22 @@ This section records the security controls committed to in Task 1 8, where each 
 
 ### Security tests
 
-| Required test (Task 2 plan) | Status |
-|---|---|
-| Estimator edits another estimator's draft: refused | Unit test, `EditQuoteHandlerTests` |
-| Estimator edits their own draft: allowed | Unit test, `EditQuoteHandlerTests` |
-| MD edits any quote: allowed | Unit test, `EditQuoteHandlerTests` |
-| Price change writes an `AuditEntry` with user and time | Unit test, `AuditInterceptorTests` |
-| Audit trail filters and a quote's change history | Unit test, `AuditTrailServiceTests` |
-| Anonymous request redirects to sign-in | Enforced by the fallback policy; no automated HTTP test yet |
-| Estimator posts to the price editor: refused | Enforced by `CanEditCatalogue`; no automated HTTP test yet |
-| Estimator approves a quote: refused | Policy in place; the approve endpoint arrives with the quoting workflow |
-| Deactivated user signs in: refused | Enforced in `SignInService`; no automated test yet |
-| Form post without an antiforgery token: rejected | Enforced globally; no automated HTTP test yet |
-| Registration route does not exist | Confirmed: no such route in any controller |
-| MD changes to terms and bank details are audited | Unit test, `QuotationTermsMaintenanceTests` |
+ | Required test (Task 2 plan) | Status |
+  |---|---|
+ | Estimator edits another estimator's draft: refused | Unit test `EditQuoteHandlerTests`; integration test `CostingApiTests` (403) |
+ | Estimator edits their own draft: allowed | Unit test, `EditQuoteHandlerTests` |
+ | MD edits any quote: allowed | Unit test, `EditQuoteHandlerTests` |
+ | Price change writes an `AuditEntry` with user and time | Unit test, `AuditInterceptorTests` |
+ | Audit trail filters and a quote's change history | Unit test, `AuditTrailServiceTests` |
+ | Anonymous request redirects to sign-in | Integration test, `PlatformTests` |
+ | Estimator posts to the price editor: refused | Enforced by `CanEditCatalogue`; no automated HTTP test yet |
+ | Estimator approves a quote: refused | Integration test, `QuoteWorkflowApiTests` (403) |
+ | Deactivated user signs in: refused | Enforced in `SignInService`; no automated test yet |
+ | Post without an antiforgery token: rejected | Enforced globally; integration test `CostingApiTests` covers the API header |
+ | Registration route does not exist | Integration test, `PlatformTests` |
+ | MD changes to terms and bank details are audited | Unit test, `QuotationTermsMaintenanceTests` |
 
-The HTTP-level tests need an integration test project with a test database, which does not exist yet.
+ Integration tests run in CI against a throwaway SQL Server database (`tests/TechnoSurfaces.IntegrationTests`).
 
 ### Not done, and why
 
