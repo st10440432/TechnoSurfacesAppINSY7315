@@ -315,4 +315,49 @@ public sealed class CostingSheetServiceTests : IAsyncLifetime
         Assert.Equal(CostingOutcome.QuoteNotFound,
             (await service.AddRateLineAsync(999, new AddRateLine(1, 1m))).Outcome);
     }
+
+    [Fact]
+    public async Task An_earlier_version_reads_with_its_own_lines_after_the_quote_is_revised()
+    {
+        await AddPricedMaterialLineAsync(quantity: 2m);
+
+        // Issue version 1, then reopen it and change the revision.
+        await using (var db = new TechnoSurfacesDbContext(_options))
+        {
+            var quote = await new QuoteRepository(db).GetAsync(_quoteId);
+            quote!.CurrentVersion!.AddQuotationLine(new QuotationLine("Kitchen", 1000m));
+            quote.Submit();
+            quote.Approve("md");
+            quote.MarkSent();
+            quote.Reopen("estimator", new DateOnly(2026, 10, 20));
+            await db.SaveChangesAsync();
+        }
+        var revisionLine = await AddPricedMaterialLineAsync(quantity: 5m);
+
+        await using var read = new TechnoSurfacesDbContext(_options);
+        var first = await ServiceOver(read).GetVersionAsync(_quoteId, 1);
+        var second = await ServiceOver(read).GetVersionAsync(_quoteId, 2);
+
+        Assert.Equal(CostingOutcome.Ok, first.Outcome);
+        Assert.Equal(1, first.Version!.VersionNo);
+        Assert.True(first.Version.IsSealed);
+        Assert.Equal(2m, first.Totals!.TotalSheetCount);
+        Assert.DoesNotContain(first.Version.CostingLines, l => l.Id == revisionLine);
+
+        Assert.Equal(2, second.Version!.VersionNo);
+        Assert.Equal(7m, second.Totals!.TotalSheetCount);
+        Assert.True(second.Totals.TotalExVat > first.Totals.TotalExVat);
+    }
+
+    [Fact]
+    public async Task A_version_the_quote_does_not_have_is_not_found()
+    {
+        await using var db = new TechnoSurfacesDbContext(_options);
+
+        var missingVersion = await ServiceOver(db).GetVersionAsync(_quoteId, 2);
+        var missingQuote = await ServiceOver(db).GetVersionAsync(9999, 1);
+
+        Assert.Equal(CostingOutcome.VersionNotFound, missingVersion.Outcome);
+        Assert.Equal(CostingOutcome.QuoteNotFound, missingQuote.Outcome);
+    }
 }

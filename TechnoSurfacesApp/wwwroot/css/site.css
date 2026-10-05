@@ -132,9 +132,11 @@ img, svg { max-width: 100%; }
 }
 .sidebar :focus-visible { outline-color: var(--focus-ring-on-dark); }
 
+/* The logo at the foot of the side menu, small and on white so its navy and grey
+   parts stay visible against the navy menu. */
 .brand {
-    padding: var(--space-4) var(--space-4) var(--space-4);
-    border-bottom: 1px solid var(--overlay-line);
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    border-top: 1px solid var(--overlay-line);
 }
 .brand-logo {
     display: block;
@@ -142,7 +144,7 @@ img, svg { max-width: 100%; }
     background: var(--surface);
     border-radius: var(--radius-sm);
 }
-.brand-logo img { display: block; width: 100%; max-width: 11rem; height: auto; margin: 0 auto; }
+.brand-logo img { display: block; width: 100%; max-width: 8.5rem; height: auto; margin: 0 auto; }
 .brand-tag {
     display: block;
     margin-top: var(--space-2);
@@ -928,7 +930,7 @@ dl.facts dd { margin: 0; font-weight: var(--weight-medium); }
     font-size: var(--text-sm);
 }
 .doc-top { display: flex; gap: var(--space-6); align-items: flex-start; padding-bottom: var(--space-5); border-bottom: 3px solid var(--brand-navy); }
-.doc-top img { width: 8rem; height: auto; }
+.doc-top img { width: 13rem; height: auto; }
 .doc-co { margin-left: auto; text-align: right; color: var(--ink-secondary); line-height: 1.6; font-size: var(--text-xs); }
 .doc-co strong { color: var(--ink); }
 .doc-title { margin: var(--space-6) 0 var(--space-4); font-size: var(--text-xl); color: var(--brand-navy); }
@@ -988,7 +990,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
 .auth-steps li { margin-bottom: var(--space-2); line-height: var(--leading-normal); }
 .auth-action { margin-top: var(--space-6); }
 .brand-logo-sm { display: inline-block; align-self: flex-start; padding: var(--space-4) var(--space-5); background: var(--surface); border-radius: var(--radius); }
-.brand-logo-sm img { display: block; height: 7rem; width: auto; }
+.brand-logo-sm img { display: block; width: 16rem; max-width: 100%; height: auto; }
 
 /* ==========================================================================
    Small screens: tablet below 992px, phone below 768px
@@ -1018,7 +1020,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
     .auth-brand { padding: var(--space-6); }
     .auth-headline { margin-top: var(--space-6); font-size: 1.5rem; }
     .auth-points, .auth-foot { display: none; }
-    .brand-logo-sm img { height: 4.5rem; }
+    .brand-logo-sm img { width: 11rem; }
 }
 
 @media (max-width: 767.98px) {
@@ -1413,7 +1415,7 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
     .auth-brand { padding: var(--space-4) var(--space-4) var(--space-5); }
     .auth-brand::after { display: none; }
     .brand-logo-sm { padding: var(--space-2) var(--space-3); }
-    .brand-logo-sm img { height: 3rem; }
+    .brand-logo-sm img { width: 9rem; height: auto; }
     .auth-headline { margin-top: var(--space-3); font-size: var(--text-md); }
     .auth-sub { display: none; }
     .auth-panel { padding: var(--space-6) var(--space-4); }

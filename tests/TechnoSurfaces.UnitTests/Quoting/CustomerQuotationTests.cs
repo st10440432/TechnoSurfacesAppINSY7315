@@ -287,15 +287,29 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         Assert.Collection(document!.Lines,
             material =>
             {
+                Assert.Equal("Material", material.Room);
                 Assert.Equal("Infinito material line", material.Description);
                 Assert.Equal(1m, material.Quantity);
                 Assert.Equal(1500m, material.AmountExVat);
             },
             rest =>
             {
+                Assert.Equal("Labour and extras", rest.Room);
                 Assert.Equal(QuotationGenerationService.OtherCostsDescription, rest.Description);
                 Assert.Equal(300m, rest.AmountExVat);
             });
+    }
+
+    [Fact]
+    public async Task Every_copied_material_carries_the_material_item()
+    {
+        var quoteId = await AddMaterialOnlyQuoteAsync("TS-QTN-ITEMS", 20m, 1000m, 2000m);
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(quoteId));
+
+        Assert.Equal(2, document!.Lines.Count);
+        Assert.All(document.Lines, line => Assert.Equal(QuotationGenerationService.MaterialItem, line.Room));
     }
 
     [Fact]
@@ -359,5 +373,70 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         Assert.Null(await WithServiceAsync(s => s.GenerateAsync(999)));
         Assert.Equal(QuotationOutcome.QuoteNotFound,
             (await WithServiceAsync(s => s.AddLineAsync(999, new QuotationLineInput("Line", 1m)))).Outcome);
+    }
+
+    /// <summary>Issues version 1 with one line, then reopens it and changes the revision.</summary>
+    private async Task IssueThenReviseAsync()
+    {
+        await using var db = new TechnoSurfacesDbContext(_options);
+        var quote = await new QuoteRepository(db).GetAsync(_quoteId);
+        quote!.CurrentVersion!.AddQuotationLine(new QuotationLine("Countertop as first offered", 1000m, "Kitchen"));
+        quote.Submit();
+        // As the approval workflow does: the terms are recorded, then the quote approved.
+        await new QuoteTermsRecorder(new QuotationTermsReader(db)).RecordAsync(quote.CurrentVersion);
+        quote.Approve("md");
+        quote.MarkSent();
+
+        var revision = quote.Reopen("estimator", new DateOnly(2026, 10, 20));
+        quote.UpdateDetails("Constantia", "Kitchen and scullery", "SWEET VALLEY FARM", null);
+        revision.AddQuotationLine(new QuotationLine("Scullery top added after the counter-offer", 400m, "Scullery"));
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task An_earlier_version_prints_as_it_was_issued()
+    {
+        await IssueThenReviseAsync();
+
+        var first = await WithServiceAsync(s => s.GenerateVersionAsync(_quoteId, 1));
+
+        Assert.Equal(1, first!.VersionNo);
+        Assert.False(first.IsCurrentVersion);
+        Assert.True(first.IsIssued);
+        Assert.True(first.HeadingAsIssued);
+        Assert.Equal("Countertop as first offered", Assert.Single(first.Lines).Description);
+        Assert.Equal(1000m, first.Totals.SubtotalExVat);
+        Assert.Equal(1150m, first.Totals.TotalIncVat);
+
+        // The heading the customer received, not the quote's details now.
+        Assert.Equal("Tokai", first.Header.Site);
+        Assert.Equal("Kitchen", first.Header.Project);
+        Assert.Equal(new DateOnly(2026, 11, 3), first.Header.ValidUntil);
+        Assert.Equal("Accounts", first.Header.Attention);
+        Assert.NotEmpty(first.Terms);
+    }
+
+    [Fact]
+    public async Task The_current_version_after_a_revision_prints_the_quote_as_it_stands()
+    {
+        await IssueThenReviseAsync();
+
+        var second = await WithServiceAsync(s => s.GenerateVersionAsync(_quoteId, 2));
+        var current = await WithServiceAsync(s => s.GenerateAsync(_quoteId));
+
+        Assert.True(second!.IsCurrentVersion);
+        Assert.False(second.HeadingAsIssued);
+        Assert.Equal(2, second.Lines.Count);
+        Assert.Equal("Constantia", second.Header.Site);
+        Assert.Equal(new DateOnly(2026, 11, 19), second.Header.ValidUntil);
+        Assert.Equal(1400m, second.Totals.SubtotalExVat);
+        Assert.Equal(second.Totals, current!.Totals);
+    }
+
+    [Fact]
+    public async Task A_version_that_does_not_exist_has_no_document()
+    {
+        Assert.Null(await WithServiceAsync(s => s.GenerateVersionAsync(_quoteId, 2)));
+        Assert.Null(await WithServiceAsync(s => s.GenerateVersionAsync(9999, 1)));
     }
 }

@@ -157,4 +157,56 @@ public sealed class QuoteRevisionTests
         Assert.Throws<InvalidQuoteTransitionException>(() => quote.Reopen("estimator", ReopenedOn));
         Assert.Single(quote.Versions);
     }
+
+    [Fact]
+    public void Approving_records_the_heading_the_version_was_issued_with()
+    {
+        var quote = SentQuoteWithLines(out var first);
+
+        Assert.True(first.IsIssued);
+        Assert.Equal("md", first.IssuedByUserId);
+        Assert.Equal(new DateOnly(2026, 11, 1), first.IssuedValidUntil);
+        Assert.Equal(quote.ValidUntil, first.IssuedValidUntil);
+    }
+
+    [Fact]
+    public void An_earlier_version_keeps_its_heading_after_the_quote_is_reopened()
+    {
+        var quote = SentQuoteWithLines(out var first);
+
+        var second = quote.Reopen("estimator", ReopenedOn);
+        quote.UpdateDetails("New site", "New project", "NEW-REF", null);
+
+        // The quote moved on: a new validity period and corrected details.
+        Assert.Equal(ReopenedOn.AddDays(Quote.DefaultValidForDays), quote.ValidUntil);
+        Assert.Null(quote.ApprovedByUserId);
+
+        // Version 1 still reads as it was issued.
+        Assert.Equal(new DateOnly(2026, 11, 1), first.IssuedValidUntil);
+        Assert.Null(first.IssuedSite);
+        Assert.Equal("md", first.IssuedByUserId);
+
+        // The revision has not been issued.
+        Assert.False(second.IsIssued);
+        Assert.Same(first, quote.Version(1));
+        Assert.Same(second, quote.Version(2));
+        Assert.Null(quote.Version(3));
+    }
+
+    [Fact]
+    public void Approving_the_revision_records_its_own_heading_and_leaves_version_one_alone()
+    {
+        var quote = SentQuoteWithLines(out var first);
+        var second = quote.Reopen("estimator", ReopenedOn);
+        quote.UpdateDetails("New site", null, null, null);
+        quote.Submit();
+
+        quote.Approve("md");
+
+        Assert.True(second.IsIssued);
+        Assert.Equal("New site", second.IssuedSite);
+        Assert.Equal(ReopenedOn.AddDays(Quote.DefaultValidForDays), second.IssuedValidUntil);
+        Assert.Null(first.IssuedSite);
+        Assert.Equal(new DateOnly(2026, 11, 1), first.IssuedValidUntil);
+    }
 }

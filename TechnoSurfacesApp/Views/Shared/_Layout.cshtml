@@ -45,13 +45,6 @@
         <div class="sidebar-scrim" aria-hidden="true"></div>
 
         <aside class="sidebar" id="sidebar">
-            <div class="brand">
-                <span class="brand-logo">
-                    <img src="~/img/logo.jpg" alt="Techno Surfaces" />
-                </span>
-                <span class="brand-tag">Quoting System</span>
-            </div>
-
             <nav class="nav" aria-label="Main menu">
                 <a class="@NavClass("dashboard")" aria-current="@Current("dashboard")" asp-controller="Home" asp-action="Dashboard">
                     <svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg> Dashboard
@@ -109,6 +102,14 @@
                     }
                 }
             </nav>
+
+            @* The logo sits at the foot of the menu, so the menu items come first. *@
+            <div class="brand">
+                <span class="brand-logo">
+                    <img src="~/img/techno-surfaces-logo.jpg" alt="Techno Surfaces" width="2000" height="475" />
+                </span>
+                <span class="brand-tag">Quoting System</span>
+            </div>
         </aside>
 
         <div class="main">

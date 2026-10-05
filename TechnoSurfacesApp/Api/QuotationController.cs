@@ -37,6 +37,19 @@ public sealed class QuotationController : ControllerBase
     public async Task<IActionResult> Quotation(int quoteId, CancellationToken ct) =>
         await _quotation.GenerateAsync(quoteId, ct) is { } document ? Ok(document) : QuoteNotFound(quoteId);
 
+    /// <summary>
+    /// GET /api/quotes/{quoteId}/versions/{versionNo}/quotation: the customer document
+    /// for any version, as it was issued (US-21).
+    /// </summary>
+    [HttpGet("versions/{versionNo:int}/quotation")]
+    [ProducesResponseType<CustomerQuotation>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> VersionQuotation(int quoteId, int versionNo, CancellationToken ct) =>
+        await _quotation.GenerateVersionAsync(quoteId, versionNo, ct) is { } document
+            ? Ok(document)
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Version not found",
+                detail: $"Quote {quoteId} has no version {versionNo}.");
+
     /// <summary>GET /api/quotes/{quoteId}/quotation/check: internal, quotation total against costing total.</summary>
     [HttpGet("quotation/check")]
     [ProducesResponseType<QuotationCheck>(StatusCodes.Status200OK)]

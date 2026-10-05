@@ -36,6 +36,9 @@ public enum CostingOutcome
     QuoteNotFound,
     LineNotFound,
 
+    /// <summary>The quote exists but has no version with that number.</summary>
+    VersionNotFound,
+
     /// <summary>NFR-01 and US-03. The line was not created; the reason says why.</summary>
     PriceNotResolved,
 
@@ -54,12 +57,19 @@ public sealed record CostingResult(
     Quote? Quote = null,
     CostingLine? Line = null,
     QuoteTotals? Totals = null,
-    string? Problem = null);
+    string? Problem = null,
+    QuoteVersion? Version = null);
 
 public interface ICostingSheetService
 {
     /// <summary>The quote's current version with its lines and totals.</summary>
     Task<CostingResult> GetAsync(int quoteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Any version of the quote with its lines and totals, read only (US-21). An
+    /// earlier version is sealed, so it is totalled exactly as it was issued.
+    /// </summary>
+    Task<CostingResult> GetVersionAsync(int quoteId, int versionNo, CancellationToken ct = default);
 
     Task<CostingResult> GetLineAsync(int quoteId, int lineId, CancellationToken ct = default);
 
@@ -116,7 +126,18 @@ public sealed class CostingSheetService : ICostingSheetService
         if (quote?.CurrentVersion is not { } version)
             return new(CostingOutcome.QuoteNotFound);
 
-        return new(CostingOutcome.Ok, quote, Totals: _calculator.Calculate(version));
+        return new(CostingOutcome.Ok, quote, Totals: _calculator.Calculate(version), Version: version);
+    }
+
+    public async Task<CostingResult> GetVersionAsync(int quoteId, int versionNo, CancellationToken ct = default)
+    {
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        if (quote is null)
+            return new(CostingOutcome.QuoteNotFound);
+        if (quote.Version(versionNo) is not { } version)
+            return new(CostingOutcome.VersionNotFound, quote, Problem: $"Quote {quote.Reference} has no version {versionNo}.");
+
+        return new(CostingOutcome.Ok, quote, Totals: _calculator.Calculate(version), Version: version);
     }
 
     public async Task<CostingResult> GetLineAsync(int quoteId, int lineId, CancellationToken ct = default)
