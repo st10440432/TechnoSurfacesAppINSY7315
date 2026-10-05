@@ -990,7 +990,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
 .auth-steps li { margin-bottom: var(--space-2); line-height: var(--leading-normal); }
 .auth-action { margin-top: var(--space-6); }
 .brand-logo-sm { display: inline-block; align-self: flex-start; padding: var(--space-4) var(--space-5); background: var(--surface); border-radius: var(--radius); }
-.brand-logo-sm img { display: block; width: 16rem; max-width: 100%; height: auto; }
+.brand-logo-sm img { display: block; width: 24rem; max-width: 100%; height: auto; }
 
 /* ==========================================================================
    Small screens: tablet below 992px, phone below 768px
@@ -1020,7 +1020,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
     .auth-brand { padding: var(--space-6); }
     .auth-headline { margin-top: var(--space-6); font-size: 1.5rem; }
     .auth-points, .auth-foot { display: none; }
-    .brand-logo-sm img { width: 11rem; }
+    .brand-logo-sm img { width: 16rem; }
 }
 
 @media (max-width: 767.98px) {
@@ -1415,7 +1415,7 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
     .auth-brand { padding: var(--space-4) var(--space-4) var(--space-5); }
     .auth-brand::after { display: none; }
     .brand-logo-sm { padding: var(--space-2) var(--space-3); }
-    .brand-logo-sm img { width: 9rem; height: auto; }
+    .brand-logo-sm img { width: 12rem; height: auto; }
     .auth-headline { margin-top: var(--space-3); font-size: var(--text-md); }
     .auth-sub { display: none; }
     .auth-panel { padding: var(--space-6) var(--space-4); }
