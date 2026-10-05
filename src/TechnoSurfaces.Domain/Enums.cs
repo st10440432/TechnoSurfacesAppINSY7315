@@ -48,7 +48,12 @@ public enum DerivationRule
 }
 
 /// <summary>
-/// Grouping of rate items on the costing sheet.
+/// Grouping of rate items on the costing sheet. Extras holds the cut-out and
+/// groove charges that sit below the markup line.
+///
+/// Consumables was added after Task 1 because the client's costing sheet groups
+/// seamkit, sandpaper, silicon and Genkem together. It goes last so the stored
+/// values of the existing members do not move.
 /// </summary>
 public enum RateCategory
 {
@@ -56,7 +61,8 @@ public enum RateCategory
     Installation,
     Wood,
     SinksAndHardware,
-    Extras
+    Extras,
+    Consumables
 }
 
 /// <summary>
@@ -87,4 +93,26 @@ public enum PricingStructure
 {
     Band,
     Item
+}
+
+/// <summary>
+/// The sections of standing wording printed on every customer quotation, in the
+/// order the client's quotation template prints them. Added last so the stored
+/// values of the existing enumerations are unaffected.
+/// </summary>
+public enum TermSection
+{
+    Notes,
+    LeadTimes,
+    Exclusions,
+    TermsAndConditions,
+    Disclaimers,
+    Warranties,
+    PaymentTerms,
+
+    /// <summary>
+    /// Not seeded: the repository is public and the client's banking details fall
+    /// under the non-disclosure agreement. Entered by the Managing Director.
+    /// </summary>
+    BankDetails
 }

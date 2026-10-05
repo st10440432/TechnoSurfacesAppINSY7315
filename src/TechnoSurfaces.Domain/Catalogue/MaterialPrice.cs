@@ -61,6 +61,32 @@ public class MaterialPrice
         EffectiveFrom <= date && (EffectiveTo is null || EffectiveTo >= date);
 
     /// <summary>
+    /// Replaces this price from a date. This price closes on the day before, so the
+    /// two are never in force on the same day and a quote dated before the change
+    /// still resolves to the price it was created under. Prices are versioned, never
+    /// overwritten.
+    /// </summary>
+    public MaterialPrice Supersede(decimal pricePerSqm, DateOnly from, string capturedByUserId)
+    {
+        PricePeriod.EnsureCanSupersede(EffectiveFrom, EffectiveTo, from);
+        if (pricePerSqm <= 0)
+            throw new ArgumentOutOfRangeException(nameof(pricePerSqm), "A material price must be greater than zero.");
+
+        EffectiveTo = from.AddDays(-1);
+
+        return new MaterialPrice
+        {
+            ColourId = ColourId,
+            PriceBandId = PriceBandId,
+            SheetSizeId = SheetSizeId,
+            PricePerSqm = pricePerSqm,
+            EffectiveFrom = from,
+            CapturedByUserId = capturedByUserId,
+            CapturedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    /// <summary>
     /// price per sheet = price per square metre x (length x width). Verified to the
     /// cent against the Staron, Perago and Surface Studio published figures.
     /// </summary>

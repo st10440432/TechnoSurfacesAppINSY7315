@@ -67,6 +67,27 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Login));
     }
 
+    /// <summary>Shown after signing in with a temporary password (Task 1 8.2).</summary>
+    [HttpGet]
+    public IActionResult ChangePassword() => View(new ChangePasswordViewModel());
+
+    [HttpPost]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+            return View(new ChangePasswordViewModel());
+
+        var errors = await _signIn.ChangePasswordAsync(User, model.CurrentPassword, model.NewPassword);
+        if (errors.Count == 0)
+            return RedirectToAction("Dashboard", "Home");
+
+        foreach (var error in errors)
+            ModelState.AddModelError(string.Empty, error);
+
+        // Passwords are never written back into the page.
+        return View(new ChangePasswordViewModel());
+    }
+
     /// <summary>
     /// Shown instead of a 403 error when a signed-in user opens a page their role
     /// cannot use (Task 1 2.4). It carries no data from the page they asked for.

@@ -1,0 +1,21 @@
+# Task 1 section 8.10 and risk R10: known vulnerabilities in NuGet packages and in
+# the GitHub Actions the pipelines use are raised as pull requests against develop,
+# where CI and review apply to them like any other change.
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

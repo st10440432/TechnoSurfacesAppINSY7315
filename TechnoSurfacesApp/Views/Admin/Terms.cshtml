@@ -1,4 +1,20 @@
-﻿@model TechnoSurfacesApp.Controllers.TermsVm
+﻿@using TermSection = TechnoSurfaces.Domain.TermSection
+@model TechnoSurfacesApp.Controllers.TermsVm
+
+@functions {
+    private static string SectionName(TermSection s) => s switch
+    {
+        TermSection.Notes => "Notes",
+        TermSection.LeadTimes => "Lead times",
+        TermSection.Exclusions => "Exclusions",
+        TermSection.TermsAndConditions => "Terms & conditions",
+        TermSection.Disclaimers => "Disclaimers",
+        TermSection.Warranties => "Warranties",
+        TermSection.PaymentTerms => "Payment terms",
+        TermSection.BankDetails => "Bank details",
+        _ => s.ToString()
+    };
+}
 
 <div class="page-head">
     <div>
@@ -12,6 +28,21 @@
     </div>
 </div>
 
+@if (TempData["CatalogueMessage"] is string message)
+{
+    <div class="notice notice-good" role="status" style="margin-bottom:18px">
+        <svg class="ico"><use href="#i-check-circle" /></svg>
+        <div><strong>@message</strong></div>
+    </div>
+}
+@if (TempData["CatalogueError"] is string error)
+{
+    <div class="notice notice-alert" role="alert" style="margin-bottom:18px">
+        <svg class="ico"><use href="#i-alert" /></svg>
+        <div>@error</div>
+    </div>
+}
+
 @if (!Model.CanEdit)
 {
     <div class="notice notice-alert">
@@ -23,8 +54,8 @@
 <div class="notice notice-info">
     <svg class="ico"><use href="#i-info" /></svg>
     <div>
-        Held in one place and versioned, so a quote already sent keeps the terms it was issued
-        under even if this wording changes later.
+        Each line is saved on its own and every change is recorded in the audit trail. A quote that
+        has been approved keeps the wording it was issued with, even if a line changes here later.
     </div>
 </div>
 
@@ -36,101 +67,124 @@
                 <h2>Content</h2>
             </div>
             <div class="card-body">
+                @foreach (var section in Enum.GetValues<TermSection>())
+                {
+                    var active = Model.ActiveIn(section);
+                    var retired = Model.RetiredIn(section);
 
-                <div class="term-block">
-                    <h4>Notes</h4>
-                    <textarea class="input" rows="2" disabled="@(!Model.CanEdit)">Any span in carcass greater than 700mm must be re-enforced.</textarea>
-                </div>
+                    <div class="term-block">
+                        <h4>@SectionName(section)</h4>
 
-                <div class="term-block">
-                    <h4>Lead times</h4>
-                    <div class="field-row field-row-2">
-                        <div class="field">
-                            <label class="label">Material</label>
-                            <input class="input" disabled="@(!Model.CanEdit)"
-                                   value="2 working days if in stock at suppliers; 6 to 8 weeks if imported" />
-                        </div>
-                        <div class="field">
-                            <label class="label">Production</label>
-                            <input class="input" disabled="@(!Model.CanEdit)"
-                                   value="5 working days from written acceptance and deposit" />
-                        </div>
+                        @if (section == TermSection.BankDetails && active.Count == 0)
+                        {
+                            <div class="notice notice-warn" style="margin-bottom:10px">
+                                <svg class="ico"><use href="#i-alert" /></svg>
+                                <div>
+                                    Bank details are not set, and quotations say so until they are entered here.
+                                    They are deliberately kept out of the code, because the repository is public.
+                                </div>
+                            </div>
+                        }
+                        else if (active.Count == 0)
+                        {
+                            <p class="muted small">No lines in this section.</p>
+                        }
+
+                        @foreach (var line in active)
+                        {
+                            if (Model.CanEdit)
+                            {
+                                <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+                                    <form asp-controller="Catalogue" asp-action="UpdateTerm" method="post" style="display:flex;gap:8px;flex:1">
+                                        <input type="hidden" name="TermId" value="@line.Id" />
+                                        <textarea class="input" name="Text" rows="2" maxlength="500" required
+                                                  aria-label="@SectionName(section), line @line.SortOrder">@line.Text</textarea>
+                                        <button class="btn btn-secondary btn-sm" type="submit">Save</button>
+                                    </form>
+                                    <form asp-controller="Catalogue" asp-action="RetireTerm" method="post"
+                                          onsubmit="return confirm('Retire this line? It stops printing on new quotations. Approved quotes keep it.');">
+                                        <input type="hidden" name="termId" value="@line.Id" />
+                                        <button class="btn btn-ghost btn-sm" type="submit">Retire</button>
+                                    </form>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="small" style="margin:0 0 6px">@line.Text</p>
+                            }
+                        }
+
+                        @if (Model.CanEdit)
+                        {
+                            <form asp-controller="Catalogue" asp-action="AddTerm" method="post" style="display:flex;gap:8px;margin-top:4px">
+                                <input type="hidden" name="Section" value="@(section)" />
+                                <input class="input input-sm" name="Text" maxlength="500" required
+                                       placeholder="Add a line to @SectionName(section)"
+                                       aria-label="New line for @SectionName(section)" />
+                                <button class="btn btn-secondary btn-sm" type="submit">Add</button>
+                            </form>
+                        }
+
+                        @if (retired.Count > 0)
+                        {
+                            <details style="margin-top:6px">
+                                <summary class="tiny muted">@retired.Count retired line@(retired.Count == 1 ? "" : "s")</summary>
+                                @foreach (var line in retired)
+                                {
+                                    <p class="tiny muted" style="margin:4px 0;text-decoration:line-through">@line.Text</p>
+                                }
+                            </details>
+                        }
                     </div>
-                </div>
-
-                <div class="term-block">
-                    <h4>Exclusions</h4>
-                    <textarea class="input" rows="3" disabled="@(!Model.CanEdit)">Sealing between countertop and walls
-Any plumbing or electrical work
-Removal of existing worktops</textarea>
-                </div>
-
-                <div class="term-block">
-                    <h4>Terms &amp; conditions</h4>
-                    <textarea class="input" rows="6" disabled="@(!Model.CanEdit)">Quotation valid for 30 days only
-Damage caused by other parties/trades is charged as extra
-No liability for negligent damage once handed over, or once signed "Received in Good Order"
-No work commences until written acceptance and deposit paid, or an official order number for account customers
-Prices exclude VAT and delivery unless stated
-All pricing subject to final measurement on site; changes are charged for
-No contra charges, set off or retentions unless agreed in writing beforehand</textarea>
-                    <div class="hint">
-                        <strong>Quote validity (30 days)</strong> is also read by the system to set
-                        each quote's expiry date &mdash; changing it here changes new quotes only.
-                    </div>
-                </div>
-
-                <div class="term-block">
-                    <h4>Disclaimers</h4>
-                    <textarea class="input" rows="4" disabled="@(!Model.CanEdit)">No warranty where material is used in an application the manufacturer does not support
-Solid dark colours scratch more easily than lighter speckled colours - not recommended for kitchen worktops or high-traffic areas
-Veined or glitter colours may not give a seamless finish due to the directional nature of the material
-No warranty where material is in direct sunlight or variable weather</textarea>
-                </div>
-
-                <div class="term-block">
-                    <h4>Payment &amp; banking</h4>
-                    <div class="field-row field-row-2">
-                        <div class="field">
-                            <label class="label">Payment terms</label>
-                            <input class="input" disabled="@(!Model.CanEdit)" value="60% deposit on order, balance on completion" />
-                        </div>
-                        <div class="field">
-                            <label class="label">Bank details</label>
-                            <input class="input" disabled="@(!Model.CanEdit)" value="ABSA Bank, Claremont, branch 632005, account 4075862554" />
-                        </div>
-                    </div>
-                </div>
-
+                }
             </div>
-            @if (Model.CanEdit)
-            {
-                <div class="card-foot">
-                    <button class="btn btn-primary" type="button">Save as new version</button>
-                    <span class="tiny muted" style="margin-left:6px">
-                        Quotes already sent are unaffected
-                    </span>
-                </div>
-            }
         </div>
     </div>
 
     <div>
         <div class="card">
             <div class="card-head"><h3>Warranty by brand</h3></div>
-            <div class="table-wrap">
-                <table class="data">
-                    <thead><tr><th>Brand</th><th>Material</th><th>Workmanship</th></tr></thead>
-                    <tbody>
-                        <tr><td>DuPont Corian</td><td>10 years</td><td>10 years (limited)</td></tr>
-                        <tr><td>Avonite, Samsung Staron</td><td>10 years</td><td>1 year</td></tr>
-                    </tbody>
-                </table>
+            <div class="card-body">
+                @if (Model.Brands.Count == 0)
+                {
+                    <p class="muted small">No brands in the catalogue yet.</p>
+                }
+                @foreach (var b in Model.Brands)
+                {
+                    <div style="margin-bottom:14px">
+                        <div class="strong">
+                            @b.Name
+                            <span class="tiny muted">&middot; @b.ProductLineCount product line@(b.ProductLineCount == 1 ? "" : "s")</span>
+                        </div>
+                        @if (Model.CanEdit)
+                        {
+                            <form asp-controller="Catalogue" asp-action="SetBrandWarranty" method="post"
+                                  style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+                                <input type="hidden" name="BrandId" value="@b.Id" />
+                                <input class="input input-sm" name="MaterialWarranty" value="@b.MaterialWarranty" maxlength="60"
+                                       placeholder="Material, e.g. 10 years" aria-label="Material warranty for @b.Name"
+                                       style="flex:1;min-width:120px" />
+                                <input class="input input-sm" name="WorkmanshipWarranty" value="@b.WorkmanshipWarranty" maxlength="60"
+                                       placeholder="Workmanship, e.g. 1 year" aria-label="Workmanship warranty for @b.Name"
+                                       style="flex:1;min-width:120px" />
+                                <button class="btn btn-secondary btn-sm" type="submit">Save</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="small">
+                                @(b.HasWarranty
+                                    ? $"{b.MaterialWarranty} material, {b.WorkmanshipWarranty} workmanship"
+                                    : "No confirmed warranty, so none is printed")
+                            </div>
+                        }
+                    </div>
+                }
             </div>
             <div class="card-foot">
                 <span class="tiny muted">
-                    Applied automatically &mdash; the quotation shows the wording that matches the
-                    brand actually quoted, not free text typed per job.
+                    A product line with no brand, or a brand with no confirmed warranty, prints no warranty
+                    rather than a guess. Clear both boxes to remove a warranty.
                 </span>
             </div>
         </div>
@@ -148,8 +202,8 @@ No warranty where material is in direct sunlight or variable weather</textarea>
                 <div class="check-row">
                     <span class="check-dot check-info"><svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-history" /></svg></span>
                     <span class="check-body">
-                        <span class="check-title">Versioned</span>
-                        <span class="check-detail">A quote keeps the wording it was issued under.</span>
+                        <span class="check-title">Kept with each approved quote</span>
+                        <span class="check-detail">A quote keeps the wording it was approved with.</span>
                     </span>
                 </div>
             </div>

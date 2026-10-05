@@ -1,0 +1,59 @@
+﻿@using TechnoSurfaces.Application.Auditing
+@model IReadOnlyList<AuditRow>
+
+<div class="card">
+    <div class="card-head">
+        <svg class="ico" style="color:var(--ink-3)"><use href="#i-history" /></svg>
+        <h3>Changes to this quote</h3>
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <div class="card-body">
+            <p class="muted small" style="margin:0">No changes recorded yet.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data stack">
+                <thead>
+                    <tr><th>When (SAST)</th><th>Who</th><th>Change</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model)
+                    {
+                        <tr>
+                            <td data-label="When" class="small nowrap">@Fmt.DateTimeShort(a.ChangedAtLocal)</td>
+                            <td data-label="Who" class="small">@a.UserName</td>
+                            <td data-label="Change" class="small">
+                                <span class="badge">
+                                    @(a.EntityName switch
+                                    {
+                                        "CostingLine" => $"Line {a.EntityKey}",
+                                        "QuoteVersion" => "Version",
+                                        _ => "Quote"
+                                    })
+                                </span>
+                                @if (a.IsDeletion)
+                                {
+                                    <span class="muted">removed</span>
+                                }
+                                else
+                                {
+                                    <span class="muted">@a.PropertyName:</span>
+                                    @if (a.OldValue is not null)
+                                    {
+                                        <span style="text-decoration:line-through;color:var(--ink-3)">@a.OldValue</span>
+                                        <span class="muted">&rarr;</span>
+                                    }
+                                    <strong>@a.NewValue</strong>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

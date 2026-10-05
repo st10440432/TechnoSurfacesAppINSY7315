@@ -1,0 +1,97 @@
+name: CD
+
+# Runs after a pull request is merged. develop deploys to staging; main deploys to
+# production, which waits for a reviewer to approve it in the production environment.
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # lets azure/login exchange a GitHub OIDC token; no stored Azure secret
+
+concurrency:
+  group: cd-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore
+      - name: Build (warnings as errors)
+        run: dotnet build --no-restore -c Release -warnaserror
+      - name: Unit tests
+        run: dotnet test tests/TechnoSurfaces.UnitTests -c Release --no-build
+      - name: Publish
+        run: dotnet publish TechnoSurfacesApp/TechnoSurfacesApp.csproj -c Release -o publish
+      - name: Generate idempotent migration scripts
+        # Kept as an auditable record of the schema each release applies. The app
+        # applies the migrations itself at startup (Database__MigrateOnStartup),
+        # because the database has no public endpoint a GitHub runner could reach.
+        env:
+          ConnectionStrings__DefaultConnection: Server=placeholder;Database=placeholder
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.12
+          mkdir -p migrations
+          dotnet ef migrations script --idempotent --no-build --configuration Release \
+            --project src/TechnoSurfaces.Infrastructure --startup-project TechnoSurfacesApp \
+            --context TechnoSurfacesDbContext -o migrations/domain.sql
+          dotnet ef migrations script --idempotent --no-build --configuration Release \
+            --project TechnoSurfacesApp --startup-project TechnoSurfacesApp \
+            --context AuthDbContext -o migrations/auth.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrations
+          path: migrations
+
+  deploy:
+    needs: build
+    # Only develop and main deploy, even when the workflow is started by hand.
+    if: github.ref_name == 'develop' || github.ref_name == 'main'
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+      url: https://${{ vars.WEBAPP_NAME }}.azurewebsites.net
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: app
+      - name: Sign in to Azure (OIDC federated credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy to App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.WEBAPP_NAME }}
+          package: app
+      - name: Health check
+        # The app migrates the database while it starts, so allow up to five
+        # minutes. A failed check fails the run, and GitHub emails whoever
+        # triggered it.
+        run: |
+          url="https://${{ vars.WEBAPP_NAME }}.azurewebsites.net/health"
+          for attempt in $(seq 1 30); do
+            status=$(curl -s -o body.txt -w "%{http_code}" "$url" || true)
+            echo "Attempt $attempt: HTTP $status $(cat body.txt 2>/dev/null)"
+            if [ "$status" = "200" ] && grep -q "Healthy" body.txt; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$url did not report Healthy within five minutes"
+          exit 1

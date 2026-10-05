@@ -12,12 +12,13 @@ public sealed record PriceResolution
 {
     private readonly decimal _unitPrice;
 
-    private PriceResolution(bool resolved, decimal unitPrice, string origin, string? failureReason)
+    private PriceResolution(bool resolved, decimal unitPrice, string origin, string? failureReason, int? sourcePriceId)
     {
         Resolved = resolved;
         _unitPrice = unitPrice;
         Origin = origin;
         FailureReason = failureReason;
+        SourcePriceId = sourcePriceId;
     }
 
     public bool Resolved { get; }
@@ -30,6 +31,13 @@ public sealed record PriceResolution
 
     /// <summary>Why the price could not be resolved. Shown to the estimator.</summary>
     public string? FailureReason { get; }
+
+    /// <summary>
+    /// The MaterialPrice row the figure came from, on a resolved material price.
+    /// A material costing line records it in CostingLine.MaterialPriceId for
+    /// traceability. Null for a rate and for a price that did not resolve.
+    /// </summary>
+    public int? SourcePriceId { get; }
 
     /// <summary>
     /// The resolved unit price. Throws when the price did not resolve, so that a
@@ -46,11 +54,11 @@ public sealed record PriceResolution
     /// </summary>
     public const string UnresolvedOrigin = "unresolved";
 
-    public static PriceResolution Success(decimal unitPrice, string origin) =>
-        new(true, unitPrice, origin, null);
+    public static PriceResolution Success(decimal unitPrice, string origin, int? sourcePriceId = null) =>
+        new(true, unitPrice, origin, null, sourcePriceId);
 
     public static PriceResolution Failure(string reason) =>
-        new(false, 0m, UnresolvedOrigin, reason);
+        new(false, 0m, UnresolvedOrigin, reason, null);
 }
 
 /// <summary>

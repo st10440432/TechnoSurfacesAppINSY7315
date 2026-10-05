@@ -17,6 +17,8 @@ public class QuoteVersion
 {
     private readonly List<CostingLine> _costingLines = new();
     private readonly List<QuotationLine> _quotationLines = new();
+    private readonly List<QuoteVersionTerm> _terms = new();
+    private readonly List<QuoteVersionWarranty> _warranties = new();
 
     private QuoteVersion() { }
 
@@ -52,11 +54,30 @@ public class QuoteVersion
     /// </summary>
     public decimal VatRate { get; private set; }
 
+    /// <summary>
+    /// Transport: the petrol and delivery amount the Managing Director types per
+    /// job, based on the trips the job needs. Cost recovery, so it sits below the
+    /// markup line with the cut-out charges. Not on the rate card.
+    /// </summary>
+    public decimal TransportAmount { get; private set; }
+
     /// <summary>Once sealed the version is a read-only record.</summary>
     public bool IsSealed { get; private set; }
 
     public IReadOnlyCollection<CostingLine> CostingLines => _costingLines.AsReadOnly();
     public IReadOnlyCollection<QuotationLine> QuotationLines => _quotationLines.AsReadOnly();
+
+    /// <summary>
+    /// The standing wording this version was approved with. Empty until the
+    /// version is approved; a version still being worked on prints the current
+    /// wording instead.
+    /// </summary>
+    public IReadOnlyCollection<QuoteVersionTerm> Terms => _terms.AsReadOnly();
+
+    /// <summary>The brand warranties this version was approved with.</summary>
+    public IReadOnlyCollection<QuoteVersionWarranty> Warranties => _warranties.AsReadOnly();
+
+    public bool HasRecordedTerms => _terms.Count > 0;
 
     public void AddCostingLine(CostingLine line)
     {
@@ -76,6 +97,43 @@ public class QuoteVersion
         _costingLines.Remove(line);
     }
 
+    /// <summary>Rewrites a customer-facing line on this version (US-10).</summary>
+    public void ChangeQuotationLine(QuotationLine line, string description, decimal amountExVat, string? room, decimal quantity)
+    {
+        EnsureUnsealed();
+        if (!_quotationLines.Contains(line))
+            throw new InvalidOperationException($"That quotation line is not on version {VersionNo}.");
+        line.Change(description, amountExVat, room, quantity);
+    }
+
+    public void RemoveQuotationLine(QuotationLine line)
+    {
+        EnsureUnsealed();
+        _quotationLines.Remove(line);
+    }
+
+    /// <summary>
+    /// Puts the customer-facing lines in the given order. Every line on the version
+    /// must be named exactly once, so a reorder cannot drop or duplicate a line.
+    /// </summary>
+    public void ReorderQuotationLines(IReadOnlyList<QuotationLine> order)
+    {
+        EnsureUnsealed();
+        if (order.Count != _quotationLines.Count || order.Distinct().Count() != order.Count
+            || order.Any(l => !_quotationLines.Contains(l)))
+            throw new ArgumentException("Name every quotation line on the version exactly once.", nameof(order));
+
+        for (var i = 0; i < order.Count; i++)
+            order[i].SortOrder = i + 1;
+    }
+
+    /// <summary>
+    /// What the customer quotation adds up to before VAT. US-10: this must equal the
+    /// costing's total excluding VAT before the quote is approved.
+    /// </summary>
+    public decimal QuotationSubtotalExVat() =>
+        Round(_quotationLines.Sum(l => l.AmountExVat));
+
     public void SetMarkupPercent(decimal markupPercent)
     {
         EnsureUnsealed();
@@ -84,11 +142,100 @@ public class QuoteVersion
         MarkupPercent = markupPercent;
     }
 
+    public void SetTransportAmount(decimal amount)
+    {
+        EnsureUnsealed();
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "A transport amount cannot be negative.");
+        TransportAmount = amount;
+    }
+
     /// <summary>
-    /// Closes the version. Called when the quote is submitted or issued. After this
-    /// the snapshot cannot change.
+    /// Changes a quantity on this quote. On a derived line, such as silicon at two
+    /// per sheet, the typed figure replaces the derived one until it is restored.
+    /// </summary>
+    public void ChangeQuantity(CostingLine line, decimal quantity) =>
+        Change(line).ChangeQuantity(quantity);
+
+    /// <summary>Returns a derived line to the quantity the calculator works out.</summary>
+    public void RestoreDerivedQuantity(CostingLine line) =>
+        Change(line).RestoreDerivedQuantity();
+
+    /// <summary>
+    /// Charges a line at a different rate on this quote only (US-06). The rate
+    /// card is not changed and the catalogue price stays on the line.
+    /// </summary>
+    public void OverrideUnitPrice(CostingLine line, decimal unitPrice) =>
+        Change(line).OverrideUnitPrice(unitPrice);
+
+    public void ClearPriceOverride(CostingLine line) =>
+        Change(line).ClearPriceOverride();
+
+    /// <summary>A discount received from the supplier on a material line (US-08).</summary>
+    public void ChangeSupplierDiscount(CostingLine line, decimal supplierDiscountPercent) =>
+        Change(line).ChangeSupplierDiscount(supplierDiscountPercent);
+
+    private CostingLine Change(CostingLine line)
+    {
+        EnsureUnsealed();
+        if (!_costingLines.Contains(line))
+            throw new InvalidOperationException($"{line.Description} is not a line on version {VersionNo}.");
+        return line;
+    }
+
+    /// <summary>
+    /// Closes the version. Called when the quote is approved, so the Managing
+    /// Director can still correct a pending quote (US-18), and when a revision
+    /// starts. After this the snapshot cannot change.
     /// </summary>
     public void Seal() => IsSealed = true;
+
+    /// <summary>
+    /// A new, open version that starts as a copy of this one. Every line keeps the
+    /// price, origin, quantity, override and discount it carries here, and nothing
+    /// is priced again, so a catalogue change since this version cannot move the
+    /// revision's starting figures (Task 1 5.1.3). This version is read, never
+    /// written.
+    /// </summary>
+    public QuoteVersion CreateRevision(int versionNo, string createdByUserId)
+    {
+        if (versionNo <= VersionNo)
+            throw new ArgumentOutOfRangeException(nameof(versionNo), $"A revision of version {VersionNo} must have a higher number.");
+
+        var revision = new QuoteVersion(versionNo, createdByUserId, MarkupPercent, VatRate)
+        {
+            TransportAmount = TransportAmount
+        };
+
+        foreach (var line in _costingLines)
+            revision._costingLines.Add(line.CopyForRevision());
+
+        foreach (var line in _quotationLines)
+            revision._quotationLines.Add(line.CopyForRevision());
+
+        return revision;
+    }
+
+    /// <summary>
+    /// Records the standing wording and brand warranties this version is approved
+    /// with. Called once, immediately before the version is approved and sealed, so
+    /// the quotation it was issued with can always be reproduced exactly. Refused
+    /// on a sealed version, and refused a second time, because a recorded term is
+    /// part of the issued record.
+    /// </summary>
+    public void RecordTerms(IEnumerable<QuoteVersionTerm> terms, IEnumerable<QuoteVersionWarranty> warranties)
+    {
+        EnsureUnsealed();
+        if (HasRecordedTerms)
+            throw new InvalidOperationException($"The terms for version {VersionNo} have already been recorded.");
+
+        var recorded = terms.ToList();
+        if (recorded.Count == 0)
+            throw new ArgumentException("A version cannot be issued with no standing terms.", nameof(terms));
+
+        _terms.AddRange(recorded);
+        _warranties.AddRange(warranties);
+    }
 
     private void EnsureUnsealed()
     {
@@ -107,9 +254,12 @@ public class QuoteVersion
     public decimal MarkupAmount() =>
         Round(SubTotalExVat() * MarkupPercent / 100m);
 
-    /// <summary>Below-the-line items are cost recovery and are not marked up.</summary>
+    /// <summary>
+    /// Below-the-line items are cost recovery and are not marked up: the cut-out
+    /// and groove charges, and transport.
+    /// </summary>
     public decimal BelowTheLineTotal() =>
-        Round(_costingLines.Where(l => l.IsBelowTheLine).Sum(l => l.LineTotal()));
+        Round(_costingLines.Where(l => l.IsBelowTheLine).Sum(l => l.LineTotal()) + TransportAmount);
 
     public decimal TotalExVat() =>
         Round(SubTotalExVat() + MarkupAmount() + BelowTheLineTotal());

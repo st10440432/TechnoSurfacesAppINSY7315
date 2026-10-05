@@ -145,52 +145,6 @@
                 </a>
             </div>
         </div>
-
-        <div class="card">
-            <div class="card-head">
-                <svg class="ico" style="color:var(--ink-3)"><use href="#i-history" /></svg>
-                <h3>Activity on this quote</h3>
-            </div>
-            <div class="table-wrap">
-                <table class="data stack">
-                    <thead>
-                        <tr><th>When</th><th>Who</th><th>Action</th><th>Change</th></tr>
-                    </thead>
-                    <tbody>
-                        @if (Model.Activity.Count == 0)
-                        {
-                            <tr>
-                                <td colspan="4" class="muted small">No recorded activity yet.</td>
-                            </tr>
-                        }
-                        @foreach (var a in Model.Activity)
-                        {
-                            <tr>
-                                <td data-label="When" class="small nowrap">@Fmt.DateTimeShort(a.When)</td>
-                                <td data-label="Who" class="small">@a.UserName</td>
-                                <td data-label="Action" class="small">@a.Action</td>
-                                <td data-label="Change" class="small">
-                                    @if (a.Field is not null)
-                                    {
-                                        <span class="muted">@a.Field:</span>
-                                        @if (a.OldValue is not null)
-                                        {
-                                            <span style="text-decoration:line-through;color:var(--ink-3)">@a.OldValue</span>
-                                            <span class="muted">&rarr;</span>
-                                        }
-                                        <strong>@a.NewValue</strong>
-                                    }
-                                    else
-                                    {
-                                        <span class="muted">&mdash;</span>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
     </div>
 
     <div>
@@ -237,6 +191,7 @@
                 <div class="totals-note">
                     @Fmt.Area(q.TotalSqm) at <strong>@Fmt.Rand(q.RandPerSqm) per m&sup2;</strong>.
                     Use this as the range check before approving.
+                            @await Component.InvokeAsync("QuoteChanges", new { reference = q.Ref })
                 </div>
             </div>
 

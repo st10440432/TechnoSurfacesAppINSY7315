@@ -5,124 +5,173 @@ using TechnoSurfaces.Domain.Catalogue;
 namespace TechnoSurfaces.Infrastructure.Data.Seed;
 
 /// <summary>
-/// Seeds the rate card structure: the chargeable lines that are not material.
+/// Seeds the rate card: the chargeable lines that are not material.
 ///
-/// The rate card is held once here and applied to every quote. The spreadsheet's
-/// core weakness was a rate card duplicated across twelve sheets that then drifted
-/// apart, so overtime and installation are expressed as relationships to the
-/// fabrication rate rather than as separately maintained figures.
+/// The lines, their grouping and their order follow the client's costing sheet
+/// (Costing January 2026.xlsx), which is also the structure the Task 1 prototype
+/// rate card was built on. The workbook repeats the rate card on twelve material
+/// sheets and the copies disagree in places: fabrication is R250 / R270 on the
+/// Perago12mm sheet and R265 / R285 on the rest, and the seamkit is R130, R185 or
+/// R220 depending on the sheet. Where the copies differ the highest figure is
+/// seeded (team decision, 2 October 2026), and the Managing Director can change
+/// any rate on the rate card screen.
 ///
-/// Amounts are seeded only where a real figure exists in a supplier price list.
-/// The labour, sanding, cut-out and wood rates are not in any document we hold: the
-/// rand values in the client's January costing workbook are sample data. Those
-/// items are therefore seeded without a price, so the system reports them as
-/// unresolved rather than pricing them at a plausible but invented figure. The
-/// Managing Director enters the real rates through the rate card screen.
+/// Overtime and installation are not seeded as figures. The workbook calculates
+/// them (overtime is the normal rate x 1.5, installation equals fabrication with
+/// no backsplash), so they are held here as relationships to the fabrication rates.
+///
+/// Nine lines carry no price on any of the twelve sheets: the three sinks and
+/// hardware lines, and the six wood boards the workbook leaves blank or lists under
+/// "Check pricing:". They are seeded without a price, so the system reports them as
+/// unresolved until the Managing Director sets a rate, rather than pricing them at a
+/// figure nobody supplied.
+///
+/// Transport is not on the rate card. It is the "Petrol / delivery" amount the
+/// Managing Director types per job, held on the quote version.
 /// </summary>
 public static class RateCardSeeder
 {
+    /// <summary>The date of the client's costing workbook the rates are taken from.</summary>
+    public static readonly DateOnly RatesEffectiveFrom = new(2026, 1, 1);
+
     /// <summary>
-    /// Rate items left deliberately unpriced, pending the client's real figures.
-    /// Surfaced here so the gap is visible rather than buried in the data.
+    /// Rate items with no price in the client's workbook. Listed here so the gap is
+    /// visible rather than buried in the data.
     /// </summary>
     public static readonly string[] AwaitingClientRates =
     {
-        "Fabrication", "Fabrication overtime", "Installation", "Sanding and polishing",
-        "Cut-out", "Wood substrate", "Sink", "Tap hole"
+        "MFC White Std", "Chipboard 32mm Bison", "16mm White MDF", "5mm plywood bend",
+        "Marine Ply 9mm", "Marine Ply 18mm", "Sink / vanity", "Brackets", "Hardware"
     };
 
     public static async Task SeedAsync(TechnoSurfacesDbContext db, CancellationToken ct = default)
     {
+        await RemoveUnorderedRateCardAsync(db, ct);
+
         if (await db.RateItems.AnyAsync(ct)) return;
 
-        var effective = new DateOnly(2026, 1, 1);
+        var order = 0;
 
-        // ---- Labour, priced by the client through the rate card screen ----
-
-        var fabrication = Add(db, "Fabrication", RateCategory.Fabrication, ChargeUnit.Hour);
-        await db.SaveChangesAsync(ct);
-
-        // Overtime is normal fabrication multiplied by 1,5 and installation mirrors
-        // fabrication. Expressed as rules so that a change to the fabrication rate
-        // carries through instead of being applied in several places.
-        var overtime = Add(db, "Fabrication overtime", RateCategory.Fabrication, ChargeUnit.Hour);
-        overtime.DerivedFromRateItemId = fabrication.Id;
-        overtime.DerivedFromRateItemMultiplier = 1.5m;
-
-        var installation = Add(db, "Installation", RateCategory.Installation, ChargeUnit.Hour);
-        installation.DerivedFromRateItemId = fabrication.Id;
-        installation.DerivedFromRateItemMultiplier = 1.0m;
-
-        Add(db, "Sanding and polishing", RateCategory.Fabrication, ChargeUnit.Hour);
-        Add(db, "Cut-out", RateCategory.Extras, ChargeUnit.Each);
-        Add(db, "Wood substrate", RateCategory.Wood, ChargeUnit.SquareMetre);
-        Add(db, "Sink", RateCategory.SinksAndHardware, ChargeUnit.Each);
-        Add(db, "Tap hole", RateCategory.SinksAndHardware, ChargeUnit.Each);
-        await db.SaveChangesAsync(ct);
-
-        // ---- Derived quantities, reproducing the spreadsheet's behaviour ----
-
-        Add(db, "Sandpaper and consumables", RateCategory.Extras, ChargeUnit.SquareMetre,
-            derivation: DerivationRule.FromTotalAreaM2, belowTheLine: true);
-
-        var transport = Add(db, "Transport", RateCategory.Extras, ChargeUnit.Sheet,
-            derivation: DerivationRule.FromSheetCount, belowTheLine: true);
-
-        // Quantity is sheets multiplied by two, subject to estimator override. This
-        // is a team assumption and has not been confirmed by the client.
-        Add(db, "Silicon and sealing", RateCategory.Extras, ChargeUnit.Each,
-            derivation: DerivationRule.FromSheetCount, belowTheLine: true, derivationFactor: 2m);
-
-        // ---- Adhesive, where the price genuinely varies by supplier ----
-
-        var adhesive = Add(db, "Adhesive and seamkit", RateCategory.Extras, ChargeUnit.Each, belowTheLine: true);
-        await db.SaveChangesAsync(ct);
-
-        // R130 from two suppliers, R250 from a third, R299 from Max on Top when
-        // used on another supplier's material. The seamkit rate is not one global
-        // figure; it follows the supplier of the material being quoted.
-        var suppliers = await db.Suppliers.AsNoTracking().ToListAsync(ct);
-        foreach (var s in suppliers)
-            db.RatePrices.Add(new RatePrice
+        RateItem Add(string name, RateCategory category, ChargeUnit unit, decimal? amount,
+            string? description = null, DerivationRule derivation = DerivationRule.Entered,
+            decimal derivationFactor = 1m, bool belowTheLine = false)
+        {
+            var item = new RateItem
             {
-                RateItemId = adhesive.Id,
-                SupplierId = s.Id,
-                Amount = s.AdhesivePrice,
-                EffectiveFrom = effective
-            });
+                Name = name,
+                Description = description,
+                Category = category,
+                Unit = unit,
+                Derivation = derivation,
+                DerivationFactor = derivationFactor,
+                IsBelowTheLine = belowTheLine,
+                SortOrder = ++order
+            };
 
-        // ---- Transport thresholds published by the suppliers ----
+            if (amount is not null)
+                item.Prices.Add(new RatePrice { Amount = amount.Value, EffectiveFrom = RatesEffectiveFrom });
 
-        var maxOnTop = suppliers.FirstOrDefault(s => s.Name == "Max on Top");
-        if (maxOnTop is not null)
-            db.RatePrices.Add(new RatePrice { RateItemId = transport.Id, SupplierId = maxOnTop.Id, Amount = 1050.00m, EffectiveFrom = effective });
+            db.RateItems.Add(item);
+            return item;
+        }
 
-        var surfaceStudio = suppliers.FirstOrDefault(s => s.Name == "Surface Studio");
-        if (surfaceStudio is not null)
-            db.RatePrices.Add(new RatePrice { RateItemId = transport.Id, SupplierId = surfaceStudio.Id, Amount = 550.00m, EffectiveFrom = effective });
+        // ---- Fabrication ----
 
-        var perago = suppliers.FirstOrDefault(s => s.Name == "Perago and Magicstone");
-        if (perago is not null)
-            db.RatePrices.Add(new RatePrice { RateItemId = transport.Id, SupplierId = perago.Id, Amount = 510.00m, EffectiveFrom = effective });
+        var noBacksplash = Add("Fabrication — no backsplash, normal", RateCategory.Fabrication, ChargeUnit.Hour, 265.00m);
+        var withBacksplash = Add("Fabrication — with backsplash, normal", RateCategory.Fabrication, ChargeUnit.Hour, 285.00m);
+        var noBacksplashOvertime = Add("Fabrication — no backsplash, overtime", RateCategory.Fabrication, ChargeUnit.Hour, null);
+        var withBacksplashOvertime = Add("Fabrication — with backsplash, overtime", RateCategory.Fabrication, ChargeUnit.Hour, null);
+        Add("Thermoforming", RateCategory.Fabrication, ChargeUnit.Each, 400.00m);
+        Add("Vacuum press", RateCategory.Fabrication, ChargeUnit.Each, 400.00m);
+        Add("Sanding time", RateCategory.Fabrication, ChargeUnit.Hour, 100.00m);
+
+        // ---- Consumables ----
+
+        Add("Seamkit", RateCategory.Consumables, ChargeUnit.Each, 220.00m);
+        Add("Sandpaper & consumables", RateCategory.Consumables, ChargeUnit.SquareMetre, 55.00m,
+            "Quantity is the total square metres across all material lines.",
+            DerivationRule.FromTotalAreaM2);
+        Add("Silicon + sealing", RateCategory.Consumables, ChargeUnit.Each, 55.00m,
+            "Two per sheet across all material lines. The estimator can type over it.",
+            DerivationRule.FromSheetCount, derivationFactor: 2m);
+        Add("Genkem", RateCategory.Consumables, ChargeUnit.Each, 140.00m);
+
+        // ---- Installation ----
+
+        var installation = Add("Installation — normal", RateCategory.Installation, ChargeUnit.Hour, null);
+        var installationOvertime = Add("Installation — overtime", RateCategory.Installation, ChargeUnit.Hour, null);
+
+        // ---- Wood and substrate, per sheet ----
+
+        const string Large = "Sheet 2,75 x 1,83 m";
+        const string Small = "Sheet 2,44 x 1,22 m";
+
+        Add("MDF Bison 16mm white face", RateCategory.Wood, ChargeUnit.Sheet, 1027.20m, Large);
+        Add("MDF Bison 16mm", RateCategory.Wood, ChargeUnit.Sheet, 738.30m, Large);
+        Add("MDF Bison 12mm", RateCategory.Wood, ChargeUnit.Sheet, 726.53m, Large);
+        Add("MDF Bison 9mm", RateCategory.Wood, ChargeUnit.Sheet, 583.15m, Large);
+        Add("Chipboard 16mm", RateCategory.Wood, ChargeUnit.Sheet, 512.53m, Large);
+        Add("MFC White Std", RateCategory.Wood, ChargeUnit.Sheet, null, Large);
+        Add("Hardboard std 3.2", RateCategory.Wood, ChargeUnit.Sheet, 134.00m, Small);
+        Add("Plywood Pine 18mm", RateCategory.Wood, ChargeUnit.Sheet, 559.00m, Small);
+        Add("Chipboard 32mm Bison", RateCategory.Wood, ChargeUnit.Sheet, null, Large);
+        Add("16mm White MDF", RateCategory.Wood, ChargeUnit.Sheet, null, Large);
+        Add("5mm plywood bend", RateCategory.Wood, ChargeUnit.Sheet, null, Small);
+        Add("Marine Ply 9mm", RateCategory.Wood, ChargeUnit.Sheet, null, Small);
+        Add("Marine Ply 18mm", RateCategory.Wood, ChargeUnit.Sheet, null, Small);
+
+        // ---- Sinks, vanities and hardware ----
+
+        Add("Sink / vanity", RateCategory.SinksAndHardware, ChargeUnit.Each, null);
+        Add("Brackets", RateCategory.SinksAndHardware, ChargeUnit.Each, null);
+        Add("Hardware", RateCategory.SinksAndHardware, ChargeUnit.Each, null);
+
+        // ---- Below the line: cost recovery, not marked up ----
+
+        Add("Drainer grooves", RateCategory.Extras, ChargeUnit.Each, 175.00m, belowTheLine: true);
+        Add("Sink / vanity cut out", RateCategory.Extras, ChargeUnit.Each, 225.00m, belowTheLine: true);
+        Add("Underslung sink / vanity", RateCategory.Extras, ChargeUnit.Each, 375.00m, belowTheLine: true);
+        Add("Hob cut out", RateCategory.Extras, ChargeUnit.Each, 350.00m, belowTheLine: true);
+
+        await db.SaveChangesAsync(ct);
+
+        // The relationships need the keys of the rates they point at, so they are
+        // set once those rows exist. Installation overtime mirrors the no-backsplash
+        // overtime rate, which is itself the normal rate x 1.5, as in the workbook.
+        DeriveFrom(noBacksplashOvertime, noBacksplash, 1.5m);
+        DeriveFrom(withBacksplashOvertime, withBacksplash, 1.5m);
+        DeriveFrom(installation, noBacksplash, 1.0m);
+        DeriveFrom(installationOvertime, noBacksplashOvertime, 1.0m);
 
         await db.SaveChangesAsync(ct);
     }
 
-    private static RateItem Add(
-        TechnoSurfacesDbContext db, string name, RateCategory category, ChargeUnit unit,
-        DerivationRule derivation = DerivationRule.Entered, bool belowTheLine = false,
-        decimal derivationFactor = 1m)
+    /// <summary>
+    /// Databases created before the rate card followed the workbook hold an earlier
+    /// twelve-item card with no sort order. It is replaced, but only while no quote
+    /// line refers to it: once a quote uses a rate item, the card is the Managing
+    /// Director's to maintain and is never removed by a seed.
+    /// </summary>
+    private static async Task RemoveUnorderedRateCardAsync(TechnoSurfacesDbContext db, CancellationToken ct)
     {
-        var item = new RateItem
-        {
-            Name = name,
-            Category = category,
-            Unit = unit,
-            Derivation = derivation,
-            IsBelowTheLine = belowTheLine,
-            DerivationFactor = derivationFactor
-        };
-        db.RateItems.Add(item);
-        return item;
+        var hasItems = await db.RateItems.AnyAsync(ct);
+        var isUnordered = hasItems && !await db.RateItems.AnyAsync(r => r.SortOrder > 0, ct);
+        if (!isUnordered || await db.CostingLines.AnyAsync(l => l.RateItemId != null, ct))
+            return;
+
+        var items = await db.RateItems.ToListAsync(ct);
+        foreach (var item in items)
+            item.DerivedFromRateItemId = null;
+        await db.SaveChangesAsync(ct);
+
+        db.RatePrices.RemoveRange(await db.RatePrices.ToListAsync(ct));
+        db.RateItems.RemoveRange(items);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static void DeriveFrom(RateItem item, RateItem source, decimal multiplier)
+    {
+        item.DerivedFromRateItemId = source.Id;
+        item.DerivedFromRateItemMultiplier = multiplier;
     }
 }

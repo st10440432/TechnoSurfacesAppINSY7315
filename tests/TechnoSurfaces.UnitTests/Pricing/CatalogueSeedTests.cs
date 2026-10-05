@@ -160,6 +160,46 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task No_staron_colour_carries_a_made_up_supplier_code()
+    {
+        // The Staron list gives no product codes. A code that matches nothing on the
+        // supplier's list would be worse than none on an order.
+        var staron = await _db.Colours.AsNoTracking()
+            .Where(c => c.ProductLine!.Supplier!.Name == "Staron (Salvocorp)")
+            .ToListAsync();
+
+        Assert.Equal(12, staron.Count);
+        Assert.All(staron, c => Assert.Equal("", c.SupplierCode));
+    }
+
+    [Fact]
+    public async Task A_database_seeded_with_made_up_staron_codes_has_them_cleared()
+    {
+        // A database seeded before the fix holds codes such as STARON-SUPREME.
+        var supreme = await _db.Colours.FirstAsync(c => c.Name == "Supreme");
+        supreme.SupplierCode = "STARON-SUPREME";
+        var surfaceStudio = await _db.Colours.FirstAsync(c => c.SupplierCode == "SS-A-INF-003");
+        await _db.SaveChangesAsync();
+
+        await CatalogueSeeder.SeedAsync(_db);
+
+        Assert.Equal("", (await _db.Colours.AsNoTracking().FirstAsync(c => c.Id == supreme.Id)).SupplierCode);
+        Assert.Equal("SS-A-INF-003", (await _db.Colours.AsNoTracking().FirstAsync(c => c.Id == surfaceStudio.Id)).SupplierCode);
+    }
+
+    [Fact]
+    public async Task A_code_entered_for_a_staron_colour_is_left_alone()
+    {
+        var supreme = await _db.Colours.FirstAsync(c => c.Name == "Supreme");
+        supreme.SupplierCode = "SU-123";
+        await _db.SaveChangesAsync();
+
+        await CatalogueSeeder.SeedAsync(_db);
+
+        Assert.Equal("SU-123", (await _db.Colours.AsNoTracking().FirstAsync(c => c.Id == supreme.Id)).SupplierCode);
+    }
+
+    [Fact]
     public async Task A_max_on_top_item_price_matches_the_published_sheet_price()
     {
         var colour = await _db.Colours
@@ -177,41 +217,25 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Adhesive_is_priced_per_supplier_and_not_as_one_global_rate()
-    {
-        // R130 from two suppliers, R250 from Woodcentre. The seamkit rate follows
-        // the supplier of the material being quoted.
-        var adhesive = await _db.RateItems.AsNoTracking().FirstAsync(r => r.Name == "Adhesive and seamkit");
-
-        var prices = await _db.RatePrices
-            .AsNoTracking()
-            .Where(p => p.RateItemId == adhesive.Id)
-            .Join(_db.Suppliers.AsNoTracking(), p => p.SupplierId, s => s.Id, (p, s) => new { s.Name, p.Amount })
-            .ToListAsync();
-
-        Assert.Equal(250.00m, prices.Single(p => p.Name == "Woodcentre CPT").Amount);
-        Assert.Equal(130.00m, prices.Single(p => p.Name == "Max on Top").Amount);
-        Assert.True(prices.Select(p => p.Amount).Distinct().Count() > 1);
-    }
-
-    [Fact]
     public async Task Overtime_is_expressed_as_a_multiple_of_fabrication_rather_than_a_separate_figure()
     {
         // The spreadsheet's core weakness was a rate card duplicated across twelve
         // sheets that drifted apart. The relationship is held once.
-        var fabrication = await _db.RateItems.AsNoTracking().FirstAsync(r => r.Name == "Fabrication");
-        var overtime = await _db.RateItems.AsNoTracking().FirstAsync(r => r.Name == "Fabrication overtime");
+        var normal = await _db.RateItems.AsNoTracking().FirstAsync(r => r.Name == "Fabrication — no backsplash, normal");
+        var overtime = await _db.RateItems.AsNoTracking().FirstAsync(r => r.Name == "Fabrication — no backsplash, overtime");
 
-        Assert.Equal(fabrication.Id, overtime.DerivedFromRateItemId);
+        Assert.Equal(normal.Id, overtime.DerivedFromRateItemId);
         Assert.Equal(1.5m, overtime.DerivedFromRateItemMultiplier);
+        Assert.False(await _db.RatePrices.AnyAsync(p => p.RateItemId == overtime.Id));
     }
 
     [Fact]
     public async Task The_rates_awaiting_the_client_are_seeded_without_a_price()
     {
-        // These figures are not in any document we hold. They are left unpriced so
-        // the system reports them as unresolved rather than inventing a plausible
-        // number, which is the failure the project exists to remove.
+        // These lines have no price on any sheet of the client's workbook. They are
+        // left unpriced so the system reports them as unresolved rather than
+        // inventing a plausible number, which is the failure the project exists to
+        // remove.
         foreach (var name in RateCardSeeder.AwaitingClientRates)
         {
             var item = await _db.RateItems.AsNoTracking().FirstAsync(r => r.Name == name);
@@ -219,5 +243,15 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
 
             Assert.False(hasPrice, $"{name} should have no seeded price until the client supplies one.");
         }
+    }
+
+    [Fact]
+    public async Task Supplier_delivery_charges_are_not_seeded_as_a_rate()
+    {
+        // R1 050, R550 and R510 are what a supplier charges Techno Surfaces for
+        // delivery. Transport on a quote is the amount the Managing Director types
+        // per job, so no rate on the card varies by supplier.
+        Assert.False(await _db.RatePrices.AnyAsync(p => p.SupplierId != null));
+        Assert.False(await _db.RateItems.AnyAsync(r => r.Name == "Transport"));
     }
 }

@@ -41,6 +41,6 @@ public sealed class BandPricedStrategy : IPriceResolutionStrategy
             $"{colour.ProductLine?.Supplier?.Name ?? "Supplier"} price band {colour.PriceBand?.Code ?? "?"}, " +
             $"{size}, effective {price.EffectiveFrom:yyyy-MM-dd}";
 
-        return PriceResolution.Success(price.PricePerSheet(size), origin);
+        return PriceResolution.Success(price.PricePerSheet(size), origin, price.Id);
     }
 }

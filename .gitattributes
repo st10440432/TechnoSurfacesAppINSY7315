@@ -1,0 +1,8 @@
+# Line endings are normalised to LF in the repository and converted on checkout,
+# so a file edited on Windows does not show every line as changed.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

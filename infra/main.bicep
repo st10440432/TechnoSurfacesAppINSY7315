@@ -14,6 +14,35 @@ param sqlAdminPassword string
 @description('Linux App Service runtime. Verified against az webapp list-runtimes --os-type linux --runtime dotnet.')
 param linuxRuntime string = 'DOTNETCORE|10.0'
 
+@description('Seed the demo Managing Director and estimator accounts in this environment.')
+param demoAccounts bool = false
+
+@description('Password for the demo accounts. Stored in Key Vault as seed-demo-password. At least 12 characters with an upper-case letter, a lower-case letter and a digit.')
+@secure()
+param demoPassword string = ''
+
+@description('Production only. Email address of the first Managing Director account, created once at the first start of an empty production database. Leave empty for staging.')
+param initialAdminEmail string = ''
+
+@description('Production only. Full name of the first Managing Director account.')
+param initialAdminName string = ''
+
+@description('Production only. Temporary password for the first Managing Director account; it must be changed at first sign-in. At least 12 characters with an upper-case letter, a lower-case letter and a digit.')
+@secure()
+param initialAdminPassword string = ''
+
+@description('Address that receives the availability alert and the budget alert.')
+param alertEmail string
+
+@description('Create the monthly budget. Set to false if the subscription does not support budgets.')
+param createBudget bool = true
+
+@description('Monthly budget in the subscription billing currency. 54 USD is the client ceiling of R1 000 at the R18.50 per USD rate used in Task 1 section 10.')
+param budgetAmount int = 54
+
+@description('First day of the current month, yyyy-MM-01. A budget cannot start in the past.')
+param budgetStartDate string = '2026-10-01'
+
 var isProd = environment == 'production'
 var unique = uniqueString(resourceGroup().id)
 
@@ -28,6 +57,24 @@ var aiName = 'tsqa-ai-${environment}'
 var sqlHostname = '${sqlServerName}${az.environment().suffixes.sqlServerHostname}'
 var appHostname = '${appName}.azurewebsites.net'
 var healthUrl = 'https://${appHostname}/health'
+
+// Production has no demo accounts, so its first Managing Director account is
+// created from these three secrets (IdentitySeeder.SeedInitialManagingDirectorAsync).
+var seedInitialAdmin = isProd && !empty(initialAdminEmail)
+var initialAdminSettings = seedInitialAdmin ? [
+  {
+    name: 'Seed__InitialAdminEmail'
+    value: '@Microsoft.KeyVault(VaultName=${kvName};SecretName=seed-initial-admin-email)'
+  }
+  {
+    name: 'Seed__InitialAdminName'
+    value: '@Microsoft.KeyVault(VaultName=${kvName};SecretName=seed-initial-admin-name)'
+  }
+  {
+    name: 'Seed__InitialAdminPassword'
+    value: '@Microsoft.KeyVault(VaultName=${kvName};SecretName=seed-initial-admin-password)'
+  }
+] : []
 
 // -----------------------------------------------------------------------------
 // Network
@@ -181,6 +228,49 @@ resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {
   }
 }
 
+// The connection string the app reads through its managed identity. Written
+// through Azure Resource Manager, so whoever deploys needs no Key Vault data
+// permission. The SQL password must not contain a semicolon or a quote.
+resource connectionSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
+  parent: kv
+  name: 'app-connection-${environment}'
+  properties: {
+    value: 'Server=tcp:${sqlHostname},1433;Initial Catalog=${databaseName};User ID=${sqlAdminLogin};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+  }
+}
+
+resource demoPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (demoAccounts) {
+  parent: kv
+  name: 'seed-demo-password'
+  properties: {
+    value: demoPassword
+  }
+}
+
+resource initialAdminEmailSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (seedInitialAdmin) {
+  parent: kv
+  name: 'seed-initial-admin-email'
+  properties: {
+    value: initialAdminEmail
+  }
+}
+
+resource initialAdminNameSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (seedInitialAdmin) {
+  parent: kv
+  name: 'seed-initial-admin-name'
+  properties: {
+    value: initialAdminName
+  }
+}
+
+resource initialAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (seedInitialAdmin) {
+  parent: kv
+  name: 'seed-initial-admin-password'
+  properties: {
+    value: initialAdminPassword
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Monitoring
 // -----------------------------------------------------------------------------
@@ -226,6 +316,14 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
   name: appName
   location: location
   kind: 'app,linux'
+  // The app reads both secrets when it starts, so they must exist first.
+  dependsOn: [
+    connectionSecret
+    demoPasswordSecret
+    initialAdminEmailSecret
+    initialAdminNameSecret
+    initialAdminPasswordSecret
+  ]
   identity: {
     type: 'SystemAssigned'
   }
@@ -237,7 +335,7 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
       linuxFxVersion: linuxRuntime
       minTlsVersion: '1.2'
       alwaysOn: true
-      appSettings: [
+      appSettings: concat([
         {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: isProd ? 'Production' : 'Staging'
@@ -250,7 +348,33 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
           name: 'ConnectionStrings__DefaultConnection'
           value: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/app-connection-${environment})'
         }
-      ]
+        {
+          // Gives the app up to ten minutes to start, which covers the first
+          // start on an empty database: migrations plus loading the catalogue.
+          name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
+          value: '600'
+        }
+        {
+          // The database has no public endpoint, so the app applies migrations
+          // through the private endpoint when it starts.
+          name: 'Database__MigrateOnStartup'
+          value: 'true'
+        }
+        {
+          // Lets the sign-in rate limiter see the real client address behind the
+          // App Service front end.
+          name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED'
+          value: 'true'
+        }
+        {
+          name: 'Seed__DemoAccounts'
+          value: demoAccounts ? 'true' : 'false'
+        }
+        {
+          name: 'Seed__DevelopmentPassword'
+          value: demoAccounts ? '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/seed-demo-password)' : ''
+        }
+      ], initialAdminSettings)
     }
   }
 }
@@ -292,7 +416,9 @@ resource webtest 'Microsoft.Insights/webtests@2022-06-15' = {
     ]
     Name: 'tsqa-avail-${environment}'
     Request: {
-      FollowRedirects: true
+      // A redirect from /health means it is behind the sign-in page, which is a
+      // failure, not something to follow to a page that returns 200.
+      FollowRedirects: false
       HttpVerb: 'GET'
       ParseDependentRequests: false
       RequestUrl: healthUrl
@@ -311,6 +437,22 @@ resource webtest 'Microsoft.Insights/webtests@2022-06-15' = {
 // -----------------------------------------------------------------------------
 // Availability metric alert
 // -----------------------------------------------------------------------------
+
+resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = {
+  name: 'tsqa-alerts'
+  location: 'global'
+  properties: {
+    groupShortName: 'tsqa'
+    enabled: true
+    emailReceivers: [
+      {
+        name: 'team'
+        emailAddress: alertEmail
+        useCommonAlertSchema: true
+      }
+    ]
+  }
+}
 
 resource availAlert 'Microsoft.Insights/metricalerts@2018-03-01' = {
   name: 'tsqa-avail-alert-${environment}'
@@ -336,6 +478,38 @@ resource availAlert 'Microsoft.Insights/metricalerts@2018-03-01' = {
           timeAggregation: 'Average'
         }
       ]
+    }
+    actions: [
+      {
+        actionGroupId: actionGroup.id
+      }
+    ]
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Budget alert: warns at 80 percent of the client's monthly ceiling
+// -----------------------------------------------------------------------------
+
+resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (createBudget) {
+  name: 'tsqa-monthly-budget'
+  properties: {
+    category: 'Cost'
+    amount: budgetAmount
+    timeGrain: 'Monthly'
+    timePeriod: {
+      startDate: budgetStartDate
+    }
+    notifications: {
+      actualOver80Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        thresholdType: 'Actual'
+        contactEmails: [
+          alertEmail
+        ]
+      }
     }
   }
 }

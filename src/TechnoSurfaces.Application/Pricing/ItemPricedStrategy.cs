@@ -39,6 +39,6 @@ public sealed class ItemPricedStrategy : IPriceResolutionStrategy
             $"{colour.ProductLine?.Supplier?.Name ?? "Supplier"} {colour.Name} " +
             $"({colour.SupplierCode}), {size}, effective {price.EffectiveFrom:yyyy-MM-dd}";
 
-        return PriceResolution.Success(price.PricePerSheet(size), origin);
+        return PriceResolution.Success(price.PricePerSheet(size), origin, price.Id);
     }
 }

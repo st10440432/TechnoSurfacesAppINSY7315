@@ -29,4 +29,25 @@ public class RatePrice
 
     public bool IsInForceOn(DateOnly date) =>
         EffectiveFrom <= date && (EffectiveTo is null || EffectiveTo >= date);
+
+    /// <summary>
+    /// Replaces this rate from a date, closing this one on the day before. Quotes
+    /// dated before the change keep resolving to this rate.
+    /// </summary>
+    public RatePrice Supersede(decimal amount, DateOnly from)
+    {
+        PricePeriod.EnsureCanSupersede(EffectiveFrom, EffectiveTo, from);
+        if (amount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "A rate must be greater than zero.");
+
+        EffectiveTo = from.AddDays(-1);
+
+        return new RatePrice
+        {
+            RateItemId = RateItemId,
+            SupplierId = SupplierId,
+            Amount = amount,
+            EffectiveFrom = from
+        };
+    }
 }

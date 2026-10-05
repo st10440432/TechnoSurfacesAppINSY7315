@@ -20,7 +20,10 @@ public class Colour
 
     public string Name { get; set; } = "";
 
-    /// <summary>The supplier's own product code. This is what is used when ordering.</summary>
+    /// <summary>
+    /// The supplier's own product code. This is what is used when ordering. Empty
+    /// where the supplier's list gives none, as on the Staron list.
+    /// </summary>
     public string SupplierCode { get; set; } = "";
 
     /// <summary>
