@@ -6,7 +6,6 @@
 *@
 @{
     var r = Model.Row;
-    var area = r.PricePerSqm is > 0 && r.PricePerSheet is { } sheet ? sheet / r.PricePerSqm.Value : (decimal?)null;
 }
 
 <header class="page-head">
@@ -32,6 +31,14 @@
 @if (!Model.CanEdit)
 {
     <partial name="_ReadOnlyNote" model="@("Only the Managing Director changes material prices. You can see the current price and every earlier one.")" />
+}
+
+@if (r.IsRetired)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+        <div><strong>Retired.</strong> This material cannot be chosen on a new quote, so its price can no longer be changed. Quotes already made keep it and its price.</div>
+    </div>
 }
 
 <div class="grid grid-main">
@@ -94,7 +101,68 @@
                                     </td>
                                     <td data-label="Until" class="nowrap">@(p.To is { } to ? Fmt.Date(to) : "No end date")</td>
                                     <td data-label="Per m²" class="right num">@Fmt.Rand(p.PricePerSqm)</td>
-                                    <td data-label="Per sheet" class="right num">@(area is { } a ? Fmt.Rand(decimal.Round(p.PricePerSqm * a, 2)) : "")</td>
+                                    <td data-label="Per sheet" class="right num">@(Model.PerSheet(p.PricePerSqm) is { } perSheetThen ? Fmt.Rand(perSheetThen) : "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="quotes-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                <h2 id="quotes-title">Quotes using this price</h2>
+                <span class="spacer"></span>
+                <span class="badge">@Model.Quotes.Count</span>
+            </div>
+            @if (Model.Quotes.Count == 0)
+            {
+                <div class="card-body"><p class="muted mb-0">No quote has used @(Model.IsBandPrice ? $"band {r.Band}" : r.Colour) at this sheet size yet.</p></div>
+            }
+            else
+            {
+                <div class="card-body">
+                    <p class="hint mb-0">
+                        Each quote keeps the price it was made with. A new price here applies to lines added from its start date,
+                        so none of these figures move.@(Model.IsBandPrice ? " The list covers every colour in the band." : "")
+                    </p>
+                </div>
+                <div class="table-wrap">
+                    <table class="data stack">
+                        <caption class="sr-only">Quotes that took their price from this material, with the price each one locked in</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Quote</th>
+                                <th scope="col">Line</th>
+                                <th scope="col" class="right">Sheets</th>
+                                <th scope="col" class="right">Price locked in, per sheet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var u in Model.Quotes)
+                            {
+                                <tr>
+                                    <td data-label="Quote">
+                                        <a class="row-link" asp-controller="Quotes" asp-action="Version" asp-route-id="@u.QuoteId" asp-route-number="@u.VersionNo">
+                                            @u.Reference<span class="sr-only">, version @u.VersionNo</span>
+                                        </a>
+                                        <span class="sub">
+                                            Version @u.VersionNo, @(u.IsCurrentVersion ? StatusText.Label(u.QuoteStatus).ToLowerInvariant() : "replaced by a later version").
+                                            Dated @Fmt.Date(u.IssueDate).
+                                        </span>
+                                    </td>
+                                    <td data-label="Line">@u.Line</td>
+                                    <td data-label="Sheets" class="right">@Fmt.Qty(u.Quantity)</td>
+                                    <td data-label="Price locked in, per sheet" class="right num">
+                                        <span class="strong">@Fmt.Rand(u.LockedUnitPrice)</span>
+                                        <span class="sub">From the price in force since @Fmt.Date(u.PriceFrom)</span>
+                                        @if (u.OverriddenUnitPrice is { } typed)
+                                        {
+                                            <span class="sub">Charged at @Fmt.Rand(typed) on this quote only</span>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -146,6 +214,21 @@
                     <input type="hidden" name="colourId" value="@r.ColourId" />
                     <p>Retire a colour the supplier no longer sells. It is never deleted, so older quotes still read correctly.</p>
                     <button type="submit" class="btn btn-danger btn-block">Retire @r.Colour</button>
+                </form>
+            </section>
+        </div>
+    }
+    else if (Model.CanEdit)
+    {
+        <div class="stack-gap">
+            <section class="card" aria-labelledby="reinstate-title">
+                <div class="card-head">
+                    <h2 id="reinstate-title">Quote this colour again</h2>
+                </div>
+                <form class="card-body" method="post" asp-action="ReinstateColour">
+                    <input type="hidden" name="colourId" value="@r.ColourId" />
+                    <p>@r.Colour is retired, so it cannot be chosen on a new quote or given a new price. Reinstate it if the supplier sells it again.</p>
+                    <button type="submit" class="btn btn-secondary btn-block">Reinstate @r.Colour</button>
                 </form>
             </section>
         </div>
