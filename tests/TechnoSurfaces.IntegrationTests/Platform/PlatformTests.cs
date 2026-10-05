@@ -56,6 +56,10 @@ public sealed class PlatformTests
 
         Assert.Contains("default-src 'self'", csp);
         Assert.Contains("frame-ancestors 'none'", csp);
+
+        // Task 1 8.7: scripts from the application's own origin only, never inline.
+        var scriptSrc = csp.Split(';').Select(d => d.Trim()).Single(d => d.StartsWith("script-src"));
+        Assert.Equal("script-src 'self'", scriptSrc);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("strict-origin-when-cross-origin", response.Headers.GetValues("Referrer-Policy").Single());
     }
@@ -118,5 +122,35 @@ public sealed class PlatformTests
 
         Assert.DoesNotContain(HttpStatusCode.TooManyRequests, statuses.Take(SignInRateLimiting.PermitLimit));
         Assert.Equal(HttpStatusCode.TooManyRequests, statuses.Last());
+    }
+
+    [Theory]
+    [InlineData("/Account/Login", false)]
+    [InlineData("/Account/ForgotPassword", false)]
+    [InlineData("/Account/Activate", false)]
+    [InlineData("/Error", false)]
+    [InlineData("/Home/Dashboard", true)]
+    [InlineData("/Quotes/Index", true)]
+    [InlineData("/Quotes/Create", true)]
+    [InlineData("/Quotes/Approvals", true)]
+    [InlineData("/Customers/Index", true)]
+    [InlineData("/Catalogue/Index", true)]
+    [InlineData("/Admin/Rates", true)]
+    [InlineData("/Admin/Users", true)]
+    [InlineData("/Admin/Terms", true)]
+    [InlineData("/Admin/Audit", true)]
+    public async Task No_page_relies_on_an_inline_script(string path, bool signedIn)
+    {
+        // With script-src 'self' an inline script would be blocked by the browser,
+        // so a page that used one would quietly stop working.
+        var client = signedIn
+            ? (await ApiSession.ForAsync(_app, AppFactory.ManagingDirectorEmail)).Client
+            : _app.CreateBrowser();
+        var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"<script(?![^>]*\ssrc=)[^>]*>", System.Text.RegularExpressions.RegexOptions.IgnoreCase), html);
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\son[a-z]+\s*=", System.Text.RegularExpressions.RegexOptions.IgnoreCase), html);
     }
 }
