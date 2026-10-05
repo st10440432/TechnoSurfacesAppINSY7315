@@ -163,7 +163,8 @@ public sealed record CostingLineDto(
     decimal SupplierDiscountPercent,
     decimal LineTotal,
     bool IsBelowTheLine,
-    decimal? SheetAreaM2)
+    decimal? SheetAreaM2,
+    int? RateItemId = null)
 {
     public static CostingLineDto From(CostingLine line) => new(
         line.Id,
@@ -179,7 +180,8 @@ public sealed record CostingLineDto(
         line.SupplierDiscountPercent,
         line.LineTotal(),
         line.IsBelowTheLine,
-        line.SheetAreaM2);
+        line.SheetAreaM2,
+        line.RateItemId);
 }
 
 public sealed record LineResponse(CostingLineDto Line, QuoteTotals Totals);

@@ -1,132 +1,204 @@
 @model TechnoSurfacesApp.Controllers.CostingLinesVm
 @*
-    Labour, consumables and extras from the rate card. A quantity the system works
-    out from the materials is tagged as calculated, so it is never mistaken for one
-    the estimator typed (US-05). A rate changed for this quote keeps the rate card
-    price beside it (US-06). Lines below the line are listed apart, because they
-    are added after the markup.
+    Labour, consumables and extras. While the quote can be edited this is the whole
+    rate card, section by section, with a quantity box on every item: typing a
+    quantity adds the line, clearing it takes the line off, as on the spreadsheet it
+    replaces. Sandpaper and silicon are calculated from the materials (US-05), so they
+    are ticked in rather than typed. A rate changed for this quote keeps the rate card
+    price beside it (US-06). Once the quote cannot be edited, only its lines are shown.
 *@
 @{
-    var above = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && !l.IsBelowTheLine).ToList();
-    var below = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && l.IsBelowTheLine).ToList();
-    var columns = Model.CanEdit ? 5 : 4;
+    var editable = Model.CanEdit && Model.RateGrid is not null;
+    var rateLines = Model.Sheet.Lines.Where(l => l.LineType == "Rate").ToList();
+    string[] order = { "Fabrication", "Installation", "Wood", "SinksAndHardware", "Extras", "Consumables", "Retired" };
+    string Section(string category) => category switch
+    {
+        "SinksAndHardware" => "Sinks, vanities and hardware",
+        "Extras" => "Cut-outs and grooves",
+        "Retired" => "No longer on the rate card",
+        _ => Words.Humanise(category)
+    };
 }
 <div id="rate-lines">
-    @if (above.Count == 0 && below.Count == 0)
-    {
-        <div class="empty">
-            <svg class="ico" aria-hidden="true"><use href="#i-calc" /></svg>
-            <h3>No labour or extras yet</h3>
-            <p>@(Model.CanEdit ? "Add fabrication, installation, consumables and cut-outs from the rate card below." : "No labour or extras were added to this version.")</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data stack">
-                <caption class="sr-only">Labour, consumables and extras, with each rate and where it came from</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Item</th>
-                        <th scope="col" class="right">Quantity</th>
-                        <th scope="col" class="right">Rate</th>
-                        <th scope="col" class="right">Line total</th>
-                        @if (Model.CanEdit) { <th scope="col"><span class="sr-only">Remove</span></th> }
-                    </tr>
-                </thead>
+@if (editable)
+{
+    <p class="card-body grid-help mb-0" id="rate-grid-help">
+        Type a quantity and press Enter to save it and move to the next item. Clear a quantity to take the line off. Change a rate to charge a different figure on this quote only.
+    </p>
+    <div class="table-wrap">
+        <table class="data stack rate-grid">
+            <caption class="sr-only">The rate card, with the quantity of each item on this quote</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Item</th>
+                    <th scope="col" class="right">Quantity</th>
+                    <th scope="col" class="right">Rate, ex VAT</th>
+                    <th scope="col" class="right">Line total</th>
+                </tr>
+            </thead>
+            @foreach (var section in Model.RateGrid!.GroupBy(r => r.Item.Category).OrderBy(g => Array.IndexOf(order, g.Key) is var i && i < 0 ? 99 : i))
+            {
                 <tbody>
-                    @foreach (var group in new[] { (Lines: above, Title: (string?)null), (Lines: below, Title: "Added after the markup, at cost") })
+                    <tr class="group-row">
+                        <th scope="rowgroup" colspan="4">@Section(section.Key)</th>
+                    </tr>
+                    @foreach (var row in section)
                     {
-                        if (group.Lines.Count == 0) { continue; }
-                        if (group.Title is not null)
+                        var item = row.Item;
+                        var unit = Words.Unit(item.Unit);
+                        var lines = row.Lines.Count == 0 ? new List<TechnoSurfacesApp.Api.CostingLineDto?> { null } : row.Lines.Cast<TechnoSurfacesApp.Api.CostingLineDto?>().ToList();
+                        for (var n = 0; n < lines.Count; n++)
                         {
-                            <tr class="group-row">
-                                <th scope="rowgroup" colspan="@columns">@group.Title</th>
-                            </tr>
-                        }
-                        foreach (var l in group.Lines)
-                        {
-                            var derivedNote = $"derived-{l.Id}";
-                            <tr data-line-row="@l.Id" class="@(l.IsDerived ? "is-derived" : null)">
+                            var l = lines[n];
+                            var key = n == 0 ? $"{item.Id}" : $"{item.Id}-{l!.Id}";
+                            var described = $"grid-note-{key}";
+                            <tr data-grid-row data-item="@item.Id" data-line="@(l?.Id)" data-resolved="@(row.Card.Resolved ? "true" : "false")"
+                                data-card="@(row.Card.UnitPrice is { } card ? Fmt.Input(card) : "")" data-name="@item.Name"
+                                class="@(l is null ? "is-empty" : "is-used")">
                                 <td data-label="Item">
-                                    <span class="strong">@l.Description</span>
-                                    @if (l.IsDerived)
+                                    <span class="strong">@item.Name</span>
+                                    <span class="sub" id="@described">
+                                        @unit@(item.IsBelowTheLine ? ", added after the markup at cost" : "")@(row.IsCalculated && l is null ? $". Works out to {Fmt.Qty(row.CalculatedQuantity!.Value)} from the materials" : "")
+                                    </span>
+                                    @if (l is not null)
                                     {
-                                        <span class="derived-tag" id="@derivedNote">
-                                            <svg class="ico ico-sm" aria-hidden="true"><use href="#i-calc" /></svg>
-                                            @(l.IsQuantityOverridden ? "Typed over the calculated quantity" : "Quantity calculated from the materials")
-                                        </span>
+                                        @if (l.IsDerived)
+                                        {
+                                            <span class="derived-tag">
+                                                <svg class="ico ico-sm" aria-hidden="true"><use href="#i-calc" /></svg>
+                                                @(l.IsQuantityOverridden ? "Typed over the calculated quantity" : "Quantity calculated from the materials")
+                                            </span>
+                                        }
+                                        <span class="line-origin">@l.PriceOrigin</span>
+                                        @if (l.HasPriceOverride)
+                                        {
+                                            <span class="sub">Changed on this quote only. The rate card price is @Fmt.Rand(l.ResolvedUnitPrice).</span>
+                                        }
+                                        @if (l.HasPriceOverride || l.IsQuantityOverridden)
+                                        {
+                                            <span class="btn-row btn-row-tight">
+                                                @if (l.IsQuantityOverridden)
+                                                {
+                                                    <button type="button" class="btn btn-ghost btn-sm" data-line-reset="@l.Id" data-reset="restoreDerivedQuantity"
+                                                            data-success="Calculated quantity restored">
+                                                        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-undo" /></svg> Use the calculated quantity
+                                                    </button>
+                                                }
+                                                @if (l.HasPriceOverride)
+                                                {
+                                                    <button type="button" class="btn btn-ghost btn-sm" data-line-reset="@l.Id" data-reset="clearPriceOverride"
+                                                            data-success="Rate card price restored">
+                                                        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-undo" /></svg> Use the rate card price
+                                                    </button>
+                                                }
+                                            </span>
+                                        }
                                     }
-                                    <span class="line-origin">@l.PriceOrigin</span>
-                                    @if (l.HasPriceOverride)
+                                    else if (!row.Card.Resolved)
                                     {
-                                        <span class="sub">Changed on this quote only. The rate card price is @Fmt.Rand(l.ResolvedUnitPrice).</span>
-                                    }
-                                    @if (Model.CanEdit && (l.HasPriceOverride || l.IsQuantityOverridden))
-                                    {
-                                        <span class="btn-row btn-row-tight">
-                                            @if (l.IsQuantityOverridden)
-                                            {
-                                                <button type="button" class="btn btn-ghost btn-sm" data-line-reset="@l.Id" data-reset="restoreDerivedQuantity"
-                                                        data-success="Calculated quantity restored">
-                                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-undo" /></svg> Use the calculated quantity
-                                                </button>
-                                            }
-                                            @if (l.HasPriceOverride)
-                                            {
-                                                <button type="button" class="btn btn-ghost btn-sm" data-line-reset="@l.Id" data-reset="clearPriceOverride"
-                                                        data-success="Rate card price restored">
-                                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-undo" /></svg> Use the rate card price
-                                                </button>
-                                            }
-                                        </span>
+                                        <span class="sub">Not priced on the rate card. Type the rate for this job, then the quantity.</span>
                                     }
                                 </td>
                                 <td data-label="Quantity" class="right">
-                                    @if (Model.CanEdit)
+                                    @if (row.IsCalculated)
                                     {
-                                        <label class="sr-only" for="qty-@l.Id">Quantity of @l.Description</label>
-                                        <input class="input input-sm input-num" id="qty-@l.Id" type="number" inputmode="decimal"
-                                               min="0" step="any" required value="@Fmt.Input(l.Quantity)"
-                                               aria-describedby="@(l.IsDerived ? derivedNote : null)"
-                                               data-line="@l.Id" data-field="quantity" data-saved="@Fmt.Input(l.Quantity)" />
-                                    }
-                                    else
-                                    {
-                                        @Fmt.Qty(l.Quantity)
-                                    }
-                                </td>
-                                <td data-label="Rate" class="right">
-                                    @if (Model.CanEdit)
-                                    {
-                                        <label class="sr-only" for="rate-@l.Id">Rate for @l.Description on this quote, in rand</label>
-                                        <span class="input-group input-group-sm">
-                                            <span class="addon before" aria-hidden="true">R</span>
-                                            <input class="input input-sm input-num" id="rate-@l.Id" type="number" inputmode="decimal"
-                                                   min="0.01" step="any" required value="@Fmt.Input(l.UnitPrice)"
-                                                   data-line="@l.Id" data-field="unitPrice" data-saved="@Fmt.Input(l.UnitPrice)" />
+                                        <span class="grid-include">
+                                            <input type="checkbox" id="grid-include-@key" data-grid-include checked="@(l is not null)" />
+                                            <label for="grid-include-@key">Include<span class="sr-only"> @item.Name</span></label>
                                         </span>
+                                        @if (l is not null)
+                                        {
+                                            <label class="sr-only" for="grid-qty-@key">Quantity of @item.Name</label>
+                                            <input class="input input-sm input-num" id="grid-qty-@key" type="number" inputmode="decimal" min="0" step="any"
+                                                   value="@Fmt.Input(l.Quantity)" data-line="@l.Id" data-field="quantity" data-saved="@Fmt.Input(l.Quantity)"
+                                                   aria-describedby="@described" />
+                                        }
                                     }
                                     else
                                     {
-                                        @Fmt.Rand(l.UnitPrice)
+                                        <label class="sr-only" for="grid-qty-@key">Quantity of @item.Name, @unit</label>
+                                        <input class="input input-sm input-num" id="grid-qty-@key" type="number" inputmode="decimal" min="0" step="any"
+                                               value="@(l is null ? "" : Fmt.Input(l.Quantity))" data-grid-qty data-saved="@(l is null ? "" : Fmt.Input(l.Quantity))"
+                                               aria-describedby="@described" />
                                     }
                                 </td>
-                                <td data-label="Line total" class="right strong">@Fmt.Rand(l.LineTotal)</td>
-                                @if (Model.CanEdit)
-                                {
-                                    <td data-label="Remove" class="right">
-                                        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-remove-line="@l.Id"
-                                                data-description="@l.Description" aria-label="Remove @l.Description">
-                                            <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg>
-                                        </button>
-                                    </td>
-                                }
+                                <td data-label="Rate, ex VAT" class="right">
+                                    <label class="sr-only" for="grid-rate-@key">Rate for @item.Name on this quote, in rand</label>
+                                    <span class="input-group input-group-sm">
+                                        <span class="addon before" aria-hidden="true">R</span>
+                                        @if (l is not null)
+                                        {
+                                            <input class="input input-sm input-num" id="grid-rate-@key" type="number" inputmode="decimal" min="0.01" step="any"
+                                                   value="@Fmt.Input(l.UnitPrice)" data-line="@l.Id" data-field="unitPrice" data-saved="@Fmt.Input(l.UnitPrice)" />
+                                        }
+                                        else
+                                        {
+                                            <input class="input input-sm input-num" id="grid-rate-@key" type="number" inputmode="decimal" min="0.01" step="any"
+                                                   value="@(row.Card.UnitPrice is { } price ? Fmt.Input(price) : "")" data-grid-rate
+                                                   data-saved="@(row.Card.UnitPrice is { } saved ? Fmt.Input(saved) : "")" />
+                                        }
+                                    </span>
+                                </td>
+                                <td data-label="Line total" class="right strong">@(l is null ? "" : Fmt.Rand(l.LineTotal))</td>
                             </tr>
                         }
                     }
                 </tbody>
-            </table>
-        </div>
-    }
+            }
+        </table>
+    </div>
+}
+else if (rateLines.Count == 0)
+{
+    <div class="empty">
+        <svg class="ico" aria-hidden="true"><use href="#i-calc" /></svg>
+        <h3>No labour or extras</h3>
+        <p>No labour or extras were added to this version.</p>
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data stack">
+            <caption class="sr-only">Labour, consumables and extras, with each rate and where it came from</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Item</th>
+                    <th scope="col" class="right">Quantity</th>
+                    <th scope="col" class="right">Rate</th>
+                    <th scope="col" class="right">Line total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in rateLines)
+                {
+                    <tr>
+                        <td data-label="Item">
+                            <span class="strong">@l.Description</span>
+                            @if (l.IsDerived)
+                            {
+                                <span class="derived-tag">
+                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-calc" /></svg>
+                                    @(l.IsQuantityOverridden ? "Typed over the calculated quantity" : "Quantity calculated from the materials")
+                                </span>
+                            }
+                            <span class="line-origin">@l.PriceOrigin</span>
+                            @if (l.HasPriceOverride)
+                            {
+                                <span class="sub">Changed on this quote only. The rate card price is @Fmt.Rand(l.ResolvedUnitPrice).</span>
+                            }
+                            @if (l.IsBelowTheLine)
+                            {
+                                <span class="sub">Added after the markup, at cost.</span>
+                            }
+                        </td>
+                        <td data-label="Quantity" class="right">@Fmt.Qty(l.Quantity)</td>
+                        <td data-label="Rate" class="right">@Fmt.Rand(l.UnitPrice)</td>
+                        <td data-label="Line total" class="right strong">@Fmt.Rand(l.LineTotal)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
 </div>

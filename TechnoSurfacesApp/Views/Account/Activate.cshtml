@@ -1,37 +1,38 @@
 @*
-    How a new account is activated. The Managing Director creates the account and
-    gives the new user a temporary password. Signing in with it opens the screen to
-    choose their own password, which activates the account.
+    Activating a new account (Task 1 8.2). Accounts are created by the Managing
+    Director, who hands over a temporary password; there is no self-registration
+    and no activation email. The first sign-in opens "Set your password", and no
+    other page opens until the user has chosen their own. This page explains the
+    steps; it collects nothing.
 *@
 @{
     Layout = "_AuthLayout";
     ViewData["Title"] = "Activate your account";
 }
 
-<h1>Activate your account</h1>
-<p class="lede">Your account was created by the Managing Director, who gave you a temporary password.</p>
-
-<ol class="steps">
-    <li>
-        <span class="step-no" aria-hidden="true">1</span>
-        <div><strong>Sign in with the temporary password.</strong> Use your work email address.</div>
-    </li>
-    <li>
-        <span class="step-no" aria-hidden="true">2</span>
-        <div><strong>Choose your own password.</strong> At least 12 characters, with a capital letter, a small letter and a number.</div>
-    </li>
-    <li>
-        <span class="step-no" aria-hidden="true">3</span>
-        <div><strong>You are in.</strong> From then on you sign in with your own password.</div>
-    </li>
-</ol>
-
-<a class="btn btn-primary btn-lg btn-block" asp-action="Login">
-    Sign in with the temporary password
-    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+<a class="btn btn-ghost btn-sm auth-back" asp-action="Login">
+    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg> Back to sign in
 </a>
 
-<div class="notice notice-info auth-note">
-    <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
-    <div>No temporary password yet? Ask the Managing Director to issue one from the Users screen.</div>
+<h1>Activate your account</h1>
+<p class="lede">
+    Your account is made by the Managing Director. You activate it by signing in once
+    with the temporary password they give you, then choosing your own.
+</p>
+
+<ol class="auth-steps">
+    <li>Get your temporary password from the Managing Director, in person.</li>
+    <li>Sign in with your work email address and the temporary password.</li>
+    <li>On <strong>Set your password</strong>, choose a password of at least 12 characters with an upper-case letter, a lower-case letter and a number.</li>
+    <li>From then on, sign in with your own password.</li>
+</ol>
+
+<div class="notice notice-info" role="note">
+    <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+    <div>
+        <strong>There is no public sign-up.</strong>
+        If you have not been given a temporary password, ask the Managing Director to create your account.
+    </div>
 </div>
+
+<a class="btn btn-primary btn-lg btn-block auth-action" asp-action="Login">Sign in with your temporary password</a>

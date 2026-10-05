@@ -26,7 +26,11 @@ public class CatalogueController : AppController
         var today = Today;
         var all = await _catalogue.GetCatalogueAsync(today, ct);
 
-        var rows = all.AsEnumerable();
+        // A colour is listed in every sheet size of its range, but a supplier may sell
+        // it in only one. The sizes it has no price in are left out, unless it has no
+        // price in any size, which the list must still show.
+        var priced = all.Where(r => r.PricePerSqm is not null).Select(r => r.ColourId).ToHashSet();
+        var rows = all.Where(r => r.PricePerSqm is not null || !priced.Contains(r.ColourId));
         if (!retired)
             rows = rows.Where(r => !r.IsRetired);
         if (!string.IsNullOrEmpty(supplier))
