@@ -8,8 +8,9 @@ param location string = resourceGroup().location
 
 param sqlAdminLogin string = 'tsadmin'
 
+@description('SQL admin password. Required on the first deployment, which creates the server. Not used when entraOnlyAuthentication is true.')
 @secure()
-param sqlAdminPassword string
+param sqlAdminPassword string = ''
 
 @description('Linux App Service runtime. Verified against az webapp list-runtimes --os-type linux --runtime dotnet.')
 param linuxRuntime string = 'DOTNETCORE|10.0'
@@ -34,7 +35,7 @@ param initialAdminPassword string = ''
 @description('Address that receives the availability alert and the budget alert.')
 param alertEmail string
 
-@description('Refuse SQL logins on the server, so only Microsoft Entra identities can connect. Turn on once both web apps report Healthy on the managed identity connection (staging and production share the server).')
+@description('Refuse SQL logins on the server, so only Microsoft Entra identities can connect. Turn on once both web apps report Healthy on the managed identity connection (staging and production share the server). Once on, every later deployment of either environment must also set it.')
 param entraOnlyAuthentication bool = false
 
 @description('Create the monthly budget. Set to false if the subscription does not support budgets.')
@@ -162,8 +163,11 @@ resource sql 'Microsoft.Sql/servers@2022-05-01-preview' = {
     version: '12.0'
     publicNetworkAccess: 'Disabled'
     minimalTlsVersion: '1.2'
-    administratorLogin: sqlAdminLogin
-    administratorLoginPassword: sqlAdminPassword
+    // While Entra-only authentication is on, the server refuses a write that
+    // carries the admin login and password (AadOnlyAuthenticationIsEnabled), so
+    // both are left out once it is on. The login stays on the server, unusable.
+    administratorLogin: entraOnlyAuthentication ? null : sqlAdminLogin
+    administratorLoginPassword: entraOnlyAuthentication ? null : sqlAdminPassword
   }
 }
 
