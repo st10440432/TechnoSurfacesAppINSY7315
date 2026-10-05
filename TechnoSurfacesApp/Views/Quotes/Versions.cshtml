@@ -54,15 +54,21 @@
                         <p class="small muted mb-0">
                             Started @Fmt.DateTimeShort(AuditTime.ToLocal(v.CreatedAtUtc)) by @v.CreatedByName.
                             Markup @Fmt.Pct(v.MarkupPercent). @Fmt.Rand(v.TotalIncVat) including VAT.
+                            @if (v.IsIssued)
+                            {
+                                @:Approved @Fmt.DateTimeShort(AuditTime.ToLocal(v.IssuedAtUtc!.Value)) by @(v.IssuedByName ?? "the Managing Director").
+                            }
                         </p>
-                        @if (current)
-                        {
-                            <p class="small mb-0">
+                        <p class="small mb-0">
+                            <a asp-action="Version" asp-route-id="@q.Id" asp-route-number="@v.VersionNo">View version @v.VersionNo<span class="sr-only">: its costing and customer quotation</span></a>
+                            @if (current)
+                            {
+                                <span aria-hidden="true">·</span>
                                 <a asp-action="Costing" asp-route-id="@q.Id">Open the costing sheet</a>
                                 <span aria-hidden="true">·</span>
                                 <a asp-action="Quotation" asp-route-id="@q.Id">Open the customer quotation</a>
-                            </p>
-                        }
+                            }
+                        </p>
                     </li>
                 }
             </ol>
@@ -73,7 +79,7 @@
         <section class="card" aria-labelledby="about-versions-title">
             <div class="card-head"><h2 id="about-versions-title">How versions work</h2></div>
             <div class="card-body small">
-                <p>A version is locked when it is approved. From then on it reads exactly as it was issued, even if a price or a term changes later.</p>
+                <p>A version is locked when it is approved. From then on it reads exactly as it was issued, even if a price or a term changes later. Open any version to see its costing and the quotation the customer received.</p>
                 <p class="mb-0">When a customer asks for changes, reopen the quote. The sent version stays as it was and the next version starts as a copy you can change, then goes through approval again.</p>
             </div>
         </section>

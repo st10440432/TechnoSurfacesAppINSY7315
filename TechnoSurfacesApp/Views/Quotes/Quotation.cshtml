@@ -13,9 +13,6 @@
     var check = Model.Check;
     var canEditLines = a.CanEdit;
     var toAllocate = check is null ? 0m : -check.Difference;
-    var sectionOrder = new[] { "Notes", "LeadTimes", "Exclusions", "TermsAndConditions", "Disclaimers", "Warranties", "PaymentTerms", "BankDetails" };
-    int Rank(string section) { var at = Array.IndexOf(sectionOrder, section); return at < 0 ? int.MaxValue : at; }
-    var sections = d.Terms.OrderBy(s => Rank(s.Section)).ToList();
 }
 
 <header class="page-head no-print">
@@ -199,128 +196,7 @@
 </div>
 
 @* ======================= The document ======================= *@
-<article class="doc" aria-labelledby="doc-title">
-    <div class="doc-top">
-        <img src="~/img/techno-surfaces-logo.jpg" alt="Techno Surfaces" width="2000" height="475" />
-        <address class="doc-co">
-            <strong>Techno Surfaces (Pty) Ltd</strong><br />
-            Unit 1, Esvian Business Park<br />
-            98D Bofors Circle, Epping 2, Cape Town<br />
-            Tel (021) 534 0154, Fax (021) 534 0159<br />
-            Reg. 2009/022153/07, VAT 4650255245<br />
-            www.technosurfaces.co.za
-        </address>
-    </div>
-
-    <h2 class="doc-title" id="doc-title">Quotation</h2>
-
-    <div class="doc-meta">
-        <dl>
-            <dt>Attention</dt>
-            <dd>@h.Attention</dd>
-            <dt>Company</dt>
-            <dd>@h.Company</dd>
-            <dt>Tel</dt>
-            <dd>@(h.Tel ?? "Not given")</dd>
-            <dt>Email</dt>
-            <dd>@(h.Email ?? "Not given")</dd>
-        </dl>
-        <dl>
-            <dt>Ref</dt>
-            <dd>@h.Reference@(d.VersionNo > 1 ? $" (version {d.VersionNo})" : "")</dd>
-            <dt>Date</dt>
-            <dd>@Fmt.Date(h.Date)</dd>
-            <dt>Site</dt>
-            <dd>@(h.Site ?? "Not given")</dd>
-            <dt>Project</dt>
-            <dd>@(h.Project ?? "Not given")</dd>
-            @if (!string.IsNullOrWhiteSpace(h.YourRef))
-            {
-                <dt>Your ref</dt>
-                <dd>@h.YourRef</dd>
-            }
-        </dl>
-    </div>
-
-    <table class="doc-lines">
-        <caption class="sr-only">Quoted work</caption>
-        <thead>
-            <tr>
-                <th scope="col" class="doc-col-item">Item</th>
-                <th scope="col">Description</th>
-                <th scope="col" class="r doc-col-qty">Qty</th>
-                <th scope="col" class="r doc-col-total">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (d.Lines.Count == 0)
-            {
-                <tr><td colspan="4" class="muted">No lines have been written yet.</td></tr>
-            }
-            @foreach (var l in d.Lines)
-            {
-                <tr>
-                    <td><strong>@l.Room</strong></td>
-                    <td class="pre-line">@l.Description</td>
-                    <td class="r">@Fmt.Qty(l.Quantity)</td>
-                    <td class="r">@Fmt.Rand(l.AmountExVat)</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-
-    <div class="doc-totals">
-        <div class="totals-row">
-            <span class="lbl">Subtotal ex VAT</span>
-            <span class="val">@Fmt.Rand(d.Totals.SubtotalExVat)</span>
-        </div>
-        <div class="totals-row">
-            <span class="lbl">VAT at @Fmt.Pct(d.Totals.VatRate * 100)</span>
-            <span class="val">@Fmt.Rand(d.Totals.Vat)</span>
-        </div>
-        <div class="totals-row grand">
-            <span class="lbl">Total inc VAT</span>
-            <span class="val">@Fmt.Rand(d.Totals.TotalIncVat)</span>
-        </div>
-    </div>
-
-    <p class="doc-validity"><strong>This quotation is valid until @Fmt.Date(h.ValidUntil).</strong></p>
-
-    <div class="doc-terms">
-        @foreach (var s in sections)
-        {
-            <h3>@Words.TermSection(s.Section)</h3>
-            <ul>
-                @foreach (var line in s.Lines)
-                {
-                    <li>@line</li>
-                }
-            </ul>
-            @if (s.Section == "Warranties" && d.Warranties.Count > 0)
-            {
-                <partial name="_WarrantyTable" model="d.Warranties" />
-            }
-        }
-
-        @if (!sections.Any(s => s.Section == "Warranties") && d.Warranties.Count > 0)
-        {
-            <h3>Warranties</h3>
-            <partial name="_WarrantyTable" model="d.Warranties" />
-        }
-
-        @if (!d.BankDetailsSet)
-        {
-            <h3>Banking details</h3>
-            <p>Banking details have not been entered yet.</p>
-        }
-    </div>
-
-    <div class="doc-sign">
-        <div><div class="line"></div><span>Signed</span></div>
-        <div><div class="line"></div><span>Date</span></div>
-        <div><div class="line"></div><span>Name of duly authorised person</span></div>
-    </div>
-</article>
+<partial name="_QuotationDocument" model="d" />
 
 @section Scripts {
     @if (canEditLines)

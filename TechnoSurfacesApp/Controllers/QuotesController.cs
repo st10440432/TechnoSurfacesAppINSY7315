@@ -342,6 +342,40 @@ public class QuotesController : AppController
         });
     }
 
+    /// <summary>
+    /// One version of the quote, read only: its costing and the customer quotation as
+    /// they were when it was issued (US-21). Earlier versions are sealed, so nothing on
+    /// this page can be changed; the current version is changed on the costing sheet.
+    /// </summary>
+    public async Task<IActionResult> Version(int id, int number, CancellationToken ct)
+    {
+        var detail = await DetailAsync(id, ct);
+        var versions = await _workflow.VersionsAsync(id, ct);
+        if (detail is null || versions is null)
+            return QuoteNotFound(id);
+
+        var costing = await _costing.GetVersionAsync(id, number, ct);
+        var document = await _quotation.GenerateVersionAsync(id, number, ct);
+        var summary = versions.FirstOrDefault(v => v.VersionNo == number);
+        if (costing.Outcome != CostingOutcome.Ok || document is null || summary is null)
+        {
+            Flash("error", "Version not found", $"{detail.Reference} has no version {number}. Choose one from the version history.");
+            return RedirectToAction(nameof(Versions), new { id });
+        }
+
+        SetPage($"Version {number}", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })),
+            new Crumb("Version history", Url.Action(nameof(Versions), new { id })));
+        return View(new VersionVm
+        {
+            Quote = detail,
+            Sheet = CostingSheetDto.From(costing.Quote!, costing.Version!, costing.Totals!),
+            Document = document,
+            Versions = versions.OrderBy(v => v.VersionNo).ToList(),
+            This = summary
+        });
+    }
+
     // ======================================================================
     //  Sage Pastel invoice record
     // ======================================================================
@@ -562,6 +596,25 @@ public sealed class VersionsVm
     public QuoteDetail Quote { get; init; } = null!;
     public IReadOnlyList<QuoteVersionSummary> Versions { get; init; } = [];
     public QuoteActions Actions { get; init; } = null!;
+}
+
+/// <summary>One version of a quote, opened from the version history.</summary>
+public sealed class VersionVm
+{
+    /// <summary>The quote as it stands now, for the strip and tabs.</summary>
+    public QuoteDetail Quote { get; init; } = null!;
+
+    /// <summary>This version's costing. Cost figures, so never printed.</summary>
+    public CostingSheetDto Sheet { get; init; } = null!;
+
+    /// <summary>This version's customer quotation. It carries no cost, discount or markup.</summary>
+    public CustomerQuotation Document { get; init; } = null!;
+
+    public IReadOnlyList<QuoteVersionSummary> Versions { get; init; } = [];
+    public QuoteVersionSummary This { get; init; } = null!;
+
+    public bool IsCurrent => This.VersionNo == Quote.VersionNo;
+    public QuoteVersionSummary? Next => Versions.FirstOrDefault(v => v.VersionNo == This.VersionNo + 1);
 }
 
 public sealed class InvoiceVm

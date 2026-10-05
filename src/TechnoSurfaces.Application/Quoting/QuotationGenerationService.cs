@@ -23,6 +23,12 @@ public interface IQuotationGenerationService
     /// <summary>The customer document, or null for an unknown quote.</summary>
     Task<CustomerQuotation?> GenerateAsync(int quoteId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The customer document for any version of the quote, as it was issued (US-21),
+    /// or null when the quote or the version does not exist.
+    /// </summary>
+    Task<CustomerQuotation?> GenerateVersionAsync(int quoteId, int versionNo, CancellationToken ct = default);
+
     /// <summary>Internal: whether the quotation total equals the costing total (US-10).</summary>
     Task<QuotationCheck?> CheckAsync(int quoteId, CancellationToken ct = default);
 
@@ -60,9 +66,17 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
     public async Task<CustomerQuotation?> GenerateAsync(int quoteId, CancellationToken ct = default)
     {
         var quote = await _quotes.GetAsync(quoteId, ct);
-        if (quote?.CurrentVersion is not { } version)
-            return null;
+        return quote?.CurrentVersion is { } version ? await ComposeAsync(quote, version, ct) : null;
+    }
 
+    public async Task<CustomerQuotation?> GenerateVersionAsync(int quoteId, int versionNo, CancellationToken ct = default)
+    {
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        return quote?.Version(versionNo) is { } version ? await ComposeAsync(quote, version, ct) : null;
+    }
+
+    private async Task<CustomerQuotation> ComposeAsync(Quote quote, QuoteVersion version, CancellationToken ct)
+    {
         // An issued version prints the wording it was approved with; a version still
         // being worked on prints the current wording (US-12, US-21).
         IReadOnlyList<QuotationTermSection> terms;
@@ -89,13 +103,45 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
 
         var subtotal = version.QuotationSubtotalExVat();
         var vat = decimal.Round(subtotal * version.VatRate, 2, MidpointRounding.AwayFromZero);
+        var isCurrent = version.VersionNo == quote.CurrentVersion?.VersionNo;
 
         return new CustomerQuotation(
             quote.Id,
             version.VersionNo,
-            quote.Status.ToString(),
+            // An earlier version is read as what it was when it was replaced, not as the
+            // quote's status now.
+            isCurrent ? quote.Status.ToString() : version.IsIssued ? "Issued" : "Superseded",
             version.HasRecordedTerms,
-            new QuotationHeader(
+            Heading(quote, version),
+            Lines(version),
+            new QuotationTotals(subtotal, version.VatRate, vat, subtotal + vat),
+            terms,
+            warranties,
+            BankDetailsSet: terms.Any(s => s.Section == nameof(TermSection.BankDetails) && s.Lines.Count > 0),
+            IsCurrentVersion: isCurrent,
+            HeadingAsIssued: version.IsIssued);
+    }
+
+    /// <summary>
+    /// The heading block. A version that was issued prints the heading recorded when it
+    /// was approved, because the quote's own validity date starts again when it is
+    /// reopened and its contact or site may since have been corrected (US-21). A
+    /// version not issued yet prints the quote's details as they stand.
+    /// </summary>
+    private static QuotationHeader Heading(Quote quote, QuoteVersion version) =>
+        version.IsIssued
+            ? new QuotationHeader(
+                Attention: version.IssuedAttention ?? "",
+                Company: version.IssuedCompany ?? "",
+                Tel: version.IssuedTel,
+                Email: version.IssuedEmail,
+                Reference: quote.Reference,
+                Date: quote.IssueDate,
+                ValidUntil: version.IssuedValidUntil ?? quote.ValidUntil,
+                Site: version.IssuedSite,
+                Project: version.IssuedProject,
+                YourRef: version.IssuedCustomerReference)
+            : new QuotationHeader(
                 Attention: quote.Contact?.FullName ?? "",
                 Company: quote.Customer?.Name ?? "",
                 Tel: quote.Contact?.Phone,
@@ -105,13 +151,7 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
                 ValidUntil: quote.ValidUntil,
                 Site: quote.Site,
                 Project: quote.Project,
-                YourRef: quote.CustomerReference),
-            Lines(version),
-            new QuotationTotals(subtotal, version.VatRate, vat, subtotal + vat),
-            terms,
-            warranties,
-            BankDetailsSet: terms.Any(s => s.Section == nameof(TermSection.BankDetails) && s.Lines.Count > 0));
-    }
+                YourRef: quote.CustomerReference);
 
     public async Task<QuotationCheck?> CheckAsync(int quoteId, CancellationToken ct = default)
     {

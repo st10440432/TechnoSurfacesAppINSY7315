@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TechnoSurfaces.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using TechnoSurfaces.Infrastructure.Data;
 namespace TechnoSurfaces.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(TechnoSurfacesDbContext))]
-    partial class TechnoSurfacesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005155323_RecordIssuedHeadingOnQuoteVersions")]
+    partial class RecordIssuedHeadingOnQuoteVersions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

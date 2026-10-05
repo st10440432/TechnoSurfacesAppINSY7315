@@ -100,6 +100,9 @@ public class Quote
     /// <summary>The original offer, retained so that it can be compared with a revision.</summary>
     public QuoteVersion? OriginalVersion => _versions.OrderBy(v => v.VersionNo).FirstOrDefault();
 
+    /// <summary>Any version of the quote by its number, or null when there is no such version.</summary>
+    public QuoteVersion? Version(int versionNo) => _versions.FirstOrDefault(v => v.VersionNo == versionNo);
+
     /// <summary>
     /// Starts a new snapshot. The previous version is sealed first, so earlier
     /// versions can never be altered by a later revision.
@@ -140,6 +143,9 @@ public class Quote
                 "A draft can be approved directly only by its author. Submit it for approval first.");
 
         Status = next;
+        version.RecordIssue(new IssuedHeading(
+            Contact?.FullName ?? "", Customer?.Name ?? "", Contact?.Phone, Contact?.Email,
+            Site, Project, CustomerReference, ValidUntil), approvedByUserId);
         version.Seal();
         ApprovedByUserId = approvedByUserId;
         ApprovedAtUtc = DateTime.UtcNow;

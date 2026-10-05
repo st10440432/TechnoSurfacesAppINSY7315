@@ -196,9 +196,12 @@ public sealed record CostingSheetDto(
     IReadOnlyList<CostingLineDto> Lines,
     QuoteTotals Totals)
 {
-    public static CostingSheetDto From(Quote quote, QuoteTotals totals)
+    public static CostingSheetDto From(Quote quote, QuoteTotals totals) =>
+        From(quote, quote.CurrentVersion!, totals);
+
+    /// <summary>Any version of the quote, such as an earlier one opened from the version history.</summary>
+    public static CostingSheetDto From(Quote quote, QuoteVersion version, QuoteTotals totals)
     {
-        var version = quote.CurrentVersion!;
         return new(
             quote.Id,
             quote.Reference,
