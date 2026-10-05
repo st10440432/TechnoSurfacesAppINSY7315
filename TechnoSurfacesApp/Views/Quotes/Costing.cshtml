@@ -10,7 +10,7 @@
     var q = Model.Quote;
     var a = Model.Actions;
     var t = Model.Sheet.Totals;
-    var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, a.CanEdit);
+    var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, a.CanEdit, Model.RateGrid);
     var randPerM2 = t.TotalAreaM2 > 0 ? Fmt.Rand(t.TotalExVat / t.TotalAreaM2) : "Not yet";
 
     string? lockedReason = a.CanEdit ? null
@@ -145,54 +145,6 @@
 
             <partial name="_RateLines" model="lines" />
 
-            @if (a.CanEdit)
-            {
-                <form class="card-body card-body-top" id="add-rate" novalidate data-no-busy aria-labelledby="add-rate-title">
-                    <h3 id="add-rate-title" class="section-label">Add from the rate card</h3>
-                    <div class="field-row field-row-3">
-                        <div class="field">
-                            <label class="label" for="rate-item">Item</label>
-                            <select class="select" id="rate-item" name="rateItemId" required>
-                                <option value="">Choose an item</option>
-                                @foreach (var group in Model.RateItems.GroupBy(r => r.Category))
-                                {
-                                    <optgroup label="@Words.Humanise(group.Key)">
-                                        @foreach (var r in group)
-                                        {
-                                            <option value="@r.Id" data-unit="@Words.Unit(r.Unit)" data-derived="@Words.Derivation(r.Derivation)"
-                                                    data-below="@(r.IsBelowTheLine ? "true" : null)">@r.Name</option>
-                                        }
-                                    </optgroup>
-                                }
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label class="label" for="rate-quantity">Quantity</label>
-                            <input class="input input-num" id="rate-quantity" name="quantity" type="number"
-                                   inputmode="decimal" min="0" step="any" required value="1" aria-describedby="rate-quantity-hint" />
-                            <span class="hint" id="rate-quantity-hint">How many, in the item's unit.</span>
-                        </div>
-                        <div class="field" id="rate-price-field" hidden>
-                            <label class="label" for="rate-price">Price for this job</label>
-                            <span class="input-group">
-                                <span class="addon before" aria-hidden="true">R</span>
-                                <input class="input input-num" id="rate-price" name="unitPrice" type="number"
-                                       inputmode="decimal" min="0.01" step="any" aria-describedby="rate-price-hint" />
-                            </span>
-                            <span class="hint" id="rate-price-hint">The rate card has no price for this item yet, so enter the price for this job.</span>
-                        </div>
-                    </div>
-
-                    <div id="rate-preview"></div>
-
-                    <div class="btn-row">
-                        <button type="submit" class="btn btn-primary" id="add-rate-button" disabled aria-describedby="add-rate-why">
-                            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> Add to the costing
-                        </button>
-                        <span class="hint" id="add-rate-why">Choose an item to see its rate.</span>
-                    </div>
-                </form>
-            }
         </section>
     </div>
 

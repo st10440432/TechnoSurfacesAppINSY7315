@@ -158,13 +158,14 @@ public class QuotesController : AppController
         if (detail is null || costing.Outcome != CostingOutcome.Ok)
             return QuoteNotFound(id);
 
+        var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
         var vm = new CostingVm
         {
             Quote = detail,
-            Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
+            Sheet = sheet,
             Actions = await ActionsForAsync(costing.Quote!),
             Suppliers = await _catalogue.SuppliersAsync(ct),
-            RateItems = await _catalogue.RateItemsAsync(ct),
+            RateGrid = await RateGridAsync(costing.Quote!.IssueDate, sheet, ct),
             Check = await _quotation.CheckAsync(id, ct)
         };
 
@@ -187,9 +188,45 @@ public class QuotesController : AppController
             return NotFound();
 
         var actions = await ActionsForAsync(costing.Quote!);
+        var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
         return PartialView("_CostingRefresh", new CostingRefreshVm(
-            new CostingLinesVm(CostingSheetDto.From(costing.Quote!, costing.Totals!), actions.CanEdit),
+            new CostingLinesVm(sheet, actions.CanEdit, await RateGridAsync(costing.Quote!.IssueDate, sheet, ct)),
             new QuoteActionBar(detail, actions, await _quotation.CheckAsync(id, ct))));
+    }
+
+    /// <summary>
+    /// The whole rate card as the costing sheet lists it: every item that can be
+    /// quoted, its rate-card price as at the quote's issue date, and the lines already
+    /// on the quote for it. The estimator types quantities straight into this list,
+    /// as on the spreadsheet it replaces, instead of adding items one at a time.
+    /// </summary>
+    private async Task<IReadOnlyList<RateGridRow>> RateGridAsync(DateOnly issueDate, CostingSheetDto sheet, CancellationToken ct)
+    {
+        var items = await _catalogue.RateItemsAsync(ct);
+        var rateLines = sheet.Lines.Where(l => l.LineType == "Rate").ToList();
+
+        var rows = new List<RateGridRow>();
+        foreach (var item in items)
+        {
+            var card = PricePreviewResult.From(await _rates.ResolveAsync(item.Id, supplierId: null, issueDate, ct), issueDate);
+            var calculated = item.Derivation switch
+            {
+                "FromTotalAreaM2" => decimal.Round(sheet.Totals.TotalAreaM2 * item.DerivationFactor, 4),
+                "FromSheetCount" => decimal.Round(sheet.Totals.TotalSheetCount * item.DerivationFactor, 4),
+                _ => (decimal?)null
+            };
+            rows.Add(new RateGridRow(item, card, calculated, rateLines.Where(l => l.RateItemId == item.Id).ToList()));
+        }
+
+        // Lines for an item since retired from the rate card still show, so they can be changed or removed.
+        var listed = items.Select(i => i.Id).ToHashSet();
+        foreach (var line in rateLines.Where(l => l.RateItemId is not int itemId || !listed.Contains(itemId)))
+        {
+            var item = new RateItemOption(line.RateItemId ?? 0, line.Description, "Retired", "Each", "Entered", line.IsBelowTheLine);
+            rows.Add(new RateGridRow(item, new PricePreviewResult(true, line.ResolvedUnitPrice, line.PriceOrigin, null, Fmt.Date(issueDate)), null, [line]));
+        }
+
+        return rows;
     }
 
     /// <summary>
@@ -477,11 +514,21 @@ public sealed class CostingVm
     public CostingSheetDto Sheet { get; init; } = null!;
     public QuoteActions Actions { get; init; } = null!;
     public IReadOnlyList<SupplierOption> Suppliers { get; init; } = [];
-    public IReadOnlyList<RateItemOption> RateItems { get; init; } = [];
+    public IReadOnlyList<RateGridRow> RateGrid { get; init; } = [];
     public QuotationCheck? Check { get; init; }
 }
 
-public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit);
+public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null);
+
+/// <summary>
+/// One rate card item on the costing sheet: its rate-card price on the quote date,
+/// the quantity the materials work out to when it is a calculated item, and the
+/// lines already on the quote for it (normally none or one).
+/// </summary>
+public sealed record RateGridRow(RateItemOption Item, PricePreviewResult Card, decimal? CalculatedQuantity, IReadOnlyList<CostingLineDto> Lines)
+{
+    public bool IsCalculated => CalculatedQuantity is not null;
+}
 
 public sealed record CostingRefreshVm(CostingLinesVm Lines, QuoteActionBar Side);
 
