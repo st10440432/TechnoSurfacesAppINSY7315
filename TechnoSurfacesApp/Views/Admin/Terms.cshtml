@@ -40,7 +40,7 @@
             var retired = Model.RetiredIn(part);
             var key = part.ToString().ToLowerInvariant();
 
-            <part class="card" aria-labelledby="terms-@key">
+            <section class="card" aria-labelledby="terms-@key">
                 <div class="card-head">
                     <h2 id="terms-@key">@SectionName(part)</h2>
                 </div>
@@ -116,12 +116,12 @@
                         </details>
                     }
                 </div>
-            </part>
+            </section>
         }
     </div>
 
     <div class="stack-gap">
-        <part class="card" aria-labelledby="brands-title">
+        <section class="card" aria-labelledby="brands-title">
             <div class="card-head"><h2 id="brands-title">Warranty by brand</h2></div>
             <div class="card-body">
                 <p class="hint">A brand with no warranty here prints none on its quotations, rather than a guess. Clear both boxes to remove one.</p>
@@ -159,6 +159,6 @@
                     </div>
                 }
             </div>
-        </part>
+        </section>
     </div>
 </div>

@@ -6,7 +6,7 @@ The twenty screens from the Task 1 journey maps, who can use each one, and where
 
 ## Who can use each screen
 
-Six screens are for the Managing Director only. They do not appear in an estimator's side menu, and an estimator who opens one by its address sees a read only page that says who it is for, not an error page. The wording of that note is being agreed with Amaan, who owns the authorisation rules.
+Six screens are for the Managing Director only. They do not appear in an estimator's side menu, and an estimator who opens one by its address sees a read only page that says who it is for, not an error page. The approval queue, price editor, rate card and quotation terms show their content read only with that note. Users and the audit trail are closed by policy, so they show a page saying they are for the Managing Director.
 
 | Group | Screen | Managing Director | Estimator |
 |---|---|---|---|
@@ -38,8 +38,8 @@ Estimators can see every price, including cost prices. That is a decision the cl
 | Screen | What it needs | Comes from | Owner | Ready |
 |---|---|---|---|---|
 | Sign in | Credentials, lockout, deactivated accounts refused | ASP.NET Core Identity and `ISignInService` | Amaan | Yes |
-| Forgot password | Single use, time limited reset token | User administration | Amaan | No |
-| Activate account | First password for an account the Managing Director created | User administration | Amaan | No |
+| Forgot password | No email service (client decision), so the page explains that the Managing Director issues a new temporary password, which also lifts a lock | User administration, issuing a new temporary password | Amaan | Yes |
+| Activate account | Sign in with the temporary password the Managing Director issued, then choose your own on the set your password screen | User administration and the forced password change | Amaan | Yes |
 | Dashboard | Approval queue for the Managing Director, own quotes for an estimator | Quote workflow | Morgan | Yes |
 | Quote list | Quotes filtered by status | Quote workflow | Morgan | Yes |
 | New quote | Customer, contact, site, project, markup | Quote workflow | Morgan | Yes |
