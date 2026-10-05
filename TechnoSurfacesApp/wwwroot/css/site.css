@@ -1204,7 +1204,12 @@ h3.section-label { margin: 0 0 var(--space-1); }
 .card-body-top { border-top: 1px solid var(--line); }
 .from-costing { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .cascade-qty { margin-top: var(--space-4); }
-.field-action { display: flex; flex-direction: column; justify-content: flex-end; }
+/* The Add to the costing button has no label, so it drops by a label's height to sit level with
+   the Sheets and Supplier discount inputs, with its hint under it like theirs. */
+.field-action { display: flex; flex-direction: column; justify-content: flex-start; padding-top: calc(var(--text-sm) * var(--leading-normal) + var(--space-1)); }
+@media (max-width: 767.98px) {
+    .field-action { padding-top: 0; }
+}
 .resolved-price.is-loading { display: block; }
 .resolved-fact { display: flex; flex-direction: column; gap: 2px; min-width: 10rem; }
 .resolved-origin { flex: 1 1 100%; padding-top: var(--space-3); border-top: 1px solid var(--success-line); }
