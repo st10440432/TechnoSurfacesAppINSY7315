@@ -55,7 +55,8 @@ public sealed class CatalogueService : ICatalogueService
                     line.Supplier.Name, line.Name, line.ThicknessMm,
                     colour.Name, colour.SupplierCode, colour.PriceBand?.Name, size.ToString(),
                     colour.Status == CatalogueStatus.Discontinued || line.Status == CatalogueStatus.Discontinued,
-                    price?.PricePerSqm, price?.PricePerSheet(size), price?.EffectiveFrom));
+                    price?.PricePerSqm, price?.PricePerSheet(size), price?.EffectiveFrom,
+                    colour.Status == CatalogueStatus.PhasingOut || line.Status == CatalogueStatus.PhasingOut));
             }
         }
 

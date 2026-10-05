@@ -15,7 +15,8 @@ public sealed record CatalogueRow(
     int ColourId, int? PriceBandId, int SheetSizeId,
     string Supplier, string ProductLine, int ThicknessMm,
     string Colour, string SupplierCode, string? Band, string SheetSize,
-    bool IsRetired, decimal? PricePerSqm, decimal? PricePerSheet, DateOnly? PriceFrom);
+    bool IsRetired, decimal? PricePerSqm, decimal? PricePerSheet, DateOnly? PriceFrom,
+    bool IsPhasingOut = false);
 
 /// <summary>One period in a price's history. Prices are superseded, never overwritten.</summary>
 public sealed record PricePeriodRow(

@@ -523,7 +523,8 @@
                 function (c) {
                     // Some suppliers price a whole range as one band of the same name; the band is shown only when it adds something.
                     var band = c.priceBand && c.priceBand !== c.name ? ", band " + c.priceBand : "";
-                    return c.name + (c.supplierCode ? ", " + c.supplierCode : "") + band;
+                    return c.name + (c.supplierCode ? ", " + c.supplierCode : "") + band +
+                        (c.status === "PhasingOut" ? " (being phased out)" : "");
                 },
                 "Choose a colour", "colours");
         });

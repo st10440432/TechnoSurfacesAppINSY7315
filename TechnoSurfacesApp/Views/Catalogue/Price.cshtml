@@ -21,6 +21,14 @@
     </div>
 </header>
 
+@if (r.IsPhasingOut && !r.IsRetired)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div><strong>Being phased out.</strong> The supplier's list marks this colour as being phased out. Check it is still available before quoting it.</div>
+    </div>
+}
+
 @if (!Model.CanEdit)
 {
     <partial name="_ReadOnlyNote" model="@("Only the Managing Director changes material prices. You can see the current price and every earlier one.")" />
