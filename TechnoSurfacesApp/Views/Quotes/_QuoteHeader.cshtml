@@ -1,50 +1,70 @@
-﻿@using TechnoSurfaces.Models
-@model Quote
+@model TechnoSurfaces.Application.Quoting.QuoteDetail
+@*
+    The strip of facts at the top of every screen about one quote: who it is for,
+    where it is, its status and how long it is valid. The status is always written
+    out as well as coloured.
+*@
 @{
-    var cust = Db.GetCustomer(Model.CustomerId);
-    var contact = Db.GetContact(Model.CustomerId, Model.ContactId);
+    var place = string.Join(", ", new[] { Model.Site, Model.Project }.Where(s => !string.IsNullOrWhiteSpace(s)));
 }
-
-<div class="qstrip">
+<section class="qstrip" aria-label="Quote @Model.Reference">
     <div class="qstrip-item">
         <div class="qstrip-label">Reference</div>
         <div class="qstrip-value">
-            @Model.Ref
-            @if (Model.VersionNumber > 1)
+            @Model.Reference
+            @if (Model.VersionNo > 1)
             {
-                <span class="badge">v@Model.VersionNumber</span>
+                <span class="badge">Version @Model.VersionNo</span>
             }
         </div>
     </div>
     <div class="qstrip-item">
         <div class="qstrip-label">Customer</div>
-        <div class="qstrip-value">@cust?.CompanyName</div>
+        <div class="qstrip-value">
+            <a asp-controller="Customers" asp-action="Details" asp-route-id="@Model.CustomerId">@Model.CustomerName</a>
+            @if (!string.IsNullOrEmpty(Model.CustomerAccountCode))
+            {
+                <span class="badge badge-code">@Model.CustomerAccountCode</span>
+            }
+        </div>
     </div>
     <div class="qstrip-item">
         <div class="qstrip-label">Attention</div>
-        <div class="qstrip-value">@contact?.Name</div>
+        <div class="qstrip-value">@Model.ContactName</div>
     </div>
     <div class="qstrip-item">
-        <div class="qstrip-label">Site</div>
-        <div class="qstrip-value">@Model.Site</div>
+        <div class="qstrip-label">Site and project</div>
+        <div class="qstrip-value">@(place.Length > 0 ? place : "Not entered")</div>
     </div>
     <div class="qstrip-item">
         <div class="qstrip-label">Estimator</div>
-        <div class="qstrip-value">@Db.UserName(Model.OwnerUserId)</div>
+        <div class="qstrip-value">@Model.AuthorName</div>
     </div>
     <div class="spacer"></div>
     <div class="qstrip-item">
         <div class="qstrip-label">Status</div>
-        <div class="qstrip-value"><span class="pill pill-@Model.StatusKey">@Model.StatusLabel</span></div>
+        <div class="qstrip-value">
+            <span class="@StatusText.Pill(Model.Status)">@StatusText.Label(Model.Status)</span>
+            @if (Model.IsSealed)
+            {
+                <span class="badge" title="This version can no longer be changed">
+                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-lock" /></svg> Locked
+                </span>
+            }
+        </div>
     </div>
     <div class="qstrip-item">
         <div class="qstrip-label">Valid until</div>
         <div class="qstrip-value">
             @Fmt.Date(Model.ValidUntil)
-            @if (Model.IsExpired)
+            @if (Model.Status == "Expired")
             {
                 <span class="badge badge-danger">Expired</span>
             }
+            else if (Model.ExpiresSoon)
+            {
+                <span class="badge badge-warn">@Model.DaysRemaining day@(Model.DaysRemaining == 1 ? "" : "s") left</span>
+            }
         </div>
     </div>
-</div>
+</section>

@@ -1,0 +1,132 @@
+@model TechnoSurfacesApp.Controllers.CostingLinesVm
+@*
+    Labour, consumables and extras from the rate card. A quantity the system works
+    out from the materials is tagged as calculated, so it is never mistaken for one
+    the estimator typed (US-05). A rate changed for this quote keeps the rate card
+    price beside it (US-06). Lines below the line are listed apart, because they
+    are added after the markup.
+*@
+@{
+    var above = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && !l.IsBelowTheLine).ToList();
+    var below = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && l.IsBelowTheLine).ToList();
+    var columns = Model.CanEdit ? 5 : 4;
+}
+<div id="rate-lines">
+    @if (above.Count == 0 && below.Count == 0)
+    {
+        <div class="empty">
+            <svg class="ico" aria-hidden="true"><use href="#i-calc" /></svg>
+            <h3>No labour or extras yet</h3>
+            <p>@(Model.CanEdit ? "Add fabrication, installation, consumables and cut-outs from the rate card below." : "No labour or extras were added to this version.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data stack">
+                <caption class="sr-only">Labour, consumables and extras, with each rate and where it came from</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="right">Quantity</th>
+                        <th scope="col" class="right">Rate</th>
+                        <th scope="col" class="right">Line total</th>
+                        @if (Model.CanEdit) { <th scope="col"><span class="sr-only">Remove</span></th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var group in new[] { (Lines: above, Title: (string?)null), (Lines: below, Title: "Added after the markup, at cost") })
+                    {
+                        if (group.Lines.Count == 0) { continue; }
+                        if (group.Title is not null)
+                        {
+                            <tr class="group-row">
+                                <th scope="rowgroup" colspan="@columns">@group.Title</th>
+                            </tr>
+                        }
+                        foreach (var l in group.Lines)
+                        {
+                            var derivedNote = $"derived-{l.Id}";
+                            <tr data-line-row="@l.Id" class="@(l.IsDerived ? "is-derived" : null)">
+                                <td data-label="Item">
+                                    <span class="strong">@l.Description</span>
+                                    @if (l.IsDerived)
+                                    {
+                                        <span class="derived-tag" id="@derivedNote">
+                                            <svg class="ico ico-sm" aria-hidden="true"><use href="#i-calc" /></svg>
+                                            @(l.IsQuantityOverridden ? "Typed over the calculated quantity" : "Quantity calculated from the materials")
+                                        </span>
+                                    }
+                                    <span class="line-origin">@l.PriceOrigin</span>
+                                    @if (l.HasPriceOverride)
+                                    {
+                                        <span class="sub">Changed on this quote only. The rate card price is @Fmt.Rand(l.ResolvedUnitPrice).</span>
+                                    }
+                                    @if (Model.CanEdit && (l.HasPriceOverride || l.IsQuantityOverridden))
+                                    {
+                                        <span class="btn-row btn-row-tight">
+                                            @if (l.IsQuantityOverridden)
+                                            {
+                                                <button type="button" class="btn btn-ghost btn-sm" data-line-reset="@l.Id" data-reset="restoreDerivedQuantity"
+                                                        data-success="Calculated quantity restored">
+                                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-undo" /></svg> Use the calculated quantity
+                                                </button>
+                                            }
+                                            @if (l.HasPriceOverride)
+                                            {
+                                                <button type="button" class="btn btn-ghost btn-sm" data-line-reset="@l.Id" data-reset="clearPriceOverride"
+                                                        data-success="Rate card price restored">
+                                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-undo" /></svg> Use the rate card price
+                                                </button>
+                                            }
+                                        </span>
+                                    }
+                                </td>
+                                <td data-label="Quantity" class="right">
+                                    @if (Model.CanEdit)
+                                    {
+                                        <label class="sr-only" for="qty-@l.Id">Quantity of @l.Description</label>
+                                        <input class="input input-sm input-num" id="qty-@l.Id" type="number" inputmode="decimal"
+                                               min="0" step="any" required value="@Fmt.Input(l.Quantity)"
+                                               aria-describedby="@(l.IsDerived ? derivedNote : null)"
+                                               data-line="@l.Id" data-field="quantity" data-saved="@Fmt.Input(l.Quantity)" />
+                                    }
+                                    else
+                                    {
+                                        @Fmt.Qty(l.Quantity)
+                                    }
+                                </td>
+                                <td data-label="Rate" class="right">
+                                    @if (Model.CanEdit)
+                                    {
+                                        <label class="sr-only" for="rate-@l.Id">Rate for @l.Description on this quote, in rand</label>
+                                        <span class="input-group input-group-sm">
+                                            <span class="addon before" aria-hidden="true">R</span>
+                                            <input class="input input-sm input-num" id="rate-@l.Id" type="number" inputmode="decimal"
+                                                   min="0.01" step="any" required value="@Fmt.Input(l.UnitPrice)"
+                                                   data-line="@l.Id" data-field="unitPrice" data-saved="@Fmt.Input(l.UnitPrice)" />
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @Fmt.Rand(l.UnitPrice)
+                                    }
+                                </td>
+                                <td data-label="Line total" class="right strong">@Fmt.Rand(l.LineTotal)</td>
+                                @if (Model.CanEdit)
+                                {
+                                    <td data-label="Remove" class="right">
+                                        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-remove-line="@l.Id"
+                                                data-description="@l.Description" aria-label="Remove @l.Description">
+                                            <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg>
+                                        </button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

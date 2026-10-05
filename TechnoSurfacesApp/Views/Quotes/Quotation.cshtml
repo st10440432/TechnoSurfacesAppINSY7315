@@ -1,109 +1,251 @@
-﻿@model TechnoSurfacesApp.Controllers.QuotationVm
+@model TechnoSurfacesApp.Controllers.QuotationVm
+@*
+    The customer quotation (US-10 to US-14). The document is bound only to
+    CustomerQuotation, which has no cost price, supplier discount or markup on it,
+    so none can appear here: not on screen, not in the markup, not in an attribute
+    (US-11). The editor above it, which is never printed, writes the lines the
+    customer reads and shows whether they add up to the costing.
+*@
 @{
-    var q = Model.Quote;
-    var cust = Db.GetCustomer(q.CustomerId);
-    var contact = Db.GetContact(q.CustomerId, q.ContactId);
+    var d = Model.Document;
+    var h = d.Header;
+    var a = Model.Actions;
+    var check = Model.Check;
+    var canEditLines = a.CanEdit;
+    var toAllocate = check is null ? 0m : -check.Difference;
+    var sectionOrder = new[] { "Notes", "LeadTimes", "Exclusions", "TermsAndConditions", "Disclaimers", "Warranties", "PaymentTerms", "BankDetails" };
+    int Rank(string section) { var at = Array.IndexOf(sectionOrder, section); return at < 0 ? int.MaxValue : at; }
+    var sections = d.Terms.OrderBy(s => Rank(s.Section)).ToList();
 }
 
-<div class="page-head no-print">
+<header class="page-head no-print">
     <div>
-        <h2>Customer quotation</h2>
-        <p>@q.Ref &middot; @cust?.CompanyName</p>
+        <h1>Customer quotation</h1>
+        <p>@h.Reference for @h.Company. Version @d.VersionNo.</p>
     </div>
     <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
-            <svg class="ico ico-sm"><use href="#i-arrow-left" /></svg> Costing sheet
-        </a>
-        <button class="btn btn-secondary" type="button" onclick="window.print()">
-            <svg class="ico ico-sm"><use href="#i-print" /></svg> Print / PDF
+        <button type="button" class="btn btn-secondary" data-print>
+            <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print or save as PDF
         </button>
-        <button class="btn btn-primary" type="button">Mark as sent</button>
     </div>
-</div>
+</header>
 
-<div class="notice notice-good no-print">
-    <svg class="ico"><use href="#i-check-circle" /></svg>
-    <div>
-        <strong>Safe to send.</strong> No cost price, supplier discount or markup appears anywhere on
-        this document. Material and colour are shown because the customer chooses them &mdash;
-        what those materials cost is not.
-    </div>
-</div>
+<div class="no-print">
+    <partial name="_QuoteHeader" model="Model.Quote" />
+    <partial name="_QuoteTabs" model="Model.Quote" />
 
-@if (Model.LinesAreDraft)
-{
-    <div class="notice notice-warn no-print">
-        <svg class="ico"><use href="#i-alert" /></svg>
+    <div class="notice notice-good" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
         <div>
-            <strong>Draft lines.</strong> These were composed from the costing total as a starting
-            point. Customer-facing lines are normally written per room or element &mdash; edit them
-            before sending.
+            <strong>Safe to send.</strong> This page is built only from the customer's lines, the standing terms and the warranties.
+            No cost price, supplier discount or markup is on it anywhere.
         </div>
     </div>
-}
 
-<div class="doc">
+    @if (!d.IsIssued)
+    {
+        <div class="notice notice-info" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+            <div>
+                <strong>Not issued yet.</strong> The terms below are today's standing terms. When the quote is approved they are recorded
+                with it, so a later change to the terms does not alter this quotation.
+            </div>
+        </div>
+    }
+
+    @if (!d.BankDetailsSet)
+    {
+        <div class="notice notice-warn" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+            <div>
+                <strong>No banking details.</strong> The Managing Director has not entered them on the quotation terms screen,
+                so the quotation says they have not been entered.
+            </div>
+        </div>
+    }
+
+    @if (canEditLines && check is not null)
+    {
+        <section class="card" aria-labelledby="lines-editor-title" id="quotation-editor"
+                 data-api="@Url.Content($"~/api/quotes/{d.QuoteId}/")"
+                 data-to-allocate="@Fmt.Input(toAllocate)">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
+                <h2 id="lines-editor-title">Lines the customer reads</h2>
+            </div>
+            <div class="card-body">
+                <partial name="_QuotationCheck" model="check" />
+                <p class="hint">
+                    Write one line for each room or element, with its size, material and colour, as the customer would describe it.
+                    The lines must add up to the costing total of @Fmt.Rand(check.CostingTotalExVat) ex VAT before the quote can be approved.
+                </p>
+            </div>
+
+            @if (d.Lines.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="data stack">
+                        <caption class="sr-only">Lines on the quotation, in the order the customer reads them</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Description</th>
+                                <th scope="col" class="right">Qty</th>
+                                <th scope="col" class="right">Amount ex VAT</th>
+                                <th scope="col"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < d.Lines.Count; i++)
+                            {
+                                var l = d.Lines[i];
+                                <tr data-quotation-line="@l.Id" data-room="@l.Room" data-description="@l.Description"
+                                    data-quantity="@Fmt.Input(l.Quantity)" data-amount="@Fmt.Input(l.AmountExVat)">
+                                    <td data-label="Item">@(l.Room ?? "No item")</td>
+                                    <td data-label="Description" class="pre-line">@l.Description</td>
+                                    <td data-label="Qty" class="right">@Fmt.Qty(l.Quantity)</td>
+                                    <td data-label="Amount ex VAT" class="right strong">@Fmt.Rand(l.AmountExVat)</td>
+                                    <td data-label="Actions" class="right nowrap">
+                                        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-move="up" disabled="@(i == 0)"
+                                                aria-label="Move @(l.Room ?? "line " + (i + 1)) up">
+                                            <svg class="ico" aria-hidden="true"><use href="#i-arrow-up" /></svg>
+                                        </button>
+                                        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-move="down" disabled="@(i == d.Lines.Count - 1)"
+                                                aria-label="Move @(l.Room ?? "line " + (i + 1)) down">
+                                            <svg class="ico" aria-hidden="true"><use href="#i-arrow-down" /></svg>
+                                        </button>
+                                        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-edit-line
+                                                aria-label="Change @(l.Room ?? "line " + (i + 1))">
+                                            <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
+                                        </button>
+                                        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-delete-line
+                                                aria-label="Remove @(l.Room ?? "line " + (i + 1))">
+                                            <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <form class="card-body card-body-top" id="quotation-line-form" novalidate data-no-busy aria-labelledby="line-form-title">
+                <h3 class="section-label" id="line-form-title" data-add-title="Add a line" data-edit-title="Change the line">Add a line</h3>
+                <div class="field-row field-row-2">
+                    <div class="field">
+                        <label class="label" for="line-room">Item <span class="optional">optional</span></label>
+                        <input class="input" id="line-room" name="room" maxlength="120" aria-describedby="line-room-hint" />
+                        <span class="hint" id="line-room-hint">The room or element, such as Kitchen island.</span>
+                    </div>
+                    <div class="field-row field-row-2">
+                        <div class="field">
+                            <label class="label" for="line-quantity">Qty</label>
+                            <input class="input input-num" id="line-quantity" name="quantity" type="number" inputmode="decimal" min="0" step="any" value="1" required />
+                        </div>
+                        <div class="field">
+                            <label class="label" for="line-amount">Amount ex VAT</label>
+                            <span class="input-group">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-num" id="line-amount" name="amountExVat" type="number" inputmode="decimal" min="0" step="any" required />
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label" for="line-description">Description</label>
+                    <textarea class="input" id="line-description" name="description" rows="3" maxlength="400" required
+                              aria-describedby="line-description-hint"></textarea>
+                    <span class="hint" id="line-description-hint">What was made and where, with sizes, material and colour. Up to 400 characters.</span>
+                </div>
+                <div class="btn-row">
+                    <button type="submit" class="btn btn-primary" data-add-label="Add the line" data-edit-label="Save the line">Add the line</button>
+                    @if (toAllocate > 0)
+                    {
+                        <button type="button" class="btn btn-secondary" data-fill-remaining>
+                            Use the amount still to allocate, @Fmt.Rand(toAllocate)
+                        </button>
+                    }
+                    <button type="button" class="btn btn-ghost" data-cancel-edit hidden>Cancel</button>
+                </div>
+            </form>
+        </section>
+    }
+    else if (!canEditLines && d.Lines.Count == 0)
+    {
+        <div class="notice notice-warn" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+            <div><strong>No lines yet.</strong> The estimator has not written the lines the customer reads.</div>
+        </div>
+    }
+</div>
+
+@* ======================= The document ======================= *@
+<article class="doc" aria-labelledby="doc-title">
     <div class="doc-top">
         <img src="~/img/logo.png" alt="Techno Surfaces" />
-        <div class="doc-co">
+        <address class="doc-co">
             <strong>Techno Surfaces (Pty) Ltd</strong><br />
             Unit 1, Esvian Business Park<br />
             98D Bofors Circle, Epping 2, Cape Town<br />
-            Tel (021) 534 0154 &middot; Fax (021) 534 0159<br />
-            Reg. 2009/022153/07 &middot; VAT 4650255245<br />
+            Tel (021) 534 0154, Fax (021) 534 0159<br />
+            Reg. 2009/022153/07, VAT 4650255245<br />
             www.technosurfaces.co.za
-        </div>
+        </address>
     </div>
 
-    <div class="doc-title">Quotation</div>
+    <h2 class="doc-title" id="doc-title">Quotation</h2>
 
     <div class="doc-meta">
         <dl>
             <dt>Attention</dt>
-            <dd>@contact?.Name</dd>
+            <dd>@h.Attention</dd>
             <dt>Company</dt>
-            <dd>@cust?.CompanyName</dd>
+            <dd>@h.Company</dd>
             <dt>Tel</dt>
-            <dd>@(contact?.Tel ?? "\u2014")</dd>
+            <dd>@(h.Tel ?? "Not given")</dd>
             <dt>Email</dt>
-            <dd>@(contact?.Email ?? "\u2014")</dd>
+            <dd>@(h.Email ?? "Not given")</dd>
         </dl>
         <dl>
             <dt>Ref</dt>
-            <dd>@q.Ref</dd>
+            <dd>@h.Reference@(d.VersionNo > 1 ? $" (version {d.VersionNo})" : "")</dd>
             <dt>Date</dt>
-            <dd>@Fmt.Date(q.IssueDate)</dd>
+            <dd>@Fmt.Date(h.Date)</dd>
             <dt>Site</dt>
-            <dd>@q.Site</dd>
+            <dd>@(h.Site ?? "Not given")</dd>
             <dt>Project</dt>
-            <dd>@q.Project</dd>
-            @if (!string.IsNullOrEmpty(q.CustomerReference))
+            <dd>@(h.Project ?? "Not given")</dd>
+            @if (!string.IsNullOrWhiteSpace(h.YourRef))
             {
                 <dt>Your ref</dt>
-                <dd>@q.CustomerReference</dd>
+                <dd>@h.YourRef</dd>
             }
         </dl>
     </div>
 
     <table class="doc-lines">
+        <caption class="sr-only">Quoted work</caption>
         <thead>
             <tr>
-                <th style="width:24%">Item</th>
-                <th>Description</th>
-                <th class="r" style="width:8%">Qty</th>
-                <th class="r" style="width:14%">Rate</th>
-                <th class="r" style="width:16%">Total</th>
+                <th scope="col" class="doc-col-item">Item</th>
+                <th scope="col">Description</th>
+                <th scope="col" class="r doc-col-qty">Qty</th>
+                <th scope="col" class="r doc-col-total">Total</th>
             </tr>
         </thead>
         <tbody>
-            @foreach (var l in Model.Lines)
+            @if (d.Lines.Count == 0)
             {
-                <tr class="@(l.IsNoteOnly ? "note" : "")">
-                    <td><strong>@l.Item</strong></td>
-                    <td>@l.Description</td>
-                    <td class="r">@(l.Qty.HasValue ? Fmt.Qty(l.Qty.Value) : "")</td>
-                    <td class="r">@(l.Rate.HasValue ? Fmt.Rand(l.Rate.Value) : "")</td>
-                    <td class="r">@(l.IsNoteOnly ? "" : Fmt.Rand(l.LineTotal))</td>
+                <tr><td colspan="4" class="muted">No lines have been written yet.</td></tr>
+            }
+            @foreach (var l in d.Lines)
+            {
+                <tr>
+                    <td><strong>@l.Room</strong></td>
+                    <td class="pre-line">@l.Description</td>
+                    <td class="r">@Fmt.Qty(l.Quantity)</td>
+                    <td class="r">@Fmt.Rand(l.AmountExVat)</td>
                 </tr>
             }
         </tbody>
@@ -112,99 +254,47 @@
     <div class="doc-totals">
         <div class="totals-row">
             <span class="lbl">Subtotal ex VAT</span>
-            <span class="val">@Fmt.Rand(Model.SubTotal)</span>
+            <span class="val">@Fmt.Rand(d.Totals.SubtotalExVat)</span>
         </div>
-        @if (q.CustomerDiscountPct > 0)
-        {
-            <div class="totals-row">
-                <span class="lbl">Discount @Fmt.Pct(q.CustomerDiscountPct)</span>
-                <span class="val">&minus; @Fmt.Rand(Model.Discount)</span>
-            </div>
-            <div class="totals-row">
-                <span class="lbl">Amount excl VAT</span>
-                <span class="val">@Fmt.Rand(Model.ExVat)</span>
-            </div>
-        }
         <div class="totals-row">
-            <span class="lbl">VAT @@ 15%</span>
-            <span class="val">@Fmt.Rand(Model.Vat)</span>
+            <span class="lbl">VAT at @Fmt.Pct(d.Totals.VatRate * 100)</span>
+            <span class="val">@Fmt.Rand(d.Totals.Vat)</span>
         </div>
-        <div class="totals-row grand" style="font-size:1.1rem">
-            <span class="lbl">Total incl VAT</span>
-            <span class="val">@Fmt.Rand(Model.IncVat)</span>
+        <div class="totals-row grand">
+            <span class="lbl">Total inc VAT</span>
+            <span class="val">@Fmt.Rand(d.Totals.TotalIncVat)</span>
         </div>
     </div>
 
+    <p class="doc-validity"><strong>This quotation is valid until @Fmt.Date(h.ValidUntil).</strong></p>
+
     <div class="doc-terms">
-        <h4>Notes</h4>
-        <ul>
-            <li>Any span in carcass greater than 700mm must be re-enforced.</li>
-        </ul>
-
-        <h4>Lead times</h4>
-        <ul>
-            <li>
-                Material: 2 working days if stock is available at suppliers; 6 to 8 weeks if not in
-                stock and it needs to be imported.
-            </li>
-            <li>
-                Production: 5 working days from acceptance of quotation in writing and payment of
-                deposit if applicable.
-            </li>
-        </ul>
-
-        <h4>Exclusions</h4>
-        <ul>
-            <li>Sealing between countertop and walls.</li>
-            <li>Any plumbing or electrical work.</li>
-            <li>Removal of existing worktops.</li>
-        </ul>
-
-        <h4>Terms and conditions</h4>
-        <ul>
-            <li><strong>This quotation is valid for 30 days only</strong> &mdash; until @Fmt.Date(q.ValidUntil).</li>
-            <li>Damage caused by other parties or trades is charged as extra.</li>
-            <li>No liability for negligent damage once handed over, or once signed &ldquo;Received in Good Order&rdquo;.</li>
-            <li>
-                No work commences until written acceptance and deposit paid, or an official order
-                number for account customers.
-            </li>
-            <li>Prices exclude VAT and delivery unless stated.</li>
-            <li>All pricing is subject to final measurement on site; changes are charged for.</li>
-            <li>No contra charges, set off or retentions unless agreed in writing beforehand.</li>
-        </ul>
-
-        <h4>Disclaimers</h4>
-        <ul>
-            <li>No warranty where material is used in an application the manufacturer does not support.</li>
-            <li>
-                Solid dark colours scratch more easily than lighter speckled colours &mdash; not
-                recommended for kitchen worktops or high-traffic areas.
-            </li>
-            <li>
-                Veined or glitter colours may not give a seamless finish due to the directional
-                nature of the material.
-            </li>
-            <li>No warranty where material is in direct sunlight or variable weather.</li>
-        </ul>
-
-        <h4>Warranty</h4>
-        <table class="data" style="max-width:460px;font-size:.78rem">
-            <thead><tr><th>Brand</th><th>Material</th><th>Workmanship</th></tr></thead>
-            <tbody>
-                @foreach (var w in Model.Warranties)
+        @foreach (var s in sections)
+        {
+            <h3>@Words.TermSection(s.Section)</h3>
+            <ul>
+                @foreach (var line in s.Lines)
                 {
-                    <tr><td>@w.Brand</td><td>@w.Material</td><td>@w.Workmanship</td></tr>
+                    <li>@line</li>
                 }
-            </tbody>
-        </table>
-        <p class="small muted" style="margin-top:8px">Techno Surfaces is a DuPont certified installer.</p>
+            </ul>
+            @if (s.Section == "Warranties" && d.Warranties.Count > 0)
+            {
+                <partial name="_WarrantyTable" model="d.Warranties" />
+            }
+        }
 
-        <h4>Payment</h4>
-        <ul>
-            <li>60% deposit on order, balance on completion.</li>
-            <li>ABSA Bank, Claremont, branch 632005, account 4075862554.</li>
-        </ul>
+        @if (!sections.Any(s => s.Section == "Warranties") && d.Warranties.Count > 0)
+        {
+            <h3>Warranties</h3>
+            <partial name="_WarrantyTable" model="d.Warranties" />
+        }
+
+        @if (!d.BankDetailsSet)
+        {
+            <h3>Banking details</h3>
+            <p>Banking details have not been entered yet.</p>
+        }
     </div>
 
     <div class="doc-sign">
@@ -212,4 +302,11 @@
         <div><div class="line"></div><span>Date</span></div>
         <div><div class="line"></div><span>Name of duly authorised person</span></div>
     </div>
-</div>
+</article>
+
+@section Scripts {
+    @if (canEditLines)
+    {
+        <script src="~/js/quotation.js" asp-append-version="true"></script>
+    }
+}

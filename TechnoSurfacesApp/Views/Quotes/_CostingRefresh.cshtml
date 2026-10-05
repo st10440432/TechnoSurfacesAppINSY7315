@@ -1,0 +1,7 @@
+@model TechnoSurfacesApp.Controllers.CostingRefreshVm
+@*
+    Returned by QuotesController.CostingLines after a change. costing.js swaps each
+    part into the page by its id: #material-lines, #rate-lines and #costing-side.
+*@
+<partial name="_CostingLines" model="Model.Lines" />
+<partial name="_CostingSide" model="Model.Side" />

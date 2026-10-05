@@ -1,524 +1,163 @@
-﻿@{
-    var json = ViewData["Json"] as string ?? "{}";
-    var nextRef = ViewData["NextRef"] as string;
+@model TechnoSurfacesApp.Controllers.NewQuoteVm
+@*
+    A new quote (US-14, US-15): who it is for, where the work is, and the markup.
+    Posted to QuotesController.Create, which creates it through the quote workflow
+    service and opens its costing sheet. A field with a problem is marked with
+    aria-invalid and tied to its message by the field tag helpers.
+*@
+@{
+    var f = Model.Form;
+    var noCustomers = Model.Customers.Count == 0;
+    ViewData["ErrorOrder"] = new[]
+    {
+        "Form.CustomerId", "Form.ContactId", "Form.CustomerReference", "Form.Site", "Form.Project",
+        "Form.DeliveryAddress", "Form.Reference", "Form.MarkupPercent", "Form.ValidForDays"
+    };
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>New quote</h2>
-        <p>Reference <strong>@nextRef</strong> &middot; valid 30 days from issue</p>
+        <h1>New quote</h1>
+        <p>Start with who the quote is for and where the work is. The materials and labour come next, on the costing sheet.</p>
     </div>
-    <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-action="Index">Cancel</a>
-        <a class="btn btn-primary" asp-action="Costing" asp-route-id="1">
-            Continue to costing sheet
-            <svg class="ico ico-sm"><use href="#i-chevron-right" /></svg>
-        </a>
+</header>
+
+@if (noCustomers)
+{
+    <div class="empty card">
+        <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg>
+        <h2>Add a customer first</h2>
+        <p>A quote is billed to a customer and addressed to one of its contacts. There are no active customers with contacts yet.</p>
+        <a class="btn btn-primary" asp-controller="Customers" asp-action="Index">Open customers</a>
     </div>
-</div>
+}
+else
+{
+    <form method="post" asp-action="Create" class="content-narrow" novalidate>
+        <partial name="_ErrorSummary" />
 
-<!-- ============ 1. Quote details ============ -->
-<div class="card">
-    <div class="card-head">
-        <span class="avatar" style="width:24px;height:24px;flex-basis:24px;font-size:.68rem">1</span>
-        <h2>Quote details</h2>
-    </div>
-    <div class="card-body">
-        <div class="field-row field-row-2">
-            <div class="field">
-                <label class="label" for="customer">Customer <span class="req">*</span></label>
-                <select class="select" id="customer">
-                    <option value="">Select a customer&hellip;</option>
-                </select>
-                <div class="hint" id="customerMeta"></div>
+        <section class="card" aria-labelledby="who-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg>
+                <h2 id="who-title">Who it is for</h2>
             </div>
-            <div class="field">
-                <label class="label" for="contact">Attention <span class="req">*</span></label>
-                <select class="select" id="contact" disabled>
-                    <option value="">Select a customer first</option>
-                </select>
-                <div class="hint" id="contactMeta">The quotation is addressed to a person, not a company.</div>
-            </div>
-        </div>
-
-        <div class="field-row field-row-2">
-            <div class="field">
-                <label class="label" for="site">Site <span class="req">*</span></label>
-                <input class="input" id="site" placeholder="Where the work happens" />
-            </div>
-            <div class="field">
-                <label class="label" for="project">Project <span class="req">*</span></label>
-                <input class="input" id="project" placeholder="What the job is" />
-            </div>
-        </div>
-
-        <div class="field-row field-row-3">
-            <div class="field">
-                <label class="label" for="custref">Customer's own reference</label>
-                <input class="input" id="custref" placeholder="Optional" />
-            </div>
-            <div class="field">
-                <label class="label" for="issued">Issue date</label>
-                <input class="input" id="issued" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
-            </div>
-            <div class="field">
-                <label class="label">Valid until</label>
-                <input class="input" id="validUntil" value="@Fmt.Date(DateTime.Today.AddDays(30))" disabled />
-                <div class="hint">Issue date + 30 days, per standing terms</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ============ 2. Material cascade ============ -->
-<div class="card">
-    <div class="card-head">
-        <span class="avatar sage" style="width:24px;height:24px;flex-basis:24px;font-size:.68rem">2</span>
-        <h2>Add material</h2>
-        <span class="spacer"></span>
-        <span class="badge" id="catalogueCount"></span>
-    </div>
-
-    <div class="card-body">
-        <div class="field-row field-row-2" style="margin-bottom:14px">
-            <div class="field">
-                <label class="label" for="supplier">Supplier <span class="req">*</span></label>
-                <select class="select" id="supplier">
-                    <option value="">Select a supplier&hellip;</option>
-                </select>
-                <div class="hint" id="supplierMeta"></div>
-            </div>
-
-            <div class="field">
-                <label class="label" for="productLine">Material <span class="req">*</span></label>
-                <select class="select" id="productLine" disabled>
-                    <option value="">Select a supplier first</option>
-                </select>
-                <div class="hint" id="productLineMeta"></div>
-            </div>
-        </div>
-
-        <div class="field-row field-row-2">
-            <div class="field">
-                <label class="label" for="colour">Colour <span class="req">*</span></label>
-                <select class="select" id="colour" disabled>
-                    <option value="">Select a material first</option>
-                </select>
-                <div class="hint" id="colourMeta"></div>
-            </div>
-
-            <div class="field">
-                <label class="label" for="variant">Sheet size &amp; thickness <span class="req">*</span></label>
-                <select class="select" id="variant" disabled>
-                    <option value="">Select a colour first</option>
-                </select>
-                <div class="hint" id="variantMeta">Price depends on size and thickness, so it resolves here.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Unresolved state -->
-    <div class="card-body" id="pricePending" style="border-top:1px solid var(--line-2);background:#fafbfc">
-        <div class="notice notice-info" style="margin:0">
-            <svg class="ico"><use href="#i-lock" /></svg>
-            <div>
-                <strong>No price yet.</strong>
-                A price is shown only once supplier, material, colour, size and thickness are all chosen.
-                The same colour can carry three different prices depending on the sheet &mdash;
-                showing one before then would be a guess.
-            </div>
-        </div>
-    </div>
-
-    <!-- Resolved state -->
-    <div id="priceResolved" style="display:none">
-        <div class="card-body" style="border-top:1px solid var(--line-2);background:var(--ts-sage-100)">
-            <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
-                <div style="flex:1;min-width:230px">
-                    <div class="section-label">Resolved material</div>
-                    <div style="font-size:1.05rem;font-weight:680;margin-top:4px" id="rTitle"></div>
-                    <div class="small muted" id="rSub" style="margin-top:2px"></div>
-                    <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap" id="rBadges"></div>
-                </div>
-                <div style="text-align:right">
-                    <div class="section-label">Price per sheet</div>
-                    <div style="font-size:1.75rem;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums" id="rSheet"></div>
-                    <div class="tiny muted" id="rBasis"></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card-body" style="border-top:1px solid var(--line-2)">
-            <div class="field-row field-row-3">
-                <div class="field">
-                    <label class="label">Sheet dimensions</label>
-                    <input class="input" id="rDims" disabled />
-                </div>
-                <div class="field">
-                    <label class="label">Sheet area</label>
-                    <input class="input" id="rArea" disabled />
-                </div>
-                <div class="field">
-                    <label class="label">Price per m&sup2;</label>
-                    <input class="input" id="rSqm" disabled />
-                </div>
-            </div>
-
-            <div class="field-row field-row-3">
-                <div class="field">
-                    <label class="label" for="sheets">Sheets to order <span class="req">*</span></label>
-                    <input class="input input-num" id="sheets" type="number" step="0.5" min="0" value="1" />
-                    <div class="hint">Half sheets allowed</div>
-                </div>
-                <div class="field">
-                    <label class="label" for="disc">Supplier discount</label>
-                    <div class="input-group">
-                        <input class="input input-num" id="disc" type="number" step="0.5" min="0" max="100" value="0" />
-                        <span class="addon">%</span>
+            <div class="card-body">
+                <div class="field-row field-row-2">
+                    <div class="field">
+                        <label class="label" asp-for="Form.CustomerId">Customer <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="Form.CustomerId" required data-customer-select>
+                            <option value="">Choose a customer</option>
+                            @foreach (var c in Model.Customers)
+                            {
+                                <option value="@c.Id" selected="@(f.CustomerId == c.Id)">@c.Name@(string.IsNullOrEmpty(c.AccountCode) ? "" : $" ({c.AccountCode})")</option>
+                            }
+                        </select>
+                        <field-error for="Form.CustomerId" />
                     </div>
-                    <div class="hint">Discount <strong>received</strong>, negotiated per job</div>
+                    <div class="field">
+                        <label class="label" asp-for="Form.ContactId">Attention of <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="Form.ContactId" required aria-describedby="contact-hint" data-contact-select>
+                            <option value="">Choose a contact</option>
+                            @foreach (var c in Model.Customers)
+                            {
+                                foreach (var p in c.Contacts)
+                                {
+                                    <option value="@p.Id" data-customer="@c.Id" data-name="@p.FullName@(string.IsNullOrEmpty(p.Position) ? "" : ", " + p.Position)"
+                                            selected="@(f.ContactId == p.Id)">@c.Name: @p.FullName@(string.IsNullOrEmpty(p.Position) ? "" : ", " + p.Position)</option>
+                                }
+                            }
+                        </select>
+                        <span class="hint" id="contact-hint">The person the quotation is addressed to.</span>
+                        <field-error for="Form.ContactId" />
+                    </div>
                 </div>
                 <div class="field">
-                    <label class="label">Line total</label>
-                    <input class="input input-num strong" id="rLineTotal" disabled />
-                    <div class="hint" id="rDerived"></div>
+                    <label class="label" asp-for="Form.CustomerReference">Customer's own reference <span class="optional">optional</span></label>
+                    <input class="input" asp-for="Form.CustomerReference" maxlength="100" aria-describedby="custref-hint" />
+                    <span class="hint" id="custref-hint">Their order or job number, if they gave one. It is printed on the quotation.</span>
+                    <field-error for="Form.CustomerReference" />
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div class="card-foot">
-            <button class="btn btn-primary" type="button" onclick="addLine()">
-                <svg class="ico ico-sm"><use href="#i-plus" /></svg> Add material line
+        <section class="card" aria-labelledby="where-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                <h2 id="where-title">The job</h2>
+            </div>
+            <div class="card-body">
+                <div class="field-row field-row-2">
+                    <div class="field">
+                        <label class="label" asp-for="Form.Site">Site <span class="optional">optional</span></label>
+                        <input class="input" asp-for="Form.Site" maxlength="200" aria-describedby="site-hint" />
+                        <span class="hint" id="site-hint">Where the work is done.</span>
+                        <field-error for="Form.Site" />
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Form.Project">Project <span class="optional">optional</span></label>
+                        <input class="input" asp-for="Form.Project" maxlength="200" aria-describedby="project-hint" />
+                        <span class="hint" id="project-hint">What the job is, such as Kitchen and scullery.</span>
+                        <field-error for="Form.Project" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="Form.DeliveryAddress">Delivery address <span class="optional">optional</span></label>
+                    <textarea class="input" asp-for="Form.DeliveryAddress" rows="2" maxlength="300"></textarea>
+                    <field-error for="Form.DeliveryAddress" />
+                </div>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="terms-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-sliders" /></svg>
+                <h2 id="terms-title">Reference, markup and validity</h2>
+            </div>
+            <div class="card-body">
+                <div class="field-row field-row-3">
+                    <div class="field">
+                        <label class="label" asp-for="Form.Reference">Quote reference <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" asp-for="Form.Reference" maxlength="40" required autocomplete="off" aria-describedby="reference-hint" />
+                        <span class="hint" id="reference-hint">
+                            Each quote needs its own reference.@if (Model.LastReference is not null)
+                            {
+                                <text> The last one used was <span class="mono">@Model.LastReference</span>.</text>
+                            }
+                        </span>
+                        <field-error for="Form.Reference" />
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Form.MarkupPercent">Markup <span class="req" aria-hidden="true">*</span></label>
+                        <span class="input-group">
+                            <input class="input input-num" asp-for="Form.MarkupPercent" type="text" inputmode="decimal" required aria-describedby="markup-hint" />
+                            <span class="addon" aria-hidden="true">%</span>
+                        </span>
+                        <span class="hint" id="markup-hint">Applied to the sub total only. There is no default, so enter it for every quote.</span>
+                        <field-error for="Form.MarkupPercent" />
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Form.ValidForDays">Valid for <span class="req" aria-hidden="true">*</span></label>
+                        <span class="input-group">
+                            <input class="input input-num" asp-for="Form.ValidForDays" type="number" inputmode="numeric" min="1" max="365" required aria-describedby="valid-hint" />
+                            <span class="addon">days</span>
+                        </span>
+                        <span class="hint" id="valid-hint">The standing terms give 30 days.</span>
+                        <field-error for="Form.ValidForDays" />
+                    </div>
+                </div>
+                <p class="hint mb-0">Fields marked <span class="req">*</span> are required.</p>
+            </div>
+        </section>
+
+        <div class="form-actions">
+            <a class="btn btn-ghost" asp-action="Index">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                Create the quote and open the costing sheet
             </button>
-            <button class="btn btn-ghost" type="button" onclick="resetCascade()">Clear selection</button>
         </div>
-    </div>
-</div>
-
-<!-- ============ 3. Lines on this quote ============ -->
-<div class="card">
-    <div class="card-head">
-        <span class="avatar" style="width:24px;height:24px;flex-basis:24px;font-size:.68rem">3</span>
-        <h2>Materials on this quote</h2>
-        <span class="spacer"></span>
-        <span class="badge badge-sage" id="lineCount">0 lines</span>
-    </div>
-
-    <div id="noLines" class="empty">
-        <svg class="ico"><use href="#i-layers" /></svg>
-        <h3>No materials yet</h3>
-        <p>A quote can span several materials &mdash; add as many as the job needs.</p>
-    </div>
-
-    <div class="table-wrap" id="linesWrap" style="display:none">
-        <table class="data stack">
-            <thead>
-                <tr>
-                    <th>Material</th>
-                    <th>Size</th>
-                    <th class="right">Sheets</th>
-                    <th class="right">Lin m</th>
-                    <th class="right">m&sup2;</th>
-                    <th class="right">R/sheet</th>
-                    <th class="right">Disc</th>
-                    <th class="right">Line total</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="linesBody"></tbody>
-            <tfoot id="linesFoot"></tfoot>
-        </table>
-    </div>
-
-    <div class="card-foot">
-        <a class="btn btn-secondary" asp-action="Index">Save draft</a>
-        <span style="flex:1"></span>
-        <a class="btn btn-primary" asp-action="Costing" asp-route-id="1">
-            Continue to costing sheet
-            <svg class="ico ico-sm"><use href="#i-chevron-right" /></svg>
-        </a>
-    </div>
-</div>
+    </form>
+}
 
 @section Scripts {
-    <script>
-        const DATA = @Html.Raw(json);
-        let lines = [];
-
-        // ---- formatting, matching the server-side Fmt helper ----
-        function rand(v) {
-            const p = Number(v).toFixed(2).split('.');
-            return 'R' + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0') + ',' + p[1];
-        }
-        function num(v, dp) {
-            const p = Number(v).toFixed(dp).split('.');
-            return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0') + (p[1] ? ',' + p[1] : '');
-        }
-        function qty(v) { return Number(v) % 1 === 0 ? String(v) : num(v, 2); }
-
-        const $ = id => document.getElementById(id);
-
-        // ---- populate the fixed lists ----
-        DATA.customers.forEach(c => {
-            $('customer').add(new Option(c.name + ' (' + c.account + ')', c.id));
-        });
-        DATA.suppliers.forEach(s => {
-            $('supplier').add(new Option(s.tradingAs ? s.name + ' \u2014 ' + s.tradingAs : s.name, s.id));
-        });
-        $('catalogueCount').textContent = DATA.entries.length + ' catalogue entries';
-
-        // ---- customer -> contact ----
-        $('customer').onchange = function () {
-            const c = DATA.customers.find(x => x.id == this.value);
-            const sel = $('contact');
-            sel.innerHTML = '';
-            if (!c) {
-                sel.disabled = true;
-                sel.add(new Option('Select a customer first', ''));
-                $('customerMeta').textContent = '';
-                return;
-            }
-            $('customerMeta').textContent = c.address;
-            sel.disabled = false;
-            sel.add(new Option('Select a contact\u2026', ''));
-            c.contacts.forEach(k => sel.add(new Option(k.role ? k.name + ' \u2014 ' + k.role : k.name, k.id)));
-            $('contactMeta').textContent = c.contacts.length + ' contact' +
-                (c.contacts.length === 1 ? '' : 's') + ' on file for this customer.';
-        };
-
-        $('contact').onchange = function () {
-            const c = DATA.customers.find(x => x.id == $('customer').value);
-            const k = c && c.contacts.find(x => x.id == this.value);
-            $('contactMeta').textContent = k ? [k.tel, k.email].filter(Boolean).join(' \u00B7 ')
-                : 'The quotation is addressed to a person, not a company.';
-        };
-
-        // ---- level 1: supplier -> material ----
-        $('supplier').onchange = function () {
-            const s = DATA.suppliers.find(x => x.id == this.value);
-            const sel = $('productLine');
-            sel.innerHTML = '';
-            resetBelow('productLine');
-
-            if (!s) {
-                sel.disabled = true;
-                sel.add(new Option('Select a supplier first', ''));
-                $('supplierMeta').textContent = '';
-                return;
-            }
-
-            $('supplierMeta').innerHTML = 'Price list ' + s.dated +
-                (s.stale ? ' <strong style="color:var(--st-pending)">\u00B7 over a year old, confirm before quoting</strong>' : '') +
-                ' \u00B7 prices ' + (s.structure === 'Band' ? 'by colour band' : 'per item') +
-                ' \u00B7 seamkit ' + rand(s.adhesive);
-
-            sel.disabled = false;
-            sel.add(new Option('Select a material\u2026', ''));
-            DATA.lines.filter(p => p.sup == s.id).forEach(p => sel.add(new Option(p.name, p.id)));
-        };
-
-        // ---- level 2: material -> colour ----
-        $('productLine').onchange = function () {
-            const sel = $('colour');
-            sel.innerHTML = '';
-            resetBelow('colour');
-
-            if (!this.value) {
-                sel.disabled = true;
-                sel.add(new Option('Select a material first', ''));
-                $('productLineMeta').textContent = '';
-                return;
-            }
-
-            const colours = [...new Set(DATA.entries.filter(e => e.pl == this.value).map(e => e.colour))].sort();
-            $('productLineMeta').textContent = colours.length + ' colour' + (colours.length === 1 ? '' : 's') + ' available';
-
-            sel.disabled = false;
-            sel.add(new Option('Select a colour\u2026', ''));
-            colours.forEach(c => sel.add(new Option(c, c)));
-        };
-
-        // ---- level 3: colour -> size & thickness ----
-        $('colour').onchange = function () {
-            const sel = $('variant');
-            sel.innerHTML = '';
-            showPending();
-
-            if (!this.value) {
-                sel.disabled = true;
-                sel.add(new Option('Select a colour first', ''));
-                $('colourMeta').textContent = '';
-                return;
-            }
-
-            const vs = DATA.entries
-                .filter(e => e.pl == $('productLine').value && e.colour === this.value)
-                .sort((a, b) => b.thk - a.thk || a.wid - b.wid);
-
-            const e0 = vs[0];
-            let meta = [];
-            if (e0.range) meta.push('Range: ' + e0.range);
-            if (e0.band) meta.push('Price band ' + e0.band);
-            if (vs.length > 1) meta.push(vs.length + ' sizes at different prices');
-            $('colourMeta').textContent = meta.join(' \u00B7 ');
-
-            sel.disabled = false;
-            sel.add(new Option('Select size and thickness\u2026', ''));
-            vs.forEach(e => sel.add(new Option(
-                e.len + ' \u00D7 ' + e.wid + ' \u00D7 ' + e.thk + 'mm', e.id)));
-        };
-
-        // ---- level 4: resolve the price ----
-        $('variant').onchange = function () {
-            const e = DATA.entries.find(x => x.id == this.value);
-            if (!e) { showPending(); return; }
-
-            $('pricePending').style.display = 'none';
-            $('priceResolved').style.display = 'block';
-
-            const sup = DATA.suppliers.find(s => s.id == e.sup);
-            const pl = DATA.lines.find(p => p.id == e.pl);
-
-            $('rTitle').textContent = e.colour;
-            $('rSub').textContent = sup.name + ' \u00B7 ' + pl.name;
-
-            let badges = '';
-            if (e.code)  badges += '<span class="badge badge-code">' + e.code + '</span>';
-            if (e.band)  badges += '<span class="badge badge-band">Band ' + e.band + '</span>';
-            if (e.range) badges += '<span class="badge">' + e.range + '</span>';
-            if (e.stock !== null && e.stock !== undefined)
-                badges += '<span class="badge badge-sage">' + qty(e.stock) + ' in stock</span>';
-            if (e.status !== 'Active')
-                badges += '<span class="badge badge-warn">' + e.status + '</span>';
-            badges += '<span class="badge">Priced from ' + e.eff + '</span>';
-            $('rBadges').innerHTML = badges;
-
-            $('rSheet').textContent = rand(e.sheet);
-            $('rBasis').textContent = e.basis;
-            $('rDims').value = e.len + ' \u00D7 ' + e.wid + ' \u00D7 ' + e.thk + 'mm';
-            $('rArea').value = num(e.area, 4) + ' m\u00B2';
-            $('rSqm').value = rand(e.sqm) + ' per m\u00B2';
-
-            recalc();
-        };
-
-        $('sheets').oninput = recalc;
-        $('disc').oninput = recalc;
-
-        function currentEntry() {
-            return DATA.entries.find(x => x.id == $('variant').value);
-        }
-
-        function recalc() {
-            const e = currentEntry();
-            if (!e) return;
-            const n = parseFloat($('sheets').value) || 0;
-            const d = parseFloat($('disc').value) || 0;
-            const total = n * e.sheet * (1 - d / 100);
-
-            $('rLineTotal').value = rand(total);
-            $('rDerived').innerHTML = qty(n) + ' sheets \u00B7 ' +
-                num(n * e.len / 1000, 2) + ' linear m \u00B7 ' +
-                num(n * (e.len / 1000) * (e.wid / 1000), 4) + ' m\u00B2';
-        }
-
-        function showPending() {
-            $('pricePending').style.display = 'block';
-            $('priceResolved').style.display = 'none';
-        }
-
-        function resetBelow(from) {
-            const order = ['productLine', 'colour', 'variant'];
-            order.slice(order.indexOf(from) + 1).forEach(id => {
-                const s = $(id);
-                s.innerHTML = '';
-                s.disabled = true;
-                s.add(new Option('\u2014', ''));
-            });
-            showPending();
-        }
-
-        function resetCascade() {
-            ['supplier', 'productLine', 'colour', 'variant'].forEach(id => $(id).value = '');
-            ['productLine', 'colour', 'variant'].forEach(id => { $(id).disabled = true; });
-            ['supplierMeta', 'productLineMeta', 'colourMeta'].forEach(id => $(id).textContent = '');
-            showPending();
-        }
-
-        // ---- lines ----
-        function addLine() {
-            const e = currentEntry();
-            if (!e) return;
-            const n = parseFloat($('sheets').value) || 0;
-            if (n <= 0) { alert('Enter how many sheets are needed.'); return; }
-
-            const sup = DATA.suppliers.find(s => s.id == e.sup);
-            const pl = DATA.lines.find(p => p.id == e.pl);
-            const d = parseFloat($('disc').value) || 0;
-
-            lines.push({
-                entry: e, supplier: sup.name, product: pl.name,
-                sheets: n, disc: d,
-                linm: n * e.len / 1000,
-                sqm: n * (e.len / 1000) * (e.wid / 1000),
-                total: n * e.sheet * (1 - d / 100)
-            });
-
-            renderLines();
-            resetCascade();
-            document.getElementById('lineCount').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        function removeLine(i) { lines.splice(i, 1); renderLines(); }
-
-        function renderLines() {
-            $('lineCount').textContent = lines.length + ' line' + (lines.length === 1 ? '' : 's');
-            $('noLines').style.display = lines.length ? 'none' : 'block';
-            $('linesWrap').style.display = lines.length ? 'block' : 'none';
-            if (!lines.length) return;
-
-            $('linesBody').innerHTML = lines.map((l, i) => `
-                <tr>
-                  <td data-label="Material">
-                    <div class="strong">${l.entry.colour}</div>
-                    <div class="tiny muted">${l.supplier} \u00B7 ${l.product}
-                      ${l.entry.band ? '<span class="badge badge-band">' + l.entry.band + '</span>' : ''}</div>
-                  </td>
-                  <td data-label="Size">${l.entry.len} \u00D7 ${l.entry.wid} \u00D7 ${l.entry.thk}mm</td>
-                  <td data-label="Sheets" class="right">${qty(l.sheets)}</td>
-                  <td data-label="Lin m" class="right">${num(l.linm, 2)}</td>
-                  <td data-label="m\u00B2" class="right">${num(l.sqm, 4)}</td>
-                  <td data-label="R/sheet" class="right">${rand(l.entry.sheet)}</td>
-                  <td data-label="Disc" class="right">${l.disc ? num(l.disc, 0) + '%' : '\u2014'}</td>
-                  <td data-label="Line total" class="right strong">${rand(l.total)}</td>
-                  <td data-label="" class="right">
-                    <button class="btn btn-ghost btn-sm" type="button" onclick="removeLine(${i})">Remove</button>
-                  </td>
-                </tr>`).join('');
-
-            const tSheets = lines.reduce((a, l) => a + l.sheets, 0);
-            const tSqm = lines.reduce((a, l) => a + l.sqm, 0);
-            const tTotal = lines.reduce((a, l) => a + l.total, 0);
-
-            $('linesFoot').innerHTML = `
-                <tr class="total-row">
-                  <td data-label="" colspan="2">Material subtotal</td>
-                  <td data-label="Sheets" class="right">${qty(tSheets)}</td>
-                  <td data-label=""></td>
-                  <td data-label="m\u00B2" class="right">${num(tSqm, 4)}</td>
-                  <td data-label="" colspan="2"></td>
-                  <td data-label="Total" class="right">${rand(tTotal)}</td>
-                  <td></td>
-                </tr>`;
-        }
-
-        // ---- valid-until follows issue date ----
-        $('issued').onchange = function () {
-            if (!this.value) return;
-            const d = new Date(this.value);
-            d.setDate(d.getDate() + 30);
-            $('validUntil').value = d.toLocaleDateString('en-GB',
-                { day: '2-digit', month: 'short', year: 'numeric' });
-        };
-    </script>
+    <script src="~/js/quote-create.js" asp-append-version="true"></script>
 }

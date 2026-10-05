@@ -1,0 +1,36 @@
+@model TechnoSurfaces.Application.Quoting.QuoteDetail
+@*
+    Moves between the screens about one quote. The current screen is marked with
+    aria-current, so a screen reader says which one is open.
+*@
+@{
+    var action = ViewContext.RouteData.Values["action"] as string;
+    string? Current(string name) => string.Equals(action, name, StringComparison.OrdinalIgnoreCase) ? "page" : null;
+}
+<nav class="tabs" aria-label="Screens for quote @Model.Reference">
+    <a asp-action="Costing" asp-route-id="@Model.Id" aria-current="@Current("Costing")">
+        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-calc" /></svg> Costing sheet
+    </a>
+    <a asp-action="Quotation" asp-route-id="@Model.Id" aria-current="@Current("Quotation")">
+        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-file" /></svg> Customer quotation
+    </a>
+    @if (Model.Status == "PendingApproval")
+    {
+        <a asp-action="Review" asp-route-id="@Model.Id" aria-current="@Current("Review")">
+            <svg class="ico ico-sm" aria-hidden="true"><use href="#i-check-circle" /></svg> Review
+        </a>
+    }
+    <a asp-action="Versions" asp-route-id="@Model.Id" aria-current="@Current("Versions")">
+        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-history" /></svg> Versions
+        @if (Model.VersionNo > 1)
+        {
+            <span class="nav-count">@Model.VersionNo</span>
+        }
+    </a>
+    @if (Model.Status == "Accepted")
+    {
+        <a asp-action="RecordInvoice" asp-route-id="@Model.Id" aria-current="@Current("RecordInvoice")">
+            <svg class="ico ico-sm" aria-hidden="true"><use href="#i-copy" /></svg> Invoice record
+        </a>
+    }
+</nav>

@@ -1,0 +1,22 @@
+@model IReadOnlyList<TechnoSurfaces.Application.Quoting.QuotationWarranty>
+@* The warranty for each brand on the quote (US-13). *@
+<table class="doc-warranty">
+    <caption class="sr-only">Warranty by brand</caption>
+    <thead>
+        <tr>
+            <th scope="col">Brand</th>
+            <th scope="col">Material</th>
+            <th scope="col">Workmanship</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var w in Model)
+        {
+            <tr>
+                <th scope="row">@w.Brand</th>
+                <td>@w.Material</td>
+                <td>@w.Workmanship</td>
+            </tr>
+        }
+    </tbody>
+</table>

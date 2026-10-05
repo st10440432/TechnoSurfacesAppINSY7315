@@ -1,365 +1,378 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
-using System.Text.Json;
-using TechnoSurfaces.Models;
-using TechnoSurfaces.Services;
-using TechnoSurfacesApp.Controllers;
-using TechnoSurfacesApp.Data;
+using Microsoft.AspNetCore.Mvc;
+using TechnoSurfaces.Application.Catalogue;
+using TechnoSurfaces.Application.Customers;
+using TechnoSurfaces.Application.Pricing;
+using TechnoSurfaces.Application.Quoting;
+using TechnoSurfaces.Domain;
+using TechnoSurfaces.Domain.Quoting;
+using TechnoSurfacesApp.Api;
 using TechnoSurfacesApp.Helpers;
 using TechnoSurfacesApp.Identity;
 using TechnoSurfacesApp.Models;
-using static System.Collections.Specialized.BitVector32;
+using TechnoSurfacesApp.Services;
+using QuoteStatus = TechnoSurfaces.Domain.QuoteStatus;
 
 namespace TechnoSurfacesApp.Controllers;
 
 /// <summary>
-/// Quoting screens. The prototype has no back end - every action reads from the
-/// in-memory demo store and nothing is written back.
+/// The quote screens. Pages are read here through the application services. Every
+/// change a user makes (a costing line, submit, approve, send, accept, reopen, the
+/// invoice) is sent from the page to the /api endpoints, which hold the permission
+/// checks and the error responses, so those rules exist in one place only.
 /// </summary>
 public class QuotesController : AppController
 {
-    public QuotesController(DemoSession session) : base(session) { }
+    private readonly IQuoteWorkflowService _workflow;
+    private readonly IQuoteRepository _quotes;
+    private readonly ICostingSheetService _costing;
+    private readonly IQuotationGenerationService _quotation;
+    private readonly IInvoiceRecordService _invoices;
+    private readonly ICustomerService _customers;
+    private readonly ICatalogueBrowser _catalogue;
+    private readonly IPriceResolver _prices;
+    private readonly IRateResolver _rates;
+    private readonly SignedInUser _me;
+
+    public QuotesController(
+        IQuoteWorkflowService workflow,
+        IQuoteRepository quotes,
+        ICostingSheetService costing,
+        IQuotationGenerationService quotation,
+        IInvoiceRecordService invoices,
+        ICustomerService customers,
+        ICatalogueBrowser catalogue,
+        IPriceResolver prices,
+        IRateResolver rates,
+        SignedInUser me)
+    {
+        _workflow = workflow;
+        _quotes = quotes;
+        _costing = costing;
+        _quotation = quotation;
+        _invoices = invoices;
+        _customers = customers;
+        _catalogue = catalogue;
+        _prices = prices;
+        _rates = rates;
+        _me = me;
+    }
+
+    private Crumb QuotesCrumb => new("Quotes", Url.Action(nameof(Index)));
 
     // ======================================================================
     //  Quote list
     // ======================================================================
 
-    public IActionResult Index(string? status, int? customerId, int? ownerId, string? q)
+    public async Task<IActionResult> Index(string? status, int? customerId, bool mine, string? q, CancellationToken ct)
     {
-        var list = Db.Quotes.AsEnumerable();
+        var filter = new QuoteListFilter(
+            StatusText.All.Contains(status) ? status : null,
+            customerId is > 0 ? customerId : null,
+            mine ? _me.Id : null,
+            string.IsNullOrWhiteSpace(q) ? null : q.Trim());
 
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<QuoteStatus>(status, out var s))
-            list = list.Where(x => x.Status == s);
-
-        if (customerId is > 0)
-            list = list.Where(x => x.CustomerId == customerId);
-
-        if (ownerId is > 0)
-            list = list.Where(x => x.OwnerUserId == ownerId);
-
-        if (!string.IsNullOrWhiteSpace(q))
+        var vm = new QuoteListVm
         {
-            var t = q.Trim();
-            list = list.Where(x =>
-                x.Ref.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                x.Project.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                x.Site.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                Db.CustomerName(x.CustomerId).Contains(t, StringComparison.OrdinalIgnoreCase));
-        }
-
-        ViewData["Title"] = "Quotes";
-        ViewData["Page"] = "quotes";
-        ViewData["Crumb"] = "Quoting";
-
-        return View(new QuoteListVm
-        {
-            Quotes = list.OrderByDescending(x => x.IssueDate).ToList(),
-            Status = status,
-            CustomerId = customerId,
-            OwnerId = ownerId,
-            Search = q
-        });
-    }
-
-    // ======================================================================
-    //  New quote - the supplier / material / colour / size cascade
-    // ======================================================================
-
-    public IActionResult Create()
-    {
-        // The whole catalogue is handed to the page so the cascade can filter
-        // without a round trip. Discontinued entries are excluded from new quotes
-        // but stay in the store so historic quotes still resolve.
-        var payload = new
-        {
-            suppliers = Db.Suppliers.OrderBy(s => s.Name).Select(s => new
-            {
-                id = s.Id,
-                name = s.Name,
-                tradingAs = s.TradingAs,
-                structure = s.PricingStructure.ToString(),
-                dated = Fmt.Date(s.PriceListDated),
-                stale = s.IsStale,
-                adhesive = s.AdhesivePrice,
-                delivery = s.DeliveryTerms
-            }),
-            lines = Db.ProductLines.Select(p => new
-            {
-                id = p.Id,
-                sup = p.SupplierId,
-                name = p.Name
-            }),
-            entries = Db.Catalogue
-                .Where(c => c.Status != CatalogueStatus.Discontinued)
-                .Select(c => new
-                {
-                    id = c.Id,
-                    sup = c.SupplierId,
-                    pl = c.ProductLineId,
-                    colour = c.ColourName,
-                    code = c.SupplierCode,
-                    band = c.BandCode,
-                    range = c.Range,
-                    len = c.SheetLengthMm,
-                    wid = c.SheetWidthMm,
-                    thk = c.ThicknessMm,
-                    area = c.SheetAreaSqm,
-                    sqm = c.EffectivePricePerSqm,
-                    sheet = c.EffectivePricePerSheet,
-                    basis = c.PriceBasis,
-                    stock = c.StockQty,
-                    status = c.StatusLabel,
-                    eff = Fmt.Date(c.EffectiveFrom)
-                }),
-            customers = Db.Customers.Select(c => new
-            {
-                id = c.Id,
-                name = c.CompanyName,
-                account = c.AccountCode,
-                address = c.BillingAddress,
-                contacts = c.Contacts.Select(k => new
-                {
-                    id = k.Id,
-                    name = k.Name,
-                    role = k.JobTitle,
-                    tel = k.Tel,
-                    email = k.Email
-                })
-            })
+            Quotes = await _workflow.ListAsync(filter, ct),
+            Customers = await _customers.ListAsync(includeInactive: true, ct: ct),
+            Status = filter.Status,
+            CustomerId = filter.CustomerId,
+            Mine = mine,
+            Search = filter.Search
         };
 
-        ViewData["Title"] = "New quote";
-        ViewData["Page"] = "new";
-        ViewData["Crumb"] = "Quoting";
-        ViewData["Json"] = JsonSerializer.Serialize(payload);
-        ViewData["NextRef"] = $"TS-2026-{Db.Quotes.Count + 142:0000}";
-        return View();
+        SetPage("Quotes", "quotes");
+        return View(vm);
     }
 
     // ======================================================================
-    //  Internal costing sheet
+    //  New quote
     // ======================================================================
 
-    public IActionResult Costing(int id)
+    [HttpGet]
+    public async Task<IActionResult> Create(int? customerId, CancellationToken ct)
     {
-        var quote = Db.GetQuote(id);
-        if (quote is null) return RedirectToAction(nameof(Index));
-
-        var me = Session.User;
-
-        ViewData["Title"] = "Costing sheet";
-        ViewData["Page"] = "quotes";
-        ViewData["Crumb"] = $"Quoting \u203A {quote.Ref}";
-
-        return View(new CostingVm
-        {
-            Quote = quote,
-            // Approved quotes lock against estimator edits; the MD can always edit.
-            CanEdit = Session.IsMd ||
-                      (quote.OwnerUserId == me.Id && quote.Status == QuoteStatus.Draft)
-        });
+        SetPage("New quote", "new", QuotesCrumb);
+        return View(await NewQuoteVmAsync(new NewQuoteForm { CustomerId = customerId }, ct));
     }
 
-    // ======================================================================
-    //  Customer-facing quotation
-    // ======================================================================
-
-    public IActionResult Quotation(int id)
+    [HttpPost]
+    public async Task<IActionResult> Create([Bind(Prefix = "Form")] NewQuoteForm form, CancellationToken ct)
     {
-        var quote = Db.GetQuote(id);
-        if (quote is null) return RedirectToAction(nameof(Index));
-
-        var lines = quote.QuotationLines.ToList();
-        var isDraft = lines.Count == 0;
-
-        // Where the estimator has not composed customer-facing lines yet, offer a
-        // starting point derived from the costing total. Real lines are written per
-        // room or element and replace these.
-        if (isDraft)
+        if (ModelState.IsValid)
         {
-            lines.Add(new QuotationLine
+            var result = await _workflow.CreateAsync(new NewQuote(
+                form.Reference!.Trim(), form.CustomerId!.Value, form.ContactId!.Value, form.Markup(),
+                form.Site, form.Project, form.CustomerReference, form.DeliveryAddress,
+                form.ValidForDays ?? Quote.DefaultValidForDays), ct);
+
+            switch (result.Outcome)
             {
-                Item = quote.Project,
-                Description = "Fabricate and install. Templates by Techno Surfaces. " +
-                              string.Join("; ", quote.MaterialLines.Select(m =>
-                                  $"Material: {m.SupplierName}, Colour: {m.ColourName}")),
-                Qty = 1m,
-                Rate = Math.Round(quote.Total, 2)
-            });
-            lines.Add(new QuotationLine
-            {
-                Description = "Includes 16mm MDF support board where required."
-            });
+                case WorkflowOutcome.Ok:
+                    Flash("success", $"Quote {result.Quote!.Reference} started",
+                        "Add the materials and labour. The price of each material fills in from the supplier's price list.");
+                    return RedirectToAction(nameof(Costing), new { id = result.Quote.Id });
+
+                case WorkflowOutcome.ReferenceTaken:
+                    ModelState.AddModelError("Form." + nameof(NewQuoteForm.Reference),
+                        result.Problem ?? "Another quote already uses this reference.");
+                    break;
+
+                case WorkflowOutcome.Invalid:
+                    foreach (var (field, messages) in result.Errors!)
+                        foreach (var message in messages)
+                            ModelState.AddModelError("Form." + field, message);
+                    break;
+
+                default:
+                    ModelState.AddModelError(string.Empty, result.Problem ?? "The quote could not be created.");
+                    break;
+            }
         }
 
-        ViewData["Title"] = "Customer quotation";
-        ViewData["Page"] = "quotes";
-        ViewData["Crumb"] = $"Quoting \u203A {quote.Ref}";
+        SetPage("New quote", "new", QuotesCrumb);
+        return View(await NewQuoteVmAsync(form, ct));
+    }
 
-        return View(new QuotationVm
+    private async Task<NewQuoteVm> NewQuoteVmAsync(NewQuoteForm form, CancellationToken ct)
+    {
+        var recent = await _workflow.ListAsync(new QuoteListFilter(), ct);
+        return new NewQuoteVm
         {
-            Quote = quote,
-            Lines = lines,
-            LinesAreDraft = isDraft,
-            Brands = quote.MaterialLines.Select(m => m.SupplierName).Distinct().ToList()
-        });
+            Form = form,
+            Customers = await _customers.ChoicesForNewQuoteAsync(ct),
+            LastReference = recent.OrderByDescending(r => r.Id).Select(r => r.Reference).FirstOrDefault()
+        };
     }
 
     // ======================================================================
-    //  Approval queue
+    //  Costing sheet: the internal costing, with the material cascade
     // ======================================================================
 
-    public async Task<IActionResult> Approvals()
+    public async Task<IActionResult> Costing(int id, CancellationToken ct)
     {
-        ViewData["Title"] = "Approval queue";
-        ViewData["Page"] = "approvals";
-        ViewData["Crumb"] = "Quoting";
+        var detail = await DetailAsync(id, ct);
+        var costing = await _costing.GetAsync(id, ct);
+        if (detail is null || costing.Outcome != CostingOutcome.Ok)
+            return QuoteNotFound(id);
 
-        return View(new ApprovalsVm
+        var vm = new CostingVm
         {
-            Pending = Db.QuotesAwaitingApproval,
-            IsMd = await CanAsync(Policies.CanApproveQuote)
-        });
-    }
+            Quote = detail,
+            Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
+            Actions = await ActionsForAsync(costing.Quote!),
+            Suppliers = await _catalogue.SuppliersAsync(ct),
+            RateItems = await _catalogue.RateItemsAsync(ct),
+            Check = await _quotation.CheckAsync(id, ct)
+        };
 
-    public async Task<IActionResult> Review(int id)
-    {
-        var quote = Db.GetQuote(id);
-        if (quote is null) return RedirectToAction(nameof(Approvals));
-
-        ViewData["Title"] = "Review quote";
-        ViewData["Page"] = "approvals";
-        ViewData["Crumb"] = $"Quoting \u203A {quote.Ref}";
-
-        return View(new ReviewVm
-        {
-            Quote = quote,
-            IsMd = await CanAsync(Policies.CanApproveQuote),
-            Checks = BuildChecks(quote)
-        });
+        SetPage("Costing sheet", "quotes", QuotesCrumb, new Crumb(detail.Reference));
+        return View(vm);
     }
 
     /// <summary>
-    /// Sanity checks surfaced before approval. These are prompts for the MD's
-    /// judgement, not rules - the thresholds are indicative and configurable.
+    /// The parts of the costing sheet that a change can move, rendered on their own:
+    /// both line tables, the quotation check and the next-step buttons. The sheet
+    /// swaps them in after every change, because one change can move other lines (a
+    /// line calculated from the total area follows the materials) and can make a
+    /// step possible, such as submitting once the first line is added.
     /// </summary>
-    private static List<ReviewCheck> BuildChecks(Quote quote)
+    public async Task<IActionResult> CostingLines(int id, CancellationToken ct)
     {
-        var checks = new List<ReviewCheck>();
+        var detail = await DetailAsync(id, ct);
+        var costing = await _costing.GetAsync(id, ct);
+        if (detail is null || costing.Outcome != CostingOutcome.Ok)
+            return NotFound();
 
-        // Markup within the usual band
-        if (quote.MarkupPct < 25m)
-            checks.Add(new("warn", $"Markup is {Fmt.Pct(quote.MarkupPct)}",
-                "Below the range normally applied. Confirm this is deliberate."));
-        else if (quote.MarkupPct > 45m)
-            checks.Add(new("info", $"Markup is {Fmt.Pct(quote.MarkupPct)}",
-                "Above the range normally applied."));
-        else
-            checks.Add(new("ok", $"Markup is {Fmt.Pct(quote.MarkupPct)}",
-                "Within the range normally applied."));
+        var actions = await ActionsForAsync(costing.Quote!);
+        return PartialView("_CostingRefresh", new CostingRefreshVm(
+            new CostingLinesVm(CostingSheetDto.From(costing.Quote!, costing.Totals!), actions.CanEdit),
+            new QuoteActionBar(detail, actions, await _quotation.CheckAsync(id, ct))));
+    }
 
-        // Rand per square metre
-        if (quote.TotalSqm == 0)
-            checks.Add(new("warn", "No material on the quote",
-                "The rand per square metre check cannot run without a material line."));
-        else if (quote.RandPerSqm < 2000m || quote.RandPerSqm > 12000m)
-            checks.Add(new("warn", $"{Fmt.Rand(quote.RandPerSqm)} per m\u00B2",
-                "Outside the usual range. Worth a second look before this goes out."));
-        else
-            checks.Add(new("ok", $"{Fmt.Rand(quote.RandPerSqm)} per m\u00B2",
-                $"{Fmt.Area(quote.TotalSqm)} across {quote.MaterialLines.Count} material line(s)."));
+    /// <summary>
+    /// The price a material would be charged at on this quote, before the line is
+    /// added, so the estimator sees the figure, where it came from, or the reason it
+    /// cannot be found as soon as the sheet size is chosen (US-01, US-03, NFR-01).
+    /// Read only: the line is still added through the costing API, which resolves the
+    /// price again and refuses the line if it does not resolve.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> PricePreview(int id, int colourId, int sheetSizeId, CancellationToken ct)
+    {
+        var quote = await _quotes.GetAsync(id, ct);
+        if (quote is null)
+            return NotFound();
 
-        // Supplier price list age
-        var stale = quote.MaterialLines
-            .Select(m => Db.Suppliers.FirstOrDefault(s => s.Name == m.SupplierName))
-            .Where(s => s is { IsStale: true })
-            .Select(s => s!.Name)
-            .Distinct()
-            .ToList();
+        var resolution = await _prices.ResolveAsync(new PriceKey(colourId, sheetSizeId), quote.IssueDate, ct);
+        return Json(PricePreviewResult.From(resolution, quote.IssueDate));
+    }
 
-        if (stale.Any())
-            checks.Add(new("warn", "Price list over a year old",
-                $"{string.Join(", ", stale)} \u2014 confirm current pricing before this is sent."));
-        else
-            checks.Add(new("ok", "Supplier pricing is current",
-                "Every material on this quote came from a price list under a year old."));
+    /// <summary>The rate-card price a labour or extras line would be charged at on this quote.</summary>
+    [HttpGet]
+    public async Task<IActionResult> RatePreview(int id, int rateItemId, CancellationToken ct)
+    {
+        var quote = await _quotes.GetAsync(id, ct);
+        if (quote is null)
+            return NotFound();
 
-        // Catalogue lifecycle
-        var retiring = quote.MaterialLines
-            .Select(m => Db.GetEntry(m.CatalogueEntryId))
-            .Where(e => e is not null && e.Status != CatalogueStatus.Active)
-            .Select(e => e!.ColourName)
-            .Distinct()
-            .ToList();
+        var resolution = await _rates.ResolveAsync(rateItemId, supplierId: null, quote.IssueDate, ct);
+        return Json(PricePreviewResult.From(resolution, quote.IssueDate));
+    }
 
-        if (retiring.Any())
-            checks.Add(new("warn", "Material being phased out",
-                $"{string.Join(", ", retiring)} \u2014 check availability before committing."));
+    // ======================================================================
+    //  Customer quotation: the document the customer receives
+    // ======================================================================
 
-        // Supplier discount
-        var discounted = quote.MaterialLines.Where(m => m.SupplierDiscountPct > 0).ToList();
-        if (discounted.Any())
-            checks.Add(new("info", "Supplier discount applied",
-                $"{discounted.Count} line(s) carry a discount received, up to " +
-                $"{Fmt.Pct(discounted.Max(m => m.SupplierDiscountPct))}. This reduces cost before markup."));
+    public async Task<IActionResult> Quotation(int id, CancellationToken ct)
+    {
+        var document = await _quotation.GenerateAsync(id, ct);
+        var detail = await DetailAsync(id, ct);
+        var quote = await _quotes.GetAsync(id, ct);
+        if (document is null || detail is null || quote is null)
+            return QuoteNotFound(id);
 
-        // Validity
-        if (quote.IsExpired)
-            checks.Add(new("warn", "Quote validity has lapsed",
-                $"Valid until {Fmt.Date(quote.ValidUntil)}. Reissue before sending."));
-        else
-            checks.Add(new("ok", "Valid for another " + quote.DaysRemaining + " days",
-                $"Expires {Fmt.Date(quote.ValidUntil)}, per the 30-day standing term."));
+        var vm = new QuotationVm
+        {
+            Quote = detail,
+            Document = document,
+            Check = await _quotation.CheckAsync(id, ct),
+            Actions = await ActionsForAsync(quote)
+        };
 
-        return checks;
+        SetPage("Customer quotation", "quotes", QuotesCrumb,
+            new Crumb(document.Header.Reference, Url.Action(nameof(Costing), new { id })));
+        return View(vm);
+    }
+
+    // ======================================================================
+    //  Approval queue and review
+    // ======================================================================
+
+    public async Task<IActionResult> Approvals(CancellationToken ct)
+    {
+        var vm = new ApprovalsVm
+        {
+            Queue = await _workflow.ApprovalQueueAsync(ct),
+            CanApprove = await CanAsync(Policies.CanApproveQuote)
+        };
+
+        SetPage("Approval queue", "approvals");
+        return View(vm);
+    }
+
+    public async Task<IActionResult> Review(int id, CancellationToken ct)
+    {
+        var detail = await DetailAsync(id, ct);
+        var costing = await _costing.GetAsync(id, ct);
+        if (detail is null || costing.Outcome != CostingOutcome.Ok)
+            return QuoteNotFound(id);
+
+        var vm = new ReviewVm
+        {
+            Quote = detail,
+            Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
+            Check = await _quotation.CheckAsync(id, ct),
+            Actions = await ActionsForAsync(costing.Quote!)
+        };
+
+        SetPage("Review quote", "approvals",
+            new Crumb("Approval queue", Url.Action(nameof(Approvals))), new Crumb(detail.Reference));
+        return View(vm);
     }
 
     // ======================================================================
     //  Version history
     // ======================================================================
 
-    public IActionResult Versions(int id, int? a, int? b)
+    public async Task<IActionResult> Versions(int id, CancellationToken ct)
     {
-        var quote = Db.GetQuote(id);
-        if (quote is null) return RedirectToAction(nameof(Index));
+        var detail = await DetailAsync(id, ct);
+        var versions = await _workflow.VersionsAsync(id, ct);
+        var quote = await _quotes.GetAsync(id, ct);
+        if (detail is null || versions is null || quote is null)
+            return QuoteNotFound(id);
 
-        var ordered = quote.Versions.OrderBy(v => v.VersionNumber).ToList();
-        var canCompare = ordered.Count > 1;
-
-        QuoteVersion? va = null, vb = null;
-        if (canCompare)
-        {
-            va = ordered.FirstOrDefault(v => v.VersionNumber == a) ?? ordered[^2];
-            vb = ordered.FirstOrDefault(v => v.VersionNumber == b) ?? ordered[^1];
-        }
-
-        ViewData["Title"] = "Version history";
-        ViewData["Page"] = "quotes";
-        ViewData["Crumb"] = $"Quoting \u203A {quote.Ref}";
-
+        SetPage("Version history", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })));
         return View(new VersionsVm
         {
-            Quote = quote,
-            CanCompare = canCompare,
-            A = va,
-            B = vb
+            Quote = detail,
+            Versions = versions.OrderByDescending(v => v.VersionNo).ToList(),
+            Actions = await ActionsForAsync(quote)
         });
     }
 
     // ======================================================================
-    //  Pastel invoice reference
+    //  Sage Pastel invoice record
     // ======================================================================
 
-    public IActionResult RecordInvoice(int id)
+    public async Task<IActionResult> RecordInvoice(int id, CancellationToken ct)
     {
-        var quote = Db.GetQuote(id);
-        if (quote is null) return RedirectToAction(nameof(Index));
+        var detail = await DetailAsync(id, ct);
+        if (detail is null)
+            return QuoteNotFound(id);
 
-        ViewData["Title"] = "Record Pastel invoice";
-        ViewData["Page"] = "quotes";
-        ViewData["Crumb"] = $"Quoting \u203A {quote.Ref}";
+        var existing = await _invoices.GetAsync(id, ct);
 
-        return View(new RecordInvoiceVm { Quote = quote });
+        SetPage("Invoice record", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })));
+        return View(new InvoiceVm
+        {
+            Quote = detail,
+            Recorded = existing.Outcome == InvoiceOutcome.Ok ? existing.Invoice : null,
+            CanRecord = await CanAsync(Policies.CanRecordInvoice) && detail.Status == nameof(QuoteStatus.Accepted)
+        });
+    }
+
+    // ======================================================================
+    //  Shared
+    // ======================================================================
+
+    private async Task<QuoteDetail?> DetailAsync(int id, CancellationToken ct)
+    {
+        var result = await _workflow.GetAsync(id, ct);
+        return result.Outcome == WorkflowOutcome.Ok ? result.Quote : null;
+    }
+
+    /// <summary>
+    /// Which buttons a quote shows. Each one follows the domain's own lifecycle, the
+    /// authorisation policy for that step and the rules the workflow service applies,
+    /// so the page never offers a step the server would refuse.
+    /// </summary>
+    private async Task<QuoteActions> ActionsForAsync(Quote quote)
+    {
+        var status = quote.Status;
+        var isAuthor = quote.CreatedByUserId == _me.Id;
+        var isManagingDirector = await CanAsync(Policies.CanApproveQuote);
+        var canEditQuote = await CanAsync(quote, Policies.CanEditQuote);
+        var sealedVersion = quote.CurrentVersion?.IsSealed ?? true;
+
+        return new QuoteActions(
+            CanEdit: canEditQuote && !sealedVersion,
+
+            // The Managing Director approves their own draft directly, so they are never
+            // offered the step of submitting it to themselves.
+            CanSubmit: canEditQuote && QuoteLifecycle.Allows(status, QuoteTransition.Submit)
+                       && !(isManagingDirector && isAuthor),
+
+            // A draft is approved directly only by its author (Quote.Approve).
+            CanApprove: isManagingDirector && QuoteLifecycle.Allows(status, QuoteTransition.Approve)
+                        && (status != QuoteStatus.Draft || isAuthor),
+
+            CanSend: QuoteLifecycle.Allows(status, QuoteTransition.Send),
+            CanAccept: isManagingDirector && QuoteLifecycle.Allows(status, QuoteTransition.Accept),
+            CanReopen: await CanAsync(quote, Policies.CanReopenQuote) && QuoteLifecycle.Allows(status, QuoteTransition.Reopen),
+            CanRecordInvoice: await CanAsync(Policies.CanRecordInvoice) && status == QuoteStatus.Accepted,
+            IsManagingDirector: isManagingDirector);
+    }
+
+    private IActionResult QuoteNotFound(int id)
+    {
+        Flash("error", "Quote not found", $"There is no quote {id}. Choose it from the list instead.");
+        return RedirectToAction(nameof(Index));
     }
 }
 
@@ -367,131 +380,146 @@ public class QuotesController : AppController
 //  View models
 // ==========================================================================
 
-public class QuoteListVm
+/// <summary>What the signed-in user may do to a quote right now.</summary>
+public sealed record QuoteActions(
+    bool CanEdit,
+    bool CanSubmit,
+    bool CanApprove,
+    bool CanSend,
+    bool CanAccept,
+    bool CanReopen,
+    bool CanRecordInvoice,
+    bool IsManagingDirector);
+
+/// <summary>The lifecycle buttons for one quote, with what decides whether they can be pressed.</summary>
+public sealed record QuoteActionBar(QuoteDetail Quote, QuoteActions Actions, QuotationCheck? Check);
+
+/// <summary>The answer to a price lookup, shaped for the costing sheet's script.</summary>
+public sealed record PricePreviewResult(bool Resolved, decimal? UnitPrice, string? Origin, string? Reason, string PricedAsAt)
 {
-    public List<Quote> Quotes { get; set; } = new();
-    public string? Status { get; set; }
+    public static PricePreviewResult From(PriceResolution resolution, DateOnly asAt) =>
+        resolution.Resolved
+            ? new(true, resolution.UnitPrice, resolution.Origin, null, Fmt.Date(asAt))
+            : new(false, null, null, resolution.FailureReason ?? "The price could not be found.", Fmt.Date(asAt));
+}
+
+public sealed class QuoteListVm
+{
+    public IReadOnlyList<QuoteSummary> Quotes { get; init; } = [];
+    public IReadOnlyList<CustomerSummary> Customers { get; init; } = [];
+    public string? Status { get; init; }
+    public int? CustomerId { get; init; }
+    public bool Mine { get; init; }
+    public string? Search { get; init; }
+
+    public bool AnyFilter => Status is not null || CustomerId is not null || Mine || Search is not null;
+}
+
+/// <summary>The new quote form. The limits match the checks in the quote workflow service.</summary>
+public sealed class NewQuoteForm
+{
+    [Required(ErrorMessage = "Enter a reference for the quote.")]
+    [StringLength(40, ErrorMessage = "Keep the reference to 40 characters or fewer.")]
+    [Display(Name = "Quote reference")]
+    public string? Reference { get; set; }
+
+    [Required(ErrorMessage = "Choose the customer.")]
+    [Display(Name = "Customer")]
     public int? CustomerId { get; set; }
-    public int? OwnerId { get; set; }
-    public string? Search { get; set; }
 
-    public bool AnyFilter =>
-        !string.IsNullOrEmpty(Status) || CustomerId > 0 ||
-        OwnerId > 0 || !string.IsNullOrWhiteSpace(Search);
-
-    public decimal TotalValue => Quotes.Sum(q => q.Total);
-}
-
-public class CostingVm
-{
-    public Quote Quote { get; set; } = null!;
+    [Required(ErrorMessage = "Choose who the quote is addressed to.")]
+    [Display(Name = "Attention of")]
+    public int? ContactId { get; set; }
 
     /// <summary>
-    /// Estimators edit their own drafts only. The MD edits anything, including
-    /// correcting an estimator's quote before approving it.
+    /// Typed as text so that 37,5 and 37.5 are read the same way on every machine,
+    /// whatever the server's regional settings.
     /// </summary>
-    public bool CanEdit { get; set; }
+    [Required(ErrorMessage = "Enter the markup for this quote.")]
+    [RegularExpression(@"^\s*\d{1,3}([.,]\d{1,2})?\s*$",
+        ErrorMessage = "Enter the markup as a number from 0 to 999,99, such as 35 or 37,5.")]
+    [Display(Name = "Markup")]
+    public string? MarkupPercent { get; set; }
 
-    /// <summary>Section order on the costing sheet, matching the client's own layout.</summary>
-    public static readonly RateGroup[] Order =
-    {
-        RateGroup.Fabrication,
-        RateGroup.Consumables,
-        RateGroup.Installation,
-        RateGroup.WoodSubstrate,
-        RateGroup.SinksHardware,
-        RateGroup.BelowTheLine
-    };
+    [StringLength(200, ErrorMessage = "Keep the site to 200 characters or fewer.")]
+    public string? Site { get; set; }
 
-    /// <summary>Invariant-culture string for a number going into an input value.</summary>
-    public static string Val(decimal d) => d.ToString(CultureInfo.InvariantCulture);
+    [StringLength(200, ErrorMessage = "Keep the project to 200 characters or fewer.")]
+    public string? Project { get; set; }
+
+    [StringLength(100, ErrorMessage = "Keep the customer's reference to 100 characters or fewer.")]
+    [Display(Name = "Customer's own reference")]
+    public string? CustomerReference { get; set; }
+
+    [StringLength(300, ErrorMessage = "Keep the delivery address to 300 characters or fewer.")]
+    [Display(Name = "Delivery address")]
+    public string? DeliveryAddress { get; set; }
+
+    [Required(ErrorMessage = "Enter how many days the quote is valid for.")]
+    [Range(1, QuoteWorkflowService.MaxValidForDays, ErrorMessage = "Enter between 1 and 365 days.")]
+    [Display(Name = "Valid for")]
+    public int? ValidForDays { get; set; } = Quote.DefaultValidForDays;
+
+    public decimal Markup() =>
+        decimal.Parse(MarkupPercent!.Trim().Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
 }
 
-public class QuotationVm
+public sealed class NewQuoteVm
 {
-    public Quote Quote { get; set; } = null!;
-    public List<QuotationLine> Lines { get; set; } = new();
-    public bool LinesAreDraft { get; set; }
-    public List<string> Brands { get; set; } = new();
-
-    /// <summary>
-    /// Warranty wording is a rule, not free text - it follows the brand quoted.
-    /// Avonite and Samsung Staron carry a one-year workmanship warranty;
-    /// DuPont Corian carries ten.
-    /// </summary>
-    public List<(string Brand, string Material, string Workmanship)> Warranties
-    {
-        get
-        {
-            var rows = new List<(string, string, string)>();
-
-            if (Brands.Any(b => b.Contains("Staron", StringComparison.OrdinalIgnoreCase) ||
-                                b.Contains("Max on Top", StringComparison.OrdinalIgnoreCase)))
-                rows.Add(("Avonite, Samsung Staron", "10 years", "1 year"));
-
-            if (Brands.Any(b => b.Contains("Corian", StringComparison.OrdinalIgnoreCase)))
-                rows.Add(("DuPont Corian", "10 years", "10 years (limited)"));
-
-            if (rows.Count == 0)
-                rows.Add(("Solid surface (as quoted)", "10 years", "1 year"));
-
-            return rows;
-        }
-    }
-
-    // Customer-facing totals. Composed from the descriptive lines, deliberately
-    // independent of the costing breakdown - the customer never sees that.
-    public decimal SubTotal => Lines.Sum(l => l.LineTotal);
-    public decimal Discount => Math.Round(SubTotal * (Quote.CustomerDiscountPct / 100m), 2);
-    public decimal ExVat => SubTotal - Discount;
-    public decimal Vat => Math.Round(ExVat * 0.15m, 2);
-    public decimal IncVat => ExVat + Vat;
+    public NewQuoteForm Form { get; init; } = new();
+    public IReadOnlyList<CustomerChoice> Customers { get; init; } = [];
+    public string? LastReference { get; init; }
 }
 
-public class ApprovalsVm
+public sealed class CostingVm
 {
-    public List<Quote> Pending { get; set; } = new();
-    public bool IsMd { get; set; }
-
-    public decimal TotalValue => Pending.Sum(q => q.Total);
-
-    public int EstimatorCount => Pending.Select(q => q.OwnerUserId).Distinct().Count();
-
-    public int LongestWait => Pending.Any()
-        ? Pending.Max(q => (DateTime.Today - q.IssueDate).Days)
-        : 0;
+    public QuoteDetail Quote { get; init; } = null!;
+    public CostingSheetDto Sheet { get; init; } = null!;
+    public QuoteActions Actions { get; init; } = null!;
+    public IReadOnlyList<SupplierOption> Suppliers { get; init; } = [];
+    public IReadOnlyList<RateItemOption> RateItems { get; init; } = [];
+    public QuotationCheck? Check { get; init; }
 }
 
-/// <summary>Level is "ok", "warn" or "info" - it maps to a CSS modifier.</summary>
-public record ReviewCheck(string Level, string Title, string Detail);
+public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit);
 
-public class ReviewVm
+public sealed record CostingRefreshVm(CostingLinesVm Lines, QuoteActionBar Side);
+
+public sealed class QuotationVm
 {
-    public Quote Quote { get; set; } = null!;
-    public bool IsMd { get; set; }
-    public List<ReviewCheck> Checks { get; set; } = new();
+    /// <summary>For the strip and tabs above the document, which are never printed.</summary>
+    public QuoteDetail Quote { get; init; } = null!;
+
+    /// <summary>The document itself. It carries no cost price, discount or markup.</summary>
+    public CustomerQuotation Document { get; init; } = null!;
+    public QuotationCheck? Check { get; init; }
+    public QuoteActions Actions { get; init; } = null!;
 }
 
-public class VersionsVm
+public sealed class ApprovalsVm
 {
-    public Quote Quote { get; set; } = null!;
-    public bool CanCompare { get; set; }
-    public QuoteVersion? A { get; set; }
-    public QuoteVersion? B { get; set; }
-
-    public decimal Delta => (B?.Total ?? 0m) - (A?.Total ?? 0m);
-
-    public decimal DeltaPct =>
-        A is null || A.Total == 0m ? 0m : Math.Round(Delta / A.Total * 100m, 1);
+    public IReadOnlyList<QuoteSummary> Queue { get; init; } = [];
+    public bool CanApprove { get; init; }
 }
 
-public class RecordInvoiceVm
+public sealed class ReviewVm
 {
-    public Quote Quote { get; set; } = null!;
+    public QuoteDetail Quote { get; init; } = null!;
+    public CostingSheetDto Sheet { get; init; } = null!;
+    public QuotationCheck? Check { get; init; }
+    public QuoteActions Actions { get; init; } = null!;
+}
 
-    public bool IsRecorded => !string.IsNullOrEmpty(Quote.PastelInvoiceNo);
+public sealed class VersionsVm
+{
+    public QuoteDetail Quote { get; init; } = null!;
+    public IReadOnlyList<QuoteVersionSummary> Versions { get; init; } = [];
+    public QuoteActions Actions { get; init; } = null!;
+}
 
-    /// <summary>Invoiced amount against the quoted total including VAT.</summary>
-    public decimal Variance =>
-        (Quote.PastelInvoiceAmount ?? 0m) - Math.Round(Quote.Total * 1.15m, 2);
+public sealed class InvoiceVm
+{
+    public QuoteDetail Quote { get; init; } = null!;
+    public InvoiceRecordView? Recorded { get; init; }
+    public bool CanRecord { get; init; }
 }

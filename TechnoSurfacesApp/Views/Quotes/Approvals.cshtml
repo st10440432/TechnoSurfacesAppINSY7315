@@ -1,129 +1,43 @@
-﻿@model TechnoSurfacesApp.Controllers.ApprovalsVm
+@model TechnoSurfacesApp.Controllers.ApprovalsVm
+@*
+    The approval queue (US-17): quotes waiting for the Managing Director, oldest
+    first, with customer, project and value. An estimator who opens it sees the
+    same list read only, with a note saying who works it, not an error page.
+*@
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Approval queue</h2>
-        <p>
-            @Model.Pending.Count quote@(Model.Pending.Count == 1 ? "" : "s") awaiting approval
-            &middot; @Fmt.Rand(Model.TotalValue) in value
-        </p>
+        <h1>Approval queue</h1>
+        <p>Quotes waiting for approval, oldest first.</p>
     </div>
-    <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-action="Index">All quotes</a>
-    </div>
-</div>
+</header>
 
-@if (!Model.IsMd)
+@if (!Model.CanApprove)
 {
-    <div class="notice notice-alert">
-        <svg class="ico"><use href="#i-lock" /></svg>
-        <div>
-            <strong>Managing Director only.</strong>
-            Approval is restricted to the Managing Director. You can see the queue but not act on it.
-        </div>
-    </div>
-}
-else
-{
-    <div class="notice notice-info">
-        <svg class="ico"><use href="#i-info" /></svg>
-        <div>
-            <strong>There is no rejection path.</strong>
-            Where a quote needs changing, correct it and approve it &mdash; nothing goes back to the
-            estimator. Every correction is written to the audit trail so the estimator can see what
-            changed.
-        </div>
-    </div>
+    <partial name="_ReadOnlyNote" model="@("Only the Managing Director approves quotes. You can see what is waiting, but approving is done from the Managing Director's account.")" />
 }
 
-<div class="grid grid-3" style="margin-bottom:20px">
-    <div class="tile tile-accent amber">
-        <div class="tile-label">Waiting</div>
-        <div class="tile-value">@Model.Pending.Count</div>
-        <div class="tile-note">across @Model.EstimatorCount estimator@(Model.EstimatorCount == 1 ? "" : "s")</div>
-    </div>
-    <div class="tile tile-accent blue">
-        <div class="tile-label">Value in queue</div>
-        <div class="tile-value">@Fmt.Rand(Model.TotalValue)</div>
-        <div class="tile-note">excluding VAT</div>
-    </div>
-    <div class="tile tile-accent">
-        <div class="tile-label">Longest wait</div>
-        <div class="tile-value">@Model.LongestWait<span style="font-size:1rem;font-weight:600"> days</span></div>
-        <div class="tile-note">@(Model.LongestWait > 3 ? "Worth clearing today" : "Queue is current")</div>
-    </div>
-</div>
-
-<div class="card">
+<section class="card" aria-labelledby="queue-title">
     <div class="card-head">
-        <svg class="ico" style="color:var(--st-pending)"><use href="#i-inbox" /></svg>
-        <h2>Waiting on you</h2>
+        <svg class="ico" aria-hidden="true"><use href="#i-inbox" /></svg>
+        <h2 id="queue-title">Waiting for approval</h2>
+        <span class="spacer"></span>
+        @if (Model.Queue.Count > 0)
+        {
+            <span class="badge">@Model.Queue.Count waiting, @Fmt.Rand(Model.Queue.Sum(q => q.TotalExVat)) ex VAT</span>
+        }
     </div>
 
-    @if (!Model.Pending.Any())
+    @if (Model.Queue.Count == 0)
     {
         <div class="empty">
-            <svg class="ico"><use href="#i-check-circle" /></svg>
-            <h3>Queue is clear</h3>
-            <p>Every estimator quote has been approved.</p>
-            <a class="btn btn-secondary" asp-action="Index">View all quotes</a>
+            <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
+            <h3>Nothing is waiting</h3>
+            <p>When an estimator submits a quote it appears here, oldest first.</p>
         </div>
     }
     else
     {
-        <div class="table-wrap">
-            <table class="data stack">
-                <thead>
-                    <tr>
-                        <th>Quote</th>
-                        <th>Customer</th>
-                        <th>Estimator</th>
-                        <th class="right">Waiting</th>
-                        <th class="right">Markup</th>
-                        <th class="right">R / m&sup2;</th>
-                        <th class="right">Total</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var q in Model.Pending)
-                    {
-                        var waited = (DateTime.Today - q.IssueDate).Days;
-                        <tr>
-                            <td data-label="Quote">
-                                <a class="row-link" asp-action="Review" asp-route-id="@q.Id">@q.Ref</a>
-                                <div class="tiny muted">@q.Project</div>
-                                <div class="tiny muted">@q.Site</div>
-                            </td>
-                            <td data-label="Customer">@Db.CustomerName(q.CustomerId)</td>
-                            <td data-label="Estimator">
-                                <div style="display:flex;align-items:center;gap:7px">
-                                    <span class="avatar sage" style="width:24px;height:24px;flex-basis:24px;font-size:.6rem">
-                                        @Db.GetUser(q.OwnerUserId)?.Initials
-                                    </span>
-                                    <span class="small">@Db.UserName(q.OwnerUserId)</span>
-                                </div>
-                            </td>
-                            <td data-label="Waiting" class="right">
-                                @waited days
-                                @if (waited > 3)
-                                {
-                                    <div><span class="badge badge-warn">Overdue</span></div>
-                                }
-                            </td>
-                            <td data-label="Markup" class="right">@Fmt.Pct(q.MarkupPct)</td>
-                            <td data-label="R / m&sup2;" class="right">@Fmt.Rand(q.RandPerSqm)</td>
-                            <td data-label="Total" class="right strong">@Fmt.Rand(q.Total)</td>
-                            <td data-label="" class="right nowrap">
-                                <a class="btn btn-primary btn-sm" asp-action="Review" asp-route-id="@q.Id">Review</a>
-                                <a class="btn btn-ghost btn-sm" asp-action="Costing" asp-route-id="@q.Id" title="Costing sheet">
-                                    <svg class="ico ico-sm"><use href="#i-calc" /></svg>
-                                </a>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+        <partial name="_QuoteTable" model='new QuoteTable(Model.Queue, "Quotes waiting for approval", ShowValidity: false, ShowWaiting: true, LinkToReview: true)' />
     }
-</div>
+</section>
