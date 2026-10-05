@@ -9,16 +9,24 @@ is deleted afterwards, so they never appear in the command history or in the
 repository.
 
 The web apps connect to Azure SQL as a user-assigned managed identity, which is the
-server's Microsoft Entra admin, so the connection string holds no password. The SQL
-admin password is still asked for because the server resource requires one; it must
-be the same for both environments, which share one server.
+server's Microsoft Entra admin, so the connection string holds no password. Without
+-EntraOnly the SQL admin password is still asked for because the server resource
+requires one; it must be the same for both environments, which share one server.
+With -EntraOnly it is not asked for, because the server refuses it.
 
 Moving an existing deployment to the managed identity:
   1. Deploy staging, then production, without -EntraOnly.
   2. Restart both web apps so they read the new connection secret, and check that
      /health reports Healthy on both.
-  3. Deploy both again with -EntraOnly, which stops SQL logins, the admin password
-     included, working on the server.
+  3. Deploy staging again with -EntraOnly, which stops SQL logins, the admin
+     password included, working on the server. The setting belongs to the server,
+     so this covers production too.
+
+Once -EntraOnly has been used, pass it on every later deployment of either
+environment. Without it the deployment fails with AadOnlyAuthenticationIsEnabled.
+To allow SQL logins again, first run
+  az sql server ad-only-auth disable --resource-group <group> --name <server>
+and then deploy without -EntraOnly.
 
 .EXAMPLE
 ./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail team@example.com -WhatIf
@@ -45,11 +53,14 @@ function Read-Secret([string] $prompt) {
 $parameters = @{
     environment      = @{ value = $Environment }
     alertEmail       = @{ value = $AlertEmail }
-    sqlAdminPassword = @{ value = (Read-Secret 'SQL admin password (the same one used before)') }
     demoAccounts     = @{ value = [bool] $DemoAccounts }
     createBudget     = @{ value = -not $NoBudget }
     entraOnlyAuthentication = @{ value = [bool] $EntraOnly }
     budgetStartDate  = @{ value = (Get-Date -Day 1).ToString('yyyy-MM-dd') }
+}
+
+if (-not $EntraOnly) {
+    $parameters.sqlAdminPassword = @{ value = (Read-Secret 'SQL admin password (the same one used before)') }
 }
 
 if ($DemoAccounts) {
