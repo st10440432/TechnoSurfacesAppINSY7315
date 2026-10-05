@@ -990,7 +990,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
 .auth-steps li { margin-bottom: var(--space-2); line-height: var(--leading-normal); }
 .auth-action { margin-top: var(--space-6); }
 .brand-logo-sm { display: inline-block; align-self: flex-start; padding: var(--space-4) var(--space-5); background: var(--surface); border-radius: var(--radius); }
-.brand-logo-sm img { display: block; width: 16rem; max-width: 100%; height: auto; }
+.brand-logo-sm img { display: block; width: 24rem; max-width: 100%; height: auto; }
 
 /* ==========================================================================
    Small screens: tablet below 992px, phone below 768px
@@ -1020,7 +1020,7 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
     .auth-brand { padding: var(--space-6); }
     .auth-headline { margin-top: var(--space-6); font-size: 1.5rem; }
     .auth-points, .auth-foot { display: none; }
-    .brand-logo-sm img { width: 11rem; }
+    .brand-logo-sm img { width: 16rem; }
 }
 
 @media (max-width: 767.98px) {
@@ -1204,7 +1204,12 @@ h3.section-label { margin: 0 0 var(--space-1); }
 .card-body-top { border-top: 1px solid var(--line); }
 .from-costing { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .cascade-qty { margin-top: var(--space-4); }
-.field-action { display: flex; flex-direction: column; justify-content: flex-end; }
+/* The Add to the costing button has no label, so it drops by a label's height to sit level with
+   the Sheets and Supplier discount inputs, with its hint under it like theirs. */
+.field-action { display: flex; flex-direction: column; justify-content: flex-start; padding-top: calc(var(--text-sm) * var(--leading-normal) + var(--space-1)); }
+@media (max-width: 767.98px) {
+    .field-action { padding-top: 0; }
+}
 .resolved-price.is-loading { display: block; }
 .resolved-fact { display: flex; flex-direction: column; gap: 2px; min-width: 10rem; }
 .resolved-origin { flex: 1 1 100%; padding-top: var(--space-3); border-top: 1px solid var(--success-line); }
@@ -1317,17 +1322,31 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
    Labelled filter rows on the catalogue, rate card and audit trail
    ========================================================================== */
 
-.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-4); align-items: end; padding: var(--space-5); border-bottom: 1px solid var(--line); }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-4); align-items: start; padding: var(--space-5); border-bottom: 1px solid var(--line); }
 .filters .field { margin: 0; }
-.filters .btn-row { align-self: end; }
+/* The checkbox and the buttons have no label, so they drop by a label's height to line up with
+   the inputs. Lining up from the top means a hint under one field no longer pushes the row out. */
+.filters .filter-check, .filters .btn-row { align-self: start; margin-top: calc(var(--text-sm) * var(--leading-normal) + var(--space-1)); }
+@media (max-width: 767.98px) {
+    .filters .filter-check, .filters .btn-row { margin-top: 0; }
+}
 
 /* A price or rate change form, opened from its row */
 .row-edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-4); align-items: end; }
 .row-edit .field { margin: 0; }
 
-/* Permission summary on the users screen */
-.matrix td, .matrix th { text-align: center; }
-.matrix th:first-child, .matrix td:first-child { text-align: left; }
+/* Permission summary on the users screen. table.data puts every heading on the left, so the
+   matrix needs the same weight to centre the role columns, headings included. */
+table.data.matrix td, table.data.matrix th { text-align: center; }
+table.data.matrix th:first-child, table.data.matrix td:first-child { text-align: left; }
+
+/* Rate card: what an item is charged per, its rate and since when sit centred under their
+   headings. Below 768px the table is a stack of cards and keeps its own alignment. */
+@media (min-width: 768px) {
+    table.data.rates th:nth-child(2), table.data.rates td:nth-child(2),
+    table.data.rates th:nth-child(3), table.data.rates td:nth-child(3),
+    table.data.rates th:nth-child(4), table.data.rates td:nth-child(4) { text-align: center; }
+}
 .user-actions { margin-top: var(--space-2); }
 .user-actions form { display: inline; }
 .temp-password { font-size: var(--text-md); font-weight: var(--weight-bold); padding: var(--space-1) var(--space-3); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); letter-spacing: .05em; user-select: all; }
@@ -1415,7 +1434,7 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
     .auth-brand { padding: var(--space-4) var(--space-4) var(--space-5); }
     .auth-brand::after { display: none; }
     .brand-logo-sm { padding: var(--space-2) var(--space-3); }
-    .brand-logo-sm img { width: 9rem; height: auto; }
+    .brand-logo-sm img { width: 12rem; height: auto; }
     .auth-headline { margin-top: var(--space-3); font-size: var(--text-md); }
     .auth-sub { display: none; }
     .auth-panel { padding: var(--space-6) var(--space-4); }
