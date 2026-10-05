@@ -1,0 +1,333 @@
+@model TechnoSurfacesApp.Controllers.SupplierVm
+@*
+    One supplier and everything it sells (NFR-10): its product lines, their sheet
+    sizes, price bands and colours. The Managing Director adds and corrects them here,
+    and retires what is no longer sold rather than deleting it, so older quotes still
+    read correctly (US-24). Prices are set on each colour's price history, which this
+    screen links to.
+*@
+@{
+    var s = Model.Supplier;
+}
+
+<header class="page-head">
+    <div>
+        <h1>@s.Name</h1>
+        <p>@(s.PricesByBand ? "Prices by band: colours in a band share its price." : "Prices each colour on its own.") Price list dated @Fmt.Date(s.PriceListDated).</p>
+    </div>
+    <div class="page-head-actions">
+        <a class="btn btn-secondary" asp-action="Suppliers">
+            <svg class="ico" aria-hidden="true"><use href="#i-arrow-left" /></svg> All suppliers
+        </a>
+    </div>
+</header>
+
+@if (Model.IsStale)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div>
+            <strong>This price list is over a year old.</strong>
+            Check the prices with @s.Name before quoting from them. When a new list arrives, enter its prices and change the date below.
+        </div>
+    </div>
+}
+
+@if (!Model.CanEdit)
+{
+    <partial name="_ReadOnlyNote" model="@("Only the Managing Director adds or changes materials. You can see everything this supplier sells.")" />
+}
+
+<div class="grid grid-main">
+    <div class="stack-gap">
+        @if (s.ProductLines.Count == 0)
+        {
+            <section class="card">
+                <div class="empty">
+                    <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
+                    <h2>No product lines yet</h2>
+                    <p>@(Model.CanEdit ? "Add the first product line with the form beside this list." : "The Managing Director has not added any yet.")</p>
+                </div>
+            </section>
+        }
+
+        @foreach (var line in s.ProductLines)
+        {
+            var key = $"line-{line.Id}";
+            <section class="card" aria-labelledby="@key-title">
+                <div class="card-head">
+                    <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
+                    <h2 id="@key-title">@line.Name, @line.ThicknessMm mm</h2>
+                    @if (line.IsRetired)
+                    {
+                        <span class="badge">Retired</span>
+                    }
+                    else if (line.Status == TechnoSurfaces.Domain.CatalogueStatus.PhasingOut)
+                    {
+                        <span class="badge badge-warn">Being phased out</span>
+                    }
+                    <span class="spacer"></span>
+                    <span class="muted small">@(line.Brand is null ? "No brand set" : $"Brand: {line.Brand}")</span>
+                </div>
+
+                <div class="card-body">
+                    <h3 class="section-label">Sheet sizes</h3>
+                    @if (line.SheetSizes.Count == 0)
+                    {
+                        <p class="muted">No sheet sizes yet. A colour cannot be priced until its product line has one.</p>
+                    }
+                    else
+                    {
+                        <p>@string.Join(", ", line.SheetSizes.Select(z => $"{z.LengthMm} x {z.WidthMm} mm"))</p>
+                    }
+
+                    @if (s.PricesByBand)
+                    {
+                        <h3 class="section-label">Price bands</h3>
+                        @if (line.Bands.Count == 0)
+                        {
+                            <p class="muted">No bands yet. Add the bands from the supplier's list before adding colours.</p>
+                        }
+                        else
+                        {
+                            <p>@string.Join(", ", line.Bands.Select(b => b.Name == b.Code ? b.Code : $"{b.Code} ({b.Name})"))</p>
+                        }
+                    }
+
+                    @if (Model.CanEdit && !line.IsRetired)
+                    {
+                        <div class="btn-row">
+                            <details class="disclosure">
+                                <summary class="btn btn-ghost btn-sm">
+                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-plus" /></svg> Add a sheet size<span class="sr-only"> to @line.Name, @line.ThicknessMm mm</span>
+                                </summary>
+                                <form class="disclosure-body row-edit" method="post" asp-action="AddSheetSize">
+                                    <input type="hidden" name="ProductLineId" value="@line.Id" />
+                                    <div class="field">
+                                        <label class="label" for="@key-length">Length, mm</label>
+                                        <input class="input input-num" id="@key-length" name="LengthMm" type="number" min="1" max="10000" step="1" required inputmode="numeric" />
+                                    </div>
+                                    <div class="field">
+                                        <label class="label" for="@key-width">Width, mm</label>
+                                        <input class="input input-num" id="@key-width" name="WidthMm" type="number" min="1" max="10000" step="1" required inputmode="numeric" />
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Add the size</button>
+                                </form>
+                            </details>
+
+                            @if (s.PricesByBand)
+                            {
+                                <details class="disclosure">
+                                    <summary class="btn btn-ghost btn-sm">
+                                        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-plus" /></svg> Add a price band<span class="sr-only"> to @line.Name, @line.ThicknessMm mm</span>
+                                    </summary>
+                                    <form class="disclosure-body row-edit" method="post" asp-action="AddPriceBand">
+                                        <input type="hidden" name="ProductLineId" value="@line.Id" />
+                                        <div class="field">
+                                            <label class="label" for="@key-band-code">Code</label>
+                                            <input class="input" id="@key-band-code" name="Code" maxlength="40" required autocomplete="off" />
+                                        </div>
+                                        <div class="field">
+                                            <label class="label" for="@key-band-name">Name <span class="optional">optional</span></label>
+                                            <input class="input" id="@key-band-name" name="Name" maxlength="120" autocomplete="off" />
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">Add the band</button>
+                                    </form>
+                                </details>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (line.Colours.Count > 0)
+                {
+                    <div class="table-wrap">
+                        <table class="data stack">
+                            <caption class="sr-only">Colours in @line.Name, @line.ThicknessMm mm</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Colour</th>
+                                    @if (s.PricesByBand) { <th scope="col">Band</th> }
+                                    <th scope="col">Prices</th>
+                                    @if (Model.CanEdit) { <th scope="col"><span class="sr-only">Change</span></th> }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in line.Colours)
+                                {
+                                    var ck = $"colour-{c.Id}";
+                                    <tr>
+                                        <td data-label="Colour">
+                                            <span class="strong">@c.Name</span>
+                                            @if (!string.IsNullOrEmpty(c.SupplierCode)) { <span class="sub mono">@c.SupplierCode</span> }
+                                            @if (!string.IsNullOrEmpty(c.Range)) { <span class="sub">Range @c.Range</span> }
+                                            @if (c.IsRetired) { <span class="badge stacked">Retired</span> }
+                                            else if (c.Status == TechnoSurfaces.Domain.CatalogueStatus.PhasingOut) { <span class="badge badge-warn stacked">Being phased out</span> }
+                                        </td>
+                                        @if (s.PricesByBand) { <td data-label="Band">@(c.Band ?? "None")</td> }
+                                        <td data-label="Prices">
+                                            @if (line.SheetSizes.Count == 0)
+                                            {
+                                                <span class="muted">Add a sheet size first</span>
+                                            }
+                                            @foreach (var z in line.SheetSizes)
+                                            {
+                                                <a class="btn btn-ghost btn-sm" asp-action="Price" asp-route-colourId="@c.Id" asp-route-sheetSizeId="@z.Id">
+                                                    @z.LengthMm x @z.WidthMm<span class="sr-only">: price history for @c.Name</span>
+                                                </a>
+                                            }
+                                        </td>
+                                        @if (Model.CanEdit)
+                                        {
+                                            <td data-label="Change" class="right">
+                                                @if (!line.IsRetired)
+                                                {
+                                                    <details class="disclosure">
+                                                        <summary class="btn btn-ghost btn-sm">
+                                                            <svg class="ico ico-sm" aria-hidden="true"><use href="#i-edit" /></svg> Change<span class="sr-only"> @c.Name</span>
+                                                        </summary>
+                                                        <form class="disclosure-body" method="post" asp-action="UpdateColour">
+                                                            <input type="hidden" name="ColourId" value="@c.Id" />
+                                                            <partial name="_ColourFields" model="@((c, line, s.PricesByBand, ck))" />
+                                                            <button type="submit" class="btn btn-primary btn-sm">Save @c.Name</button>
+                                                        </form>
+                                                    </details>
+                                                }
+                                                @if (c.IsRetired && !line.IsRetired)
+                                                {
+                                                    <form method="post" asp-action="ReinstateColour">
+                                                        <input type="hidden" name="colourId" value="@c.Id" />
+                                                        <button type="submit" class="btn btn-secondary btn-sm">Reinstate<span class="sr-only"> @c.Name</span></button>
+                                                    </form>
+                                                }
+                                                else if (!c.IsRetired)
+                                                {
+                                                    <form method="post" asp-action="RetireColour"
+                                                          data-confirm="Retire @c.Name?" data-confirm-label="Retire" data-confirm-tone="danger"
+                                                          data-confirm-detail="It stays on quotes already made, but cannot be chosen on new ones. It can be reinstated later.">
+                                                        <input type="hidden" name="colourId" value="@c.Id" />
+                                                        <button type="submit" class="btn btn-ghost btn-sm">Retire<span class="sr-only"> @c.Name</span></button>
+                                                    </form>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (Model.CanEdit)
+                {
+                    <div class="card-body card-body-top">
+                        @if (!line.IsRetired)
+                        {
+                            @if (s.PricesByBand && line.Bands.Count == 0)
+                            {
+                                <p class="hint">Add a price band before adding colours: a colour from this supplier takes its price from its band.</p>
+                            }
+                            else
+                            {
+                                <details class="disclosure">
+                                    <summary class="disclosure-summary">
+                                        <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> Add a colour<span class="sr-only"> to @line.Name, @line.ThicknessMm mm</span>
+                                    </summary>
+                                    <form class="disclosure-body" method="post" asp-action="AddColour">
+                                        <input type="hidden" name="ProductLineId" value="@line.Id" />
+                                        <partial name="_ColourFields" model="@(((TechnoSurfaces.Application.Catalogue.ColourDetail?)null, line, s.PricesByBand, key + "-new"))" />
+                                        <button type="submit" class="btn btn-primary">Add the colour</button>
+                                    </form>
+                                </details>
+                            }
+                            <form method="post" asp-action="RetireProductLine" class="mt-section"
+                                  data-confirm="Retire @line.Name, @line.ThicknessMm mm?" data-confirm-label="Retire" data-confirm-tone="danger"
+                                  data-confirm-detail="None of its colours can be chosen on new quotes. Quotes already made keep it. It can be reinstated later.">
+                                <input type="hidden" name="productLineId" value="@line.Id" />
+                                <button type="submit" class="btn btn-ghost btn-sm">Retire this product line</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form method="post" asp-action="ReinstateProductLine">
+                                <input type="hidden" name="productLineId" value="@line.Id" />
+                                <button type="submit" class="btn btn-secondary btn-sm">Reinstate this product line</button>
+                            </form>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </div>
+
+    <div class="stack-gap">
+        <section class="card" aria-labelledby="details-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg>
+                <h2 id="details-title">Supplier details</h2>
+            </div>
+            <div class="card-body">
+                <dl class="facts">
+                    <dt>Trading as</dt>
+                    <dd>@(s.TradingAs ?? "Same as the name")</dd>
+                    <dt>Price list dated</dt>
+                    <dd>@Fmt.Date(s.PriceListDated)</dd>
+                    <dt>Adhesive</dt>
+                    <dd>@Fmt.Rand(s.AdhesivePrice)</dd>
+                    <dt>Delivery</dt>
+                    <dd>@(string.IsNullOrWhiteSpace(s.DeliveryTerms) ? "Not given" : s.DeliveryTerms)</dd>
+                </dl>
+            </div>
+            @if (Model.CanEdit)
+            {
+                <details class="disclosure card-body-top">
+                    <summary class="disclosure-summary">
+                        <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg> Change the supplier's details
+                    </summary>
+                    <form class="disclosure-body" method="post" asp-action="UpdateSupplier">
+                        <input type="hidden" name="supplierId" value="@s.Id" />
+                        <partial name="_SupplierFields" model="@((s, Model.Today))" />
+                        <button type="submit" class="btn btn-primary">Save the details</button>
+                    </form>
+                </details>
+            }
+        </section>
+
+        @if (Model.CanEdit)
+        {
+            <section class="card" aria-labelledby="add-line-title">
+                <div class="card-head">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                    <h2 id="add-line-title">Add a product line</h2>
+                </div>
+                <form class="card-body" method="post" asp-action="AddProductLine">
+                    <input type="hidden" name="SupplierId" value="@s.Id" />
+                    <div class="field">
+                        <label class="label" for="new-line-name">Name <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" id="new-line-name" name="Name" maxlength="120" required autocomplete="off"
+                               aria-describedby="new-line-name-hint" />
+                        <span class="hint" id="new-line-name-hint">As the supplier sells it, such as Staron or Infinito Modified.</span>
+                    </div>
+                    <div class="field-row field-row-2">
+                        <div class="field">
+                            <label class="label" for="new-line-thickness">Thickness, mm <span class="req" aria-hidden="true">*</span></label>
+                            <input class="input input-num" id="new-line-thickness" name="ThicknessMm" type="number" min="1" max="100" step="1" required inputmode="numeric" />
+                        </div>
+                        <div class="field">
+                            <label class="label" for="new-line-brand">Brand <span class="optional">optional</span></label>
+                            <select class="select" id="new-line-brand" name="BrandId" aria-describedby="new-line-brand-hint">
+                                <option value="">No brand</option>
+                                @foreach (var b in Model.Brands)
+                                {
+                                    <option value="@b.Id">@b.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <p class="hint" id="new-line-brand-hint">The brand decides the warranty printed on the quotation. With no brand, none is printed.</p>
+                    <button type="submit" class="btn btn-primary btn-block">Add the product line</button>
+                </form>
+            </section>
+        }
+    </div>
+</div>
