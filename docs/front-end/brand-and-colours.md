@@ -4,7 +4,7 @@ This is the colour specification the front end is built from. Every colour token
 
 ## Where the colours come from
 
-Techno Surfaces supplied their logo but no colour codes and no brand font. Rather than pick colours by eye, we measured them from the logo file itself, `TechnoSurfacesApp/wwwroot/img/logo.png`.
+Techno Surfaces supplied their logo but no colour codes and no brand font. Rather than pick colours by eye, we measured them from the logo file itself, `TechnoSurfacesApp/wwwroot/img/logo.jpg`.
 
 Every solid pixel in the file was read and grouped by colour family, and the median of each group was taken. Using the median means the blended pixels along the edge of each shape do not pull the result.
 
