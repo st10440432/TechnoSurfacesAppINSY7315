@@ -84,27 +84,28 @@ This section records the security controls committed to in Task 1 8, where each 
 - **Rate limiting:** at most 10 sign-in attempts per minute from one client address, then HTTP 429 (`Platform/SignInRateLimiting.cs`). Together with the account lockout this limits both guessing one account and spraying many.
 - **Security headers** on every response (`Platform/SecurityHeaders.cs`): Content-Security-Policy, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and a `Permissions-Policy`. The CSP allows inline scripts (`'unsafe-inline'`) because several views still use inline handlers; moving those into script files and removing it is listed below.
 
+- **Security headers** on every response (`Platform/SecurityHeaders.cs`): Content-Security-Policy, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and a `Permissions-Policy`. No view uses inline scripts or inline event handlers any more, but the CSP still allows `'unsafe-inline'` scripts; removing it is listed below.
+
 ### Security tests
 
- | Required test (Task 2 plan) | Status |
-  |---|---|
- | Estimator edits another estimator's draft: refused | Unit test `EditQuoteHandlerTests`; integration test `CostingApiTests` (403) |
- | Estimator edits their own draft: allowed | Unit test, `EditQuoteHandlerTests` |
- | MD edits any quote: allowed | Unit test, `EditQuoteHandlerTests` |
- | Price change writes an `AuditEntry` with user and time | Unit test, `AuditInterceptorTests` |
- | Audit trail filters and a quote's change history | Unit test, `AuditTrailServiceTests` |
- | Anonymous request redirects to sign-in | Integration test, `PlatformTests` |
- | Estimator posts to the price editor: refused | Integration test, `SecurityTests` |
- | Estimator approves a quote: refused | Integration test, `QuoteWorkflowApiTests` (403) |
- | Deactivated user signs in: refused | Integration test, `SecurityTests` |
- | Post without an antiforgery token: rejected | Enforced globally; integration test `CostingApiTests` covers the API header |
- | Registration route does not exist | Integration test, `PlatformTests` |
- | MD changes to terms and bank details are audited | Unit test, `QuotationTermsMaintenanceTests` |
- | Estimator opens MD-only screens: refused | Integration test, `SecurityTests` |
- | Five wrong passwords lock the account | Integration test, `SecurityTests` |
- | MD price change audited through the real screen | Integration test, `SecurityTests` |
+| Required test (Task 2 plan) | Status |
+|---|---|
+| Estimator edits another estimator's draft: refused | Unit test `EditQuoteHandlerTests`; integration test `CostingApiTests` (403) |
+| Estimator edits their own draft: allowed | Unit test, `EditQuoteHandlerTests` |
+| MD edits any quote: allowed | Unit test, `EditQuoteHandlerTests` |
+| Price change writes an `AuditEntry` with user and time | Unit test `AuditInterceptorTests`; integration test `SecurityTests` (through the real screen) |
+| Audit trail filters and a quote's change history | Unit test, `AuditTrailServiceTests` |
+| Anonymous request redirects to sign-in | Integration test, `PlatformTests` |
+| Estimator posts to the price editor: refused | Integration test, `SecurityTests` |
+| Estimator opens MD-only screens: refused | Integration test, `SecurityTests` |
+| Estimator approves a quote: refused | Integration test, `QuoteWorkflowApiTests` (403) |
+| Deactivated user signs in: refused | Integration test, `SecurityTests` |
+| Five wrong passwords lock the account | Integration test, `SecurityTests` |
+| Post without an antiforgery token: rejected | Integration tests: `SecurityTests` (form post) and `CostingApiTests` (API header) |
+| Registration route does not exist | Integration test, `PlatformTests` |
+| MD changes to terms and bank details are audited | Unit test, `QuotationTermsMaintenanceTests` |
 
- Integration tests run in CI against a throwaway SQL Server database (`tests/TechnoSurfaces.IntegrationTests`).
+Integration tests run in CI against a throwaway SQL Server database (`tests/TechnoSurfaces.IntegrationTests`).
 
 ### Not done, and why
 
@@ -113,8 +114,7 @@ This section records the security controls committed to in Task 1 8, where each 
 | Forgot password with a single-use token | Placeholder page | There is no email service (client decision). The MD resets the password instead, and the user must change it at next sign-in |
 | Activation link for new accounts | Replaced | A temporary password plus a forced change does the same job without email |
 | Least-privilege database login | Deferred | The app connects as the SQL server administrator. A contained user with read/write rights only is the fix |
-| Change history on prototype quotes | Empty until real quotes | The quote screens still read prototype data, so the panel shows no history until they read the database |
-| Inline scripts allowed by the CSP | Partial | Views use inline `<script>` blocks and `onchange`/`onsubmit` handlers. Moving them to `.js` files would let the CSP drop `'unsafe-inline'` and block injected scripts|
+| CSP still allows inline scripts | Deferred | No view needs `'unsafe-inline'` any more, so it can be removed from `script-src`. Left in place for the deadline, to avoid an untested change to every page |
 
 Built by Brett James (ST10440287), Kallan Jones (ST10445389), Morgan Gibbon
 (ST10439398), Amaan Tesfaye (ST10287107) and Matteo Nusca (ST10440432)
