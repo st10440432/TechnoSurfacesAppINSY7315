@@ -8,14 +8,22 @@ Secrets are asked for at the prompt and passed in a temporary parameters file th
 is deleted afterwards, so they never appear in the command history or in the
 repository.
 
-The SQL admin password must be the same for both environments: they share one SQL
-server. Re-entering a different password changes it on the server and in both
-connection secrets in the same deployment; restart both web apps afterwards so they
-read the new secret.
+The web apps connect to Azure SQL as a user-assigned managed identity, which is the
+server's Microsoft Entra admin, so the connection string holds no password. The SQL
+admin password is still asked for because the server resource requires one; it must
+be the same for both environments, which share one server.
+
+Moving an existing deployment to the managed identity:
+  1. Deploy staging, then production, without -EntraOnly.
+  2. Restart both web apps so they read the new connection secret, and check that
+     /health reports Healthy on both.
+  3. Deploy both again with -EntraOnly, which stops SQL logins, the admin password
+     included, working on the server.
 
 .EXAMPLE
 ./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail team@example.com -WhatIf
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com
+./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com -EntraOnly
 #>
 param(
     [Parameter(Mandatory)] [ValidateSet('staging', 'production')] [string] $Environment,
@@ -23,6 +31,7 @@ param(
     [Parameter(Mandatory)] [string] $AlertEmail,
     [switch] $DemoAccounts,
     [switch] $NoBudget,
+    [switch] $EntraOnly,
     [switch] $WhatIf
 )
 
@@ -39,6 +48,7 @@ $parameters = @{
     sqlAdminPassword = @{ value = (Read-Secret 'SQL admin password (the same one used before)') }
     demoAccounts     = @{ value = [bool] $DemoAccounts }
     createBudget     = @{ value = -not $NoBudget }
+    entraOnlyAuthentication = @{ value = [bool] $EntraOnly }
     budgetStartDate  = @{ value = (Get-Date -Day 1).ToString('yyyy-MM-dd') }
 }
 
