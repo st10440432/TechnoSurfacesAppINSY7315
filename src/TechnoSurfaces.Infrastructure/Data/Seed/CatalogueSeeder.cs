@@ -34,6 +34,7 @@ public static class CatalogueSeeder
     {
         await ClearInventedStaronCodesAsync(db, ct);
         await CorrectMaxOnTopPricesAsync(db, ct);
+        await ApplySupplierSheetCorrectionsAsync(db, ct);
 
         if (await db.Suppliers.AnyAsync(ct)) return;
 
@@ -96,6 +97,68 @@ public static class CatalogueSeeder
 
         if (corrected > 0)
             await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Brings a database seeded before into line with the supplier sheets, which take
+    /// priority over anything worked out from them. Each step only acts while the
+    /// earlier seeded value is still there, so running it again changes nothing.
+    /// <list type="bullet">
+    /// <item>Max on Top: the colours in red on the list are being phased out.</item>
+    /// <item>Surface Studio: the 6mm Infinito sheet is 3050 x 750.</item>
+    /// <item>Perago: Classic White 3660 x 900 is a 20mm sheet.</item>
+    /// </list>
+    /// </summary>
+    private static async Task ApplySupplierSheetCorrectionsAsync(TechnoSurfacesDbContext db, CancellationToken ct)
+    {
+        var phasingOut = await db.Colours
+            .Where(c => c.ProductLine!.Supplier!.Name == "Max on Top"
+                     && MaxOnTopPhasingOut.Contains(c.SupplierCode)
+                     && c.Status == CatalogueStatus.Active)
+            .ToListAsync(ct);
+        foreach (var colour in phasingOut)
+            colour.Status = CatalogueStatus.PhasingOut;
+
+        var infinito6 = await db.SheetSizes
+            .Where(s => s.ProductLine!.Supplier!.Name == "Surface Studio"
+                     && s.ProductLine.Name == "Infinito Full Acrylic" && s.ProductLine.ThicknessMm == 6
+                     && s.LengthMm == 3050 && s.WidthMm == 760)
+            .ToListAsync(ct);
+        foreach (var size in infinito6)
+            size.WidthMm = 750;
+
+        await db.SaveChangesAsync(ct);
+
+        var perago12 = await db.ProductLines
+            .FirstOrDefaultAsync(p => p.Supplier!.Name == "Perago and Magicstone" && p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 12, ct);
+        var wide = perago12 is null ? null : await db.SheetSizes
+            .FirstOrDefaultAsync(s => s.ProductLineId == perago12.Id && s.LengthMm == 3660 && s.WidthMm == 900, ct);
+        if (perago12 is null || wide is null)
+            return;
+
+        var perago20 = await db.ProductLines
+            .FirstOrDefaultAsync(p => p.SupplierId == perago12.SupplierId && p.Name == perago12.Name && p.ThicknessMm == 20, ct);
+        if (perago20 is null)
+        {
+            perago20 = new ProductLine
+            {
+                SupplierId = perago12.SupplierId, Name = perago12.Name, ThicknessMm = 20, BrandId = perago12.BrandId
+            };
+            db.ProductLines.Add(perago20);
+            await db.SaveChangesAsync(ct);
+        }
+
+        // The colours priced on the 3660 x 900 sheet move with it.
+        var colourIds = await db.MaterialPrices
+            .Where(p => p.SheetSizeId == wide.Id && p.ColourId != null)
+            .Select(p => p.ColourId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+        foreach (var colour in await db.Colours.Where(c => colourIds.Contains(c.Id) && c.ProductLineId == perago12.Id).ToListAsync(ct))
+            colour.ProductLineId = perago20.Id;
+        wide.ProductLineId = perago20.Id;
+
+        await db.SaveChangesAsync(ct);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -195,7 +258,7 @@ public static class CatalogueSeeder
         var modified12 = await AddLineAsync(db, supplier, "Infinito Modified", 12, ct);
 
         var size12 = await AddSizeAsync(db, fullAcrylic12, 3680, 760, ct);
-        var size6 = await AddSizeAsync(db, fullAcrylic6, 3050, 760, ct);
+        var size6 = await AddSizeAsync(db, fullAcrylic6, 3050, 750, ct);
         var sizeMod = await AddSizeAsync(db, modified12, 3680, 760, ct);
 
         var bandsA = new (string Code, decimal PerSqm)[]
@@ -217,8 +280,8 @@ public static class CatalogueSeeder
             aBands[code] = band;
         }
 
-        // Group A1 is the 6mm sheet: R2 781,60 divided by R1 200,00 is 2,318 square
-        // metres, which is 3050 x 760.
+        // Group A1 is the 6mm sheet, 3050 x 750 on the availability list. The list's
+        // own sheet price of R2 781,60 would fit 3050 x 760; the stated size is used.
         AddBandPrice(db, aBands["A1"], size6, 1200.00m, dated);
 
         var mBands = new Dictionary<string, PriceBand>();
@@ -375,6 +438,12 @@ public static class CatalogueSeeder
         ("FT24407W2630W42", "GetaCore Terrazzo Pebble CGT244", "getacore3", "g3_2040x1250", 2279m)
     };
 
+    /// <summary>The colours shown in red on the list: "Items in Red are being phased out".</summary>
+    private static readonly HashSet<string> MaxOnTopPhasingOut = new(StringComparer.Ordinal)
+    {
+        "GAVONITE4312472", "GAVONITE7830472", "GAVONITE7711472", "GAVONITE7810472", "GAVONITE8090472"
+    };
+
     private static Dictionary<string, decimal> MaxOnTopPricesPerSqm() =>
         MaxOnTopList.ToDictionary(r => r.Code, r => r.PerSqm);
 
@@ -411,7 +480,11 @@ public static class CatalogueSeeder
 
         foreach (var (code, name, line, size, perSqm) in MaxOnTopList)
         {
-            var colour = new Colour { ProductLineId = lines[line].Id, Name = name, SupplierCode = code };
+            var colour = new Colour
+            {
+                ProductLineId = lines[line].Id, Name = name, SupplierCode = code,
+                Status = MaxOnTopPhasingOut.Contains(code) ? CatalogueStatus.PhasingOut : CatalogueStatus.Active
+            };
             db.Colours.Add(colour);
             await db.SaveChangesAsync(ct);
             AddColourPricePerSqm(db, colour, sizes[size], perSqm, dated);
@@ -484,11 +557,12 @@ public static class CatalogueSeeder
             adhesive: 130.00m, "Johannesburg metro R510; Pretoria metro R650; Western Cape R510 within 40km, R950 beyond.", ct);
 
         var perago12 = await AddLineAsync(db, supplier, "Perago 100% Acrylic", 12, ct);
+        var perago20 = await AddLineAsync(db, supplier, "Perago 100% Acrylic", 20, ct);
         var perago6 = await AddLineAsync(db, supplier, "Perago 100% Acrylic", 6, ct);
         var magicstone12 = await AddLineAsync(db, supplier, "Magicstone Modified", 12, ct);
 
         var p12_760 = await AddSizeAsync(db, perago12, 3660, 760, ct);
-        var p12_900 = await AddSizeAsync(db, perago12, 3660, 900, ct);
+        var p20_900 = await AddSizeAsync(db, perago20, 3660, 900, ct);
         var p6_760 = await AddSizeAsync(db, perago6, 3660, 760, ct);
         var m12_760 = await AddSizeAsync(db, magicstone12, 3660, 760, ct);
 
@@ -498,12 +572,12 @@ public static class CatalogueSeeder
         var peragoRows = new (string Name, SheetSize Size, decimal PerSqm)[]
         {
             ("Perago Classic White", p12_760, 1520.00m),
-            ("Classic White 900", p12_900, 2140.00m),
+            ("Classic White 900", p20_900, 2140.00m),
             ("Classic White 6mm", p6_760, 1295.00m)
         };
         foreach (var (name, size, perSqm) in peragoRows)
         {
-            var line = size.ProductLineId == perago6.Id ? perago6 : perago12;
+            var line = size.ProductLineId == perago6.Id ? perago6 : size.ProductLineId == perago20.Id ? perago20 : perago12;
             var colour = new Colour { ProductLineId = line.Id, Name = name, SupplierCode = name };
             db.Colours.Add(colour);
             await db.SaveChangesAsync(ct);

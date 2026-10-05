@@ -177,6 +177,58 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_seed_follows_the_supplier_sheets_on_phase_outs_sizes_and_thickness()
+    {
+        var phasing = await _db.Colours.AsNoTracking()
+            .Where(c => c.Status == CatalogueStatus.PhasingOut)
+            .Select(c => c.Name)
+            .OrderBy(n => n)
+            .ToListAsync();
+        Assert.Equal(new[] { "Alaskan Stone 4312", "Bronze 7830", "Jurassic 7711", "Malt 7810", "Snowfall 8090" }, phasing);
+
+        var infinito6 = await _db.SheetSizes.AsNoTracking()
+            .SingleAsync(s => s.ProductLine!.Name == "Infinito Full Acrylic" && s.ProductLine.ThicknessMm == 6);
+        Assert.Equal((3050, 750), (infinito6.LengthMm, infinito6.WidthMm));
+
+        var wide = await _db.SheetSizes.AsNoTracking().Include(s => s.ProductLine)
+            .SingleAsync(s => s.LengthMm == 3660 && s.WidthMm == 900);
+        var classicWhite900 = await _db.Colours.AsNoTracking().SingleAsync(c => c.Name == "Classic White 900");
+        Assert.Equal(20, wide.ProductLine!.ThicknessMm);
+        Assert.Equal(wide.ProductLineId, classicWhite900.ProductLineId);
+    }
+
+    [Fact]
+    public async Task A_database_seeded_before_the_supplier_sheet_corrections_is_put_right()
+    {
+        // Put the catalogue back the way the earlier seeder left it.
+        foreach (var colour in await _db.Colours.Where(c => c.Status == CatalogueStatus.PhasingOut).ToListAsync())
+            colour.Status = CatalogueStatus.Active;
+        var infinito6 = await _db.SheetSizes.SingleAsync(s => s.ProductLine!.Name == "Infinito Full Acrylic" && s.ProductLine.ThicknessMm == 6);
+        infinito6.WidthMm = 760;
+        var perago12 = await _db.ProductLines.SingleAsync(p => p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 12);
+        var perago20 = await _db.ProductLines.SingleAsync(p => p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 20);
+        var wide = await _db.SheetSizes.SingleAsync(s => s.LengthMm == 3660 && s.WidthMm == 900);
+        var classicWhite900 = await _db.Colours.SingleAsync(c => c.Name == "Classic White 900");
+        wide.ProductLineId = perago12.Id;
+        classicWhite900.ProductLineId = perago12.Id;
+        await _db.SaveChangesAsync();
+        _db.ProductLines.Remove(perago20);
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        await CatalogueSeeder.SeedAsync(_db);
+        await CatalogueSeeder.SeedAsync(_db);   // a second start-up changes nothing more
+        _db.ChangeTracker.Clear();
+
+        Assert.Equal(5, await _db.Colours.CountAsync(c => c.Status == CatalogueStatus.PhasingOut));
+        Assert.Equal(750, (await _db.SheetSizes.SingleAsync(s => s.Id == infinito6.Id)).WidthMm);
+        var moved = await _db.SheetSizes.Include(s => s.ProductLine).SingleAsync(s => s.Id == wide.Id);
+        Assert.Equal(20, moved.ProductLine!.ThicknessMm);
+        Assert.Equal(moved.ProductLineId, (await _db.Colours.SingleAsync(c => c.Id == classicWhite900.Id)).ProductLineId);
+        Assert.Equal(1, await _db.ProductLines.CountAsync(p => p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 20));
+    }
+
+    [Fact]
     public async Task A_staron_band_price_matches_the_published_sheet_price()
     {
         var colour = await _db.Colours
