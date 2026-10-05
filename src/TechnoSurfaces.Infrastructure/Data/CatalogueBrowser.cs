@@ -102,12 +102,12 @@ public sealed class CatalogueBrowser : ICatalogueBrowser
             .AsNoTracking()
             .Where(r => r.Status != CatalogueStatus.Discontinued)
             .OrderBy(r => r.SortOrder)
-            .Select(r => new { r.Id, r.Name, r.Category, r.Unit, r.Derivation, r.IsBelowTheLine })
+            .Select(r => new { r.Id, r.Name, r.Category, r.Unit, r.Derivation, r.IsBelowTheLine, r.DerivationFactor })
             .ToListAsync(ct);
 
         return rows
             .Select(r => new RateItemOption(r.Id, r.Name, r.Category.ToString(), r.Unit.ToString(),
-                r.Derivation.ToString(), r.IsBelowTheLine))
+                r.Derivation.ToString(), r.IsBelowTheLine, r.DerivationFactor))
             .ToList();
     }
 }
