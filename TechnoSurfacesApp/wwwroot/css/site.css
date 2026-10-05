@@ -1317,17 +1317,31 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
    Labelled filter rows on the catalogue, rate card and audit trail
    ========================================================================== */
 
-.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-4); align-items: end; padding: var(--space-5); border-bottom: 1px solid var(--line); }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-4); align-items: start; padding: var(--space-5); border-bottom: 1px solid var(--line); }
 .filters .field { margin: 0; }
-.filters .btn-row { align-self: end; }
+/* The checkbox and the buttons have no label, so they drop by a label's height to line up with
+   the inputs. Lining up from the top means a hint under one field no longer pushes the row out. */
+.filters .filter-check, .filters .btn-row { align-self: start; margin-top: calc(var(--text-sm) * var(--leading-normal) + var(--space-1)); }
+@media (max-width: 767.98px) {
+    .filters .filter-check, .filters .btn-row { margin-top: 0; }
+}
 
 /* A price or rate change form, opened from its row */
 .row-edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-4); align-items: end; }
 .row-edit .field { margin: 0; }
 
-/* Permission summary on the users screen */
-.matrix td, .matrix th { text-align: center; }
-.matrix th:first-child, .matrix td:first-child { text-align: left; }
+/* Permission summary on the users screen. table.data puts every heading on the left, so the
+   matrix needs the same weight to centre the role columns, headings included. */
+table.data.matrix td, table.data.matrix th { text-align: center; }
+table.data.matrix th:first-child, table.data.matrix td:first-child { text-align: left; }
+
+/* Rate card: what an item is charged per, its rate and since when sit centred under their
+   headings. Below 768px the table is a stack of cards and keeps its own alignment. */
+@media (min-width: 768px) {
+    table.data.rates th:nth-child(2), table.data.rates td:nth-child(2),
+    table.data.rates th:nth-child(3), table.data.rates td:nth-child(3),
+    table.data.rates th:nth-child(4), table.data.rates td:nth-child(4) { text-align: center; }
+}
 .user-actions { margin-top: var(--space-2); }
 .user-actions form { display: inline; }
 .temp-password { font-size: var(--text-md); font-weight: var(--weight-bold); padding: var(--space-1) var(--space-3); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); letter-spacing: .05em; user-select: all; }
