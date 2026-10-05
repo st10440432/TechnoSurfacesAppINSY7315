@@ -277,7 +277,7 @@ The app applies its own database migrations when it starts. The database has no 
 
 ![Cloud architecture](docs/images/cloud-architecture.png)
 
-the cloud architecture diagram (Task 1 Figure 15) as `docs/images/cloud-architecture.png`, and the Application Insights availability chart as `docs/images/availability.png`.
+![Availability](docs/images/availability.png)
 
 ## Branching, CI and CD
 
@@ -297,7 +297,11 @@ A repository ruleset protects `main` and `develop`: no direct pushes, a pull req
 
 Dependabot opens pull requests against `develop` for NuGet packages and GitHub Actions each week.
 
-screenshots of a successful pipeline run with the tests passing and the deployment succeeding (`docs/images/pipeline-run.png`), the branch ruleset (`docs/images/ruleset.png`) and the production approval (`docs/images/production-approval.png`).
+![Pipeline run](docs/images/pipeline-run.png)
+
+![Branch ruleset](docs/images/ruleset.png)
+
+![Production approval](docs/images/production-approval.png)
 
 ## Tests
 
