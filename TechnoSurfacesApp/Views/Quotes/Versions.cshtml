@@ -1,190 +1,83 @@
-﻿@model TechnoSurfacesApp.Controllers.VersionsVm
+@model TechnoSurfacesApp.Controllers.VersionsVm
+@*
+    Every version of a quote, newest first (US-20, US-21). A revision after a
+    counter offer is a new version of the same quote, not a new quote. Earlier
+    versions are locked and stay readable.
+*@
+@using TechnoSurfaces.Application.Auditing
 @{
     var q = Model.Quote;
+    var a = Model.Actions;
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Version history</h2>
-        <p>@q.Ref &middot; @q.Versions.Count version@(q.Versions.Count == 1 ? "" : "s") retained</p>
+        <h1>Version history</h1>
+        <p>@q.Reference for @q.CustomerName. @Model.Versions.Count version@(Model.Versions.Count == 1 ? "" : "s").</p>
     </div>
-    <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
-            <svg class="ico ico-sm"><use href="#i-arrow-left" /></svg> Costing sheet
-        </a>
-    </div>
-</div>
+</header>
 
 <partial name="_QuoteHeader" model="q" />
-
-<div class="notice notice-info">
-    <svg class="ico"><use href="#i-info" /></svg>
-    <div>
-        <strong>Counter-offers are a normal part of the process, not an exception.</strong>
-        When a customer comes back, the quote is reopened, edited and saved again &mdash; and every
-        earlier version is kept exactly as it was issued, along with the prices it carried.
-    </div>
-</div>
+<partial name="_QuoteTabs" model="q" />
 
 <div class="grid grid-main">
-    <div>
-        <div class="card">
-            <div class="card-head">
-                <svg class="ico" style="color:var(--ts-blue)"><use href="#i-history" /></svg>
-                <h2>Versions</h2>
-            </div>
-            <div class="card-body">
-                <div class="timeline">
-                    @foreach (var v in q.Versions.OrderByDescending(v => v.VersionNumber))
-                    {
-                        var isCurrent = v.VersionNumber == q.Versions.Max(x => x.VersionNumber);
-                        <div class="tl-item @(isCurrent ? "current" : "")">
-                            <span class="tl-dot">@v.VersionNumber</span>
-                            <div class="tl-head">
-                                <strong class="small">Version @v.VersionNumber</strong>
-                                <span class="pill pill-@v.StatusAtSnapshot.ToString().ToLowerInvariant()">
-                                    @(v.StatusAtSnapshot == QuoteStatus.PendingApproval ? "Pending approval" : v.StatusAtSnapshot.ToString())
-                                </span>
-                                @if (isCurrent)
-                                {
-                                    <span class="badge badge-sage">Current</span>
-                                }
-                                <span class="tl-total">@Fmt.Rand(v.Total)</span>
-                            </div>
-                            <div class="small" style="margin-top:4px">@v.Note</div>
-                            <div class="tiny muted" style="margin-top:3px">
-                                @v.CreatedBy &middot; @Fmt.DateTimeShort(v.CreatedAt)
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
+    <section class="card" aria-labelledby="versions-title">
+        <div class="card-head">
+            <svg class="ico" aria-hidden="true"><use href="#i-history" /></svg>
+            <h2 id="versions-title">Versions</h2>
         </div>
-
-        @if (Model.CanCompare)
-        {
-            <div class="card">
-                <div class="card-head">
-                    <svg class="ico" style="color:var(--ts-sage)"><use href="#i-copy" /></svg>
-                    <h2>Compare</h2>
-                </div>
-
-                <form method="get" class="filterbar">
-                    <input type="hidden" name="id" value="@q.Id" />
-                    <label class="label" style="margin:0">From</label>
-                    <select class="select" name="a" onchange="this.form.submit()">
-                        @foreach (var v in q.Versions.OrderBy(v => v.VersionNumber))
-                        {
-                            <option value="@v.VersionNumber" selected="@(Model.A?.VersionNumber == v.VersionNumber)">
-                                Version @v.VersionNumber
-                            </option>
-                        }
-                    </select>
-                    <label class="label" style="margin:0">To</label>
-                    <select class="select" name="b" onchange="this.form.submit()">
-                        @foreach (var v in q.Versions.OrderBy(v => v.VersionNumber))
-                        {
-                            <option value="@v.VersionNumber" selected="@(Model.B?.VersionNumber == v.VersionNumber)">
-                                Version @v.VersionNumber
-                            </option>
-                        }
-                    </select>
-                    <button class="btn btn-secondary btn-sm" type="submit">Compare</button>
-                </form>
-
-                @if (Model.A is not null && Model.B is not null)
+        <div class="card-body">
+            <ol class="timeline" reversed>
+                @foreach (var v in Model.Versions)
                 {
-                    <div class="table-wrap">
-                        <table class="data stack">
-                            <thead>
-                                <tr>
-                                    <th></th>
-                                    <th>Version @Model.A.VersionNumber</th>
-                                    <th>Version @Model.B.VersionNumber</th>
-                                    <th class="right">Change</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td data-label="">Total</td>
-                                    <td data-label="From" class="strong">@Fmt.Rand(Model.A.Total)</td>
-                                    <td data-label="To" class="strong">@Fmt.Rand(Model.B.Total)</td>
-                                    <td data-label="Change" class="right">
-                                        <span class="@(Model.Delta >= 0 ? "delta-up" : "delta-down")">
-                                            @(Model.Delta >= 0 ? "+" : "\u2212")@Fmt.Rand(Math.Abs(Model.Delta))
-                                        </span>
-                                        <div class="tiny muted">@Fmt.Pct(Math.Abs(Model.DeltaPct))</div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td data-label="">Status at snapshot</td>
-                                    <td data-label="From">@Model.A.StatusAtSnapshot</td>
-                                    <td data-label="To">@Model.B.StatusAtSnapshot</td>
-                                    <td data-label="Change" class="right muted">&mdash;</td>
-                                </tr>
-                                <tr>
-                                    <td data-label="">Saved by</td>
-                                    <td data-label="From">@Model.A.CreatedBy</td>
-                                    <td data-label="To">@Model.B.CreatedBy</td>
-                                    <td data-label="Change" class="right muted">&mdash;</td>
-                                </tr>
-                                <tr>
-                                    <td data-label="">Date</td>
-                                    <td data-label="From">@Fmt.Date(Model.A.CreatedAt)</td>
-                                    <td data-label="To">@Fmt.Date(Model.B.CreatedAt)</td>
-                                    <td data-label="Change" class="right">
-                                        @((Model.B.CreatedAt - Model.A.CreatedAt).Days) days
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td data-label="">Reason</td>
-                                    <td data-label="From" class="small muted">@Model.A.Note</td>
-                                    <td data-label="To" class="small muted">@Model.B.Note</td>
-                                    <td data-label="Change" class="right muted">&mdash;</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    var current = v.VersionNo == q.VersionNo;
+                    <li class="tl-item @(current ? "current" : null)">
+                        <span class="tl-dot" aria-hidden="true">@v.VersionNo</span>
+                        <div class="tl-head">
+                            <h3 class="tl-title">Version @v.VersionNo</h3>
+                            @if (current)
+                            {
+                                <span class="badge badge-info">Current</span>
+                            }
+                            @if (v.IsSealed)
+                            {
+                                <span class="badge">
+                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-lock" /></svg> Locked
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-good">Open for changes</span>
+                            }
+                            <span class="tl-total">@Fmt.Rand(v.TotalExVat) <span class="sub">ex VAT</span></span>
+                        </div>
+                        <p class="small muted mb-0">
+                            Started @Fmt.DateTimeShort(AuditTime.ToLocal(v.CreatedAtUtc)) by @v.CreatedByName.
+                            Markup @Fmt.Pct(v.MarkupPercent). @Fmt.Rand(v.TotalIncVat) including VAT.
+                        </p>
+                        @if (current)
+                        {
+                            <p class="small mb-0">
+                                <a asp-action="Costing" asp-route-id="@q.Id">Open the costing sheet</a>
+                                <span aria-hidden="true">·</span>
+                                <a asp-action="Quotation" asp-route-id="@q.Id">Open the customer quotation</a>
+                            </p>
+                        }
+                    </li>
                 }
-            </div>
-        }
-    </div>
-
-    <div>
-        <div class="card totals">
-            <div class="card-head"><h3>Why versions are kept</h3></div>
-            <div class="card-body">
-                <p class="small" style="margin-top:0">
-                    Two confirmed requirements are served by one mechanism:
-                </p>
-                <div class="check-row">
-                    <span class="check-dot check-ok">
-                        <svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-check" /></svg>
-                    </span>
-                    <span class="check-body">
-                        <span class="check-title">The original offer survives</span>
-                        <span class="check-detail">The customer negotiates against numbers they have already seen.</span>
-                    </span>
-                </div>
-                <div class="check-row">
-                    <span class="check-dot check-ok">
-                        <svg class="ico" style="width:11px;height:11px;flex-basis:11px"><use href="#i-check" /></svg>
-                    </span>
-                    <span class="check-body">
-                        <span class="check-title">Prices are frozen per version</span>
-                        <span class="check-detail">Reopening a quote cannot silently reprice it, even if the catalogue has moved.</span>
-                    </span>
-                </div>
-            </div>
-            <div class="card-foot" style="display:block">
-                <button class="btn btn-secondary btn-block" type="button">
-                    <svg class="ico ico-sm"><use href="#i-copy" /></svg> Reopen for counter-offer
-                </button>
-                <p class="hint" style="margin:9px 0 0">
-                    Creates version @(q.Versions.Count + 1). A revised quote needs approval again
-                    before it goes back out.
-                </p>
-            </div>
+            </ol>
         </div>
+    </section>
+
+    <div class="stack-gap">
+        <section class="card" aria-labelledby="about-versions-title">
+            <div class="card-head"><h2 id="about-versions-title">How versions work</h2></div>
+            <div class="card-body small">
+                <p>A version is locked when it is approved. From then on it reads exactly as it was issued, even if a price or a term changes later.</p>
+                <p class="mb-0">When a customer asks for changes, reopen the quote. The sent version stays as it was and the next version starts as a copy you can change, then goes through approval again.</p>
+            </div>
+        </section>
+
+        <partial name="_QuoteActions" model="new TechnoSurfacesApp.Controllers.QuoteActionBar(q, a, null)" />
     </div>
 </div>

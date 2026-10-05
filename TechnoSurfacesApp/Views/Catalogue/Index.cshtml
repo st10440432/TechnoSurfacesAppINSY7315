@@ -1,214 +1,135 @@
-﻿@model TechnoSurfacesApp.Controllers.CatalogueVm
+@model TechnoSurfacesApp.Controllers.CatalogueVm
+@*
+    The material catalogue (US-23, US-24): every colour in every sheet size with the
+    price in force today and the date it took effect. Everyone sees every price.
+*@
+@{
+    var count = Model.Rows.Count;
+    bool IsStale(DateOnly? from) =>
+        from is { } f && Model.Today.DayNumber - f.DayNumber > TechnoSurfacesApp.Controllers.CatalogueController.StaleAfterDays;
+}
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Material catalogue</h2>
-        <p>
-            @Model.Entries.Count entr@(Model.Entries.Count == 1 ? "y" : "ies")
+        <h1>Material catalogue</h1>
+        <p>Every material and the price it is quoted at today, from each supplier's own price list.</p>
+    </div>
+</header>
+
+@if (Model.StaleSuppliers.Count > 0)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div>
+            <strong>Some price lists are over a year old.</strong>
+            @string.Join("; ", Model.StaleSuppliers.Select(s => $"{s.Supplier}, from {Fmt.Date(s.NewestPrice)}")).
+            Check these prices with the supplier before quoting from them.
+        </div>
+    </div>
+}
+
+<section class="card" aria-labelledby="catalogue-title">
+    <h2 class="sr-only" id="catalogue-title">Materials</h2>
+
+    <form class="filters" method="get" asp-action="Index" role="search" aria-label="Find a material" data-no-busy>
+        <div class="field">
+            <label class="label" for="q">Search</label>
+            <input class="input" id="q" name="q" type="search" value="@Model.Search" aria-describedby="q-hint" />
+            <span class="hint" id="q-hint">Colour, supplier code, range or band.</span>
+        </div>
+        <div class="field">
+            <label class="label" for="supplier">Supplier</label>
+            <select class="select" id="supplier" name="supplier" data-autosubmit>
+                <option value="">All suppliers</option>
+                @foreach (var s in Model.Suppliers)
+                {
+                    <option value="@s" selected="@(Model.Supplier == s)">@s</option>
+                }
+            </select>
+        </div>
+        <div class="field check filter-check">
+            <input type="checkbox" id="retired" name="retired" value="true" checked="@Model.IncludeRetired" data-autosubmit />
+            <label for="retired">Include retired materials</label>
+        </div>
+        <div class="btn-row">
+            <button type="submit" class="btn btn-secondary">Search</button>
             @if (Model.AnyFilter)
             {
-                <text>matching your filters</text>
+                <a class="btn btn-ghost" asp-action="Index">Clear</a>
             }
-            else
-            {
-
-                <text>across @Db.Suppliers.Count suppliers</text>
-            }
-        </p>
-    </div>
-    <div class="page-head-actions">
-        <a class="btn btn-secondary" asp-controller="Quotes" asp-action="Create">
-            <svg class="ico ico-sm"><use href="#i-plus" /></svg> Quote a material
-        </a>
-        @if (Model.CanEditPrices)
-        {
-            <button class="btn btn-primary" type="button">
-                <svg class="ico ico-sm"><use href="#i-plus" /></svg> Add entry
-            </button>
-        }
-    </div>
-</div>
-
-@if (!Model.CanEditPrices)
-{
-    <div class="notice notice-info">
-        <svg class="ico"><use href="#i-info" /></svg>
-        <div>
-            Everyone can see pricing &mdash; that is a deliberate decision by the client.
-            <strong>Only the Managing Director can change a price.</strong>
         </div>
-    </div>
-}
-
-@if (Model.StaleSupplierCount > 0)
-{
-    <div class="notice notice-warn">
-        <svg class="ico"><use href="#i-alert" /></svg>
-        <div>
-            <strong>@Model.StaleSupplierCount supplier price list@(Model.StaleSupplierCount == 1 ? " is" : "s are") over a year old.</strong>
-            Every price carries the date it came into effect &mdash; check that column before quoting
-            from an old list.
-        </div>
-    </div>
-}
-
-<div class="grid grid-4" style="margin-bottom:20px">
-    <div class="tile tile-accent">
-        <div class="tile-label">Active entries</div>
-        <div class="tile-value">@Db.ActiveEntryCount</div>
-        <div class="tile-note">of @Db.Catalogue.Count total</div>
-    </div>
-    <div class="tile tile-accent blue">
-        <div class="tile-label">Suppliers</div>
-        <div class="tile-value">@Db.Suppliers.Count</div>
-        <div class="tile-note">@Db.Suppliers.Count(s => s.PricingStructure == PricingStructure.Band) price by band, @Db.Suppliers.Count(s => s.PricingStructure == PricingStructure.Item) per item</div>
-    </div>
-    <div class="tile">
-        <div class="tile-label">Product lines</div>
-        <div class="tile-value">@Db.ProductLines.Count</div>
-        <div class="tile-note">a colour can price differently in each</div>
-    </div>
-    <div class="tile tile-accent amber">
-        <div class="tile-label">Phasing out</div>
-        <div class="tile-value">@Db.Catalogue.Count(c => c.Status != CatalogueStatus.Active)</div>
-        <div class="tile-note">retired, never deleted</div>
-    </div>
-</div>
-
-<div class="card">
-    <form method="get" class="filterbar">
-        <div class="search">
-            <svg class="ico ico-sm"><use href="#i-search" /></svg>
-            <input class="input" name="q" value="@Model.Search" placeholder="Colour, code, range or band" />
-        </div>
-
-        <select class="select" name="supplierId" onchange="this.form.submit()">
-            <option value="">All suppliers</option>
-            @foreach (var s in Db.Suppliers.OrderBy(s => s.Name))
-            {
-                <option value="@s.Id" selected="@(Model.SupplierId == s.Id)">@s.Name</option>
-            }
-        </select>
-
-        <select class="select" name="productLineId" onchange="this.form.submit()">
-            <option value="">All materials</option>
-            @foreach (var p in Model.ProductLineOptions)
-            {
-                <option value="@p.Id" selected="@(Model.ProductLineId == p.Id)">@p.Name</option>
-            }
-        </select>
-
-        <select class="select" name="thickness" onchange="this.form.submit()">
-            <option value="">Any thickness</option>
-            @foreach (var t in Model.ThicknessOptions)
-            {
-                <option value="@t" selected="@(Model.Thickness == t)">@t mm</option>
-            }
-        </select>
-
-        <select class="select" name="status" onchange="this.form.submit()">
-            <option value="">Any status</option>
-            @foreach (var st in Enum.GetValues<CatalogueStatus>())
-            {
-                <option value="@st" selected="@(Model.Status == st.ToString())">
-                    @(st == CatalogueStatus.PhasingOut ? "Phasing out" : st.ToString())
-                </option>
-            }
-        </select>
-
-        <button class="btn btn-secondary btn-sm" type="submit">Apply</button>
-        @if (Model.AnyFilter)
-        {
-            <a class="btn btn-ghost btn-sm" asp-action="Index">Clear</a>
-        }
     </form>
 
-    @if (Model.Entries.Count == 0)
-    {
-        <div class="empty">
-            <svg class="ico"><use href="#i-search" /></svg>
-            <h3>Nothing matches</h3>
-            <p>Try widening the filters.</p>
-            <a class="btn btn-secondary" asp-action="Index">Clear filters</a>
-        </div>
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data stack">
-                <thead>
-                    <tr>
-                        <th>Colour</th>
-                        <th>Supplier &amp; material</th>
-                        <th>Code</th>
-                        <th>Sheet</th>
-                        <th class="right">R / m&sup2;</th>
-                        <th class="right">R / sheet</th>
-                        <th class="right">Stock</th>
-                        <th>Effective</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var e in Model.Entries)
-                    {
-                        var sup = Db.GetSupplier(e.SupplierId);
+    <div class="card-body">
+        <p class="list-count" role="status">@count material@(count == 1 ? "" : "s")@(Model.AnyFilter ? " match" : "").</p>
+
+        @if (count == 0)
+        {
+            <div class="empty">
+                <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
+                <h3>No materials match</h3>
+                <p>Check the spelling, or choose All suppliers.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data stack stack-md">
+                    <caption class="sr-only">Materials and their prices today</caption>
+                    <thead>
                         <tr>
-                            <td data-label="Colour">
-                                <div class="strong">@e.ColourName</div>
-                                <div class="tiny muted">
-                                    @if (e.BandCode is not null)
-                                    {
-                                        <span class="badge badge-band">@e.BandCode</span>
-                                    }
-                                    @if (e.Range is not null)
-                                    {
-                                        <span class="badge">@e.Range</span>
-                                    }
-                                    @if (e.Status != CatalogueStatus.Active)
-                                    {
-                                        <span class="badge badge-warn">@e.StatusLabel</span>
-                                    }
-                                </div>
-                            </td>
-                            <td data-label="Supplier &amp; material">
-                                <div class="small">@Db.SupplierName(e.SupplierId)</div>
-                                <div class="tiny muted">@Db.ProductLineName(e.ProductLineId)</div>
-                            </td>
-                            <td data-label="Code" class="mono tiny">
-                                @(string.IsNullOrEmpty(e.SupplierCode) ? "\u2014" : e.SupplierCode)
-                            </td>
-                            <td data-label="Sheet" class="nowrap small">
-                                @e.ShortSizeLabel
-                                <div class="tiny muted">@e.ThicknessMm mm &middot; @Fmt.Num(e.SheetAreaSqm) m&sup2;</div>
-                            </td>
-                            <td data-label="R / m&sup2;" class="right">@Fmt.Rand(e.EffectivePricePerSqm)</td>
-                            <td data-label="R / sheet" class="right strong">
-                                @Fmt.Rand(e.EffectivePricePerSheet)
-                                @if (!e.PublishedPricePerSheet.HasValue)
-                                {
-                                    <div class="tiny muted">derived</div>
-                                }
-                            </td>
-                            <td data-label="Stock" class="right">
-                                @(e.StockQty.HasValue ? Fmt.Qty(e.StockQty.Value) : "\u2014")
-                            </td>
-                            <td data-label="Effective" class="small nowrap">
-                                @Fmt.Date(e.EffectiveFrom)
-                                @if (sup is { IsStale: true })
-                                {
-                                    <div><span class="badge badge-warn">Old list</span></div>
-                                }
-                            </td>
-                            <td data-label="" class="right">
-                                <a class="btn btn-ghost btn-sm" asp-action="Price" asp-route-id="@e.Id">
-                                    @(Model.CanEditPrices ? "Edit price" : "View")
-                                </a>
-                            </td>
+                            <th scope="col">Material</th>
+                            <th scope="col">Supplier and range</th>
+                            <th scope="col">Sheet size</th>
+                            <th scope="col" class="right">Price per sheet</th>
+                            <th scope="col"><span class="sr-only">Actions</span></th>
                         </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.Rows)
+                        {
+                            <tr>
+                                <td data-label="Material">
+                                    <span class="strong">@r.Colour</span>
+                                    @if (!string.IsNullOrEmpty(r.SupplierCode))
+                                    {
+                                        <span class="sub mono">@r.SupplierCode</span>
+                                    }
+                                    @if (r.IsRetired)
+                                    {
+                                        <span class="badge stacked">Retired</span>
+                                    }
+                                </td>
+                                <td data-label="Supplier and range">
+                                    @r.Supplier
+                                    <span class="sub">@r.ProductLine, @r.ThicknessMm mm@(r.Band is null ? "" : $", band {r.Band}")</span>
+                                </td>
+                                <td data-label="Sheet size">@r.SheetSize</td>
+                                <td data-label="Price per sheet" class="right num">
+                                    @if (r.PricePerSheet is { } sheet)
+                                    {
+                                        <span class="strong">@Fmt.Rand(sheet)</span>
+                                        <span class="sub">@Fmt.Rand(r.PricePerSqm!.Value) per m², since @Fmt.Date(r.PriceFrom!.Value)</span>
+                                        @if (IsStale(r.PriceFrom))
+                                        {
+                                            <span class="badge badge-warn stacked">Price list over a year old</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-danger">No price</span>
+                                    }
+                                </td>
+                                <td data-label="Actions" class="right">
+                                    <a class="btn btn-ghost btn-sm" asp-action="Price" asp-route-colourId="@r.ColourId" asp-route-sheetSizeId="@r.SheetSizeId">
+                                        Price history<span class="sr-only"> for @r.Colour, @r.SheetSize</span>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>

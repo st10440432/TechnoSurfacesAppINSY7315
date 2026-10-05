@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using TechnoSurfaces.Application.Catalogue;
 using TechnoSurfaces.Application.Costing;
+using TechnoSurfaces.Application.Customers;
 using TechnoSurfaces.Application.Pricing;
 using TechnoSurfaces.Application.Quoting;
 using TechnoSurfaces.Infrastructure.Data;
@@ -34,6 +37,29 @@ public static class DependencyInjection
         services.AddScoped<IRateResolver, RateResolver>();
         services.AddScoped<IPriceHistory, PriceHistory>();
         services.AddScoped<IQuoteCalculationService, QuoteCalculationService>();
+
+        // The costing sheet: quotes, their priced lines and the cascading choice.
+        services.AddScoped<IQuoteRepository, QuoteRepository>();
+        services.AddScoped<ICostingSheetService, CostingSheetService>();
+        services.AddScoped<ICatalogueBrowser, CatalogueBrowser>();
+
+        // Customers and their contacts.
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerService, CustomerService>();
+
+        // The quote workflow and the lists the screens show. One QuoteQueries per
+        // request serves both interfaces, so lapsed quotes are expired on the same
+        // context the workflow saves through.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<QuoteQueries>();
+        services.AddScoped<IQuoteQueries>(sp => sp.GetRequiredService<QuoteQueries>());
+        services.AddScoped<ILapsedQuotes>(sp => sp.GetRequiredService<QuoteQueries>());
+        services.AddScoped<IQuoteWorkflowService, QuoteWorkflowService>();
+        services.AddScoped<IQuotationGenerationService, QuotationGenerationService>();
+
+        // The Pastel invoice recorded against an accepted quote (US-25).
+        services.AddScoped<IInvoiceRecords, InvoiceRecords>();
+        services.AddScoped<IInvoiceRecordService, InvoiceRecordService>();
 
         return services;
     }

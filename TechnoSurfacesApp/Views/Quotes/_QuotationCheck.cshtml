@@ -1,0 +1,35 @@
+@model TechnoSurfaces.Application.Quoting.QuotationCheck
+@*
+    Whether the customer quotation adds up to the costing (US-10). The quote cannot
+    be approved until it does. Written out in words, with an icon, never by colour
+    alone.
+*@
+<div class="check-row">
+    @if (!Model.HasLines)
+    {
+        <span class="check-dot check-warn" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-alert" /></svg></span>
+        <span class="check-body">
+            <span class="check-title">Not written yet</span>
+            <span class="check-detail">Write the lines the customer will read. They must add up to @Fmt.Rand(Model.CostingTotalExVat) ex VAT.</span>
+        </span>
+    }
+    else if (Model.Matches)
+    {
+        <span class="check-dot check-ok" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-check" /></svg></span>
+        <span class="check-body">
+            <span class="check-title">Adds up to the costing</span>
+            <span class="check-detail">@Fmt.Rand(Model.QuotationSubtotalExVat) ex VAT on both.</span>
+        </span>
+    }
+    else
+    {
+        <span class="check-dot check-warn" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-alert" /></svg></span>
+        <span class="check-body">
+            <span class="check-title">Does not add up yet</span>
+            <span class="check-detail">
+                The quotation comes to @Fmt.Rand(Model.QuotationSubtotalExVat), which is @Fmt.Rand(Math.Abs(Model.Difference))
+                @(Model.Difference > 0 ? "more" : "less") than the costing total of @Fmt.Rand(Model.CostingTotalExVat).
+            </span>
+        </span>
+    }
+</div>

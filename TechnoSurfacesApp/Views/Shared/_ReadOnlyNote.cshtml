@@ -1,0 +1,12 @@
+@model string
+@*
+    The note on a Managing Director screen opened by an estimator. The screen shows
+    its content read only and says who may change it, instead of an error page
+    (Task 1 section 2.4).
+*@
+<div class="notice notice-info read-only-note" role="note">
+    <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+    <div>
+        <strong>Read only for you.</strong> @Model
+    </div>
+</div>

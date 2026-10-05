@@ -97,6 +97,43 @@ public class QuoteVersion
         _costingLines.Remove(line);
     }
 
+    /// <summary>Rewrites a customer-facing line on this version (US-10).</summary>
+    public void ChangeQuotationLine(QuotationLine line, string description, decimal amountExVat, string? room, decimal quantity)
+    {
+        EnsureUnsealed();
+        if (!_quotationLines.Contains(line))
+            throw new InvalidOperationException($"That quotation line is not on version {VersionNo}.");
+        line.Change(description, amountExVat, room, quantity);
+    }
+
+    public void RemoveQuotationLine(QuotationLine line)
+    {
+        EnsureUnsealed();
+        _quotationLines.Remove(line);
+    }
+
+    /// <summary>
+    /// Puts the customer-facing lines in the given order. Every line on the version
+    /// must be named exactly once, so a reorder cannot drop or duplicate a line.
+    /// </summary>
+    public void ReorderQuotationLines(IReadOnlyList<QuotationLine> order)
+    {
+        EnsureUnsealed();
+        if (order.Count != _quotationLines.Count || order.Distinct().Count() != order.Count
+            || order.Any(l => !_quotationLines.Contains(l)))
+            throw new ArgumentException("Name every quotation line on the version exactly once.", nameof(order));
+
+        for (var i = 0; i < order.Count; i++)
+            order[i].SortOrder = i + 1;
+    }
+
+    /// <summary>
+    /// What the customer quotation adds up to before VAT. US-10: this must equal the
+    /// costing's total excluding VAT before the quote is approved.
+    /// </summary>
+    public decimal QuotationSubtotalExVat() =>
+        Round(_quotationLines.Sum(l => l.AmountExVat));
+
     public void SetMarkupPercent(decimal markupPercent)
     {
         EnsureUnsealed();
@@ -152,6 +189,32 @@ public class QuoteVersion
     /// starts. After this the snapshot cannot change.
     /// </summary>
     public void Seal() => IsSealed = true;
+
+    /// <summary>
+    /// A new, open version that starts as a copy of this one. Every line keeps the
+    /// price, origin, quantity, override and discount it carries here, and nothing
+    /// is priced again, so a catalogue change since this version cannot move the
+    /// revision's starting figures (Task 1 5.1.3). This version is read, never
+    /// written.
+    /// </summary>
+    public QuoteVersion CreateRevision(int versionNo, string createdByUserId)
+    {
+        if (versionNo <= VersionNo)
+            throw new ArgumentOutOfRangeException(nameof(versionNo), $"A revision of version {VersionNo} must have a higher number.");
+
+        var revision = new QuoteVersion(versionNo, createdByUserId, MarkupPercent, VatRate)
+        {
+            TransportAmount = TransportAmount
+        };
+
+        foreach (var line in _costingLines)
+            revision._costingLines.Add(line.CopyForRevision());
+
+        foreach (var line in _quotationLines)
+            revision._quotationLines.Add(line.CopyForRevision());
+
+        return revision;
+    }
 
     /// <summary>
     /// Records the standing wording and brand warranties this version is approved

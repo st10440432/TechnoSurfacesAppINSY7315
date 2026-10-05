@@ -1,0 +1,155 @@
+@model TechnoSurfacesApp.Controllers.QuoteActionBar
+@*
+    The next step for a quote and the buttons that take it. Which buttons show is
+    worked out in QuotesController.ActionsForAsync from the lifecycle and the
+    permission policies. A button that cannot be pressed yet says why, in words,
+    beside it. Each button calls the quote workflow API through app.js, which shows
+    the busy state, asks for confirmation and reports the result.
+*@
+@{
+    var q = Model.Quote;
+    var a = Model.Actions;
+    var check = Model.Check;
+    var api = Url.Content($"~/api/quotes/{q.Id}/");
+    var noLines = q.CostingLineCount == 0;
+    var quotationReady = check is { Matches: true };
+    var nextVersion = q.VersionNo + 1;
+
+    string? approveBlock = noLines
+        ? "Add at least one costing line first."
+        : check is null || !check.HasLines
+            ? "Write the customer quotation lines first. Approval needs them to add up to the costing."
+            : !check.Matches
+                ? $"The customer quotation is {Fmt.Rand(Math.Abs(check.Difference))} {(check.Difference > 0 ? "more" : "less")} than the costing. Correct the quotation lines first."
+                : null;
+}
+
+<section class="card" aria-labelledby="next-step-title">
+    <div class="card-head">
+        <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
+        <h2 id="next-step-title">Next step</h2>
+    </div>
+    <div class="card-body">
+        <p class="small">
+            @switch (q.Status)
+            {
+                case "Draft" when a.CanApprove:
+                    @:This is your draft. When the customer quotation adds up to the costing you can approve it yourself.
+                    break;
+                case "Draft":
+                    @:Draft. When the costing and the customer quotation are ready, submit it to the Managing Director for approval.
+                    break;
+                case "PendingApproval" when a.IsManagingDirector:
+                    @:Waiting for your approval. You can correct the costing or the quotation first, then approve it.
+                    break;
+                case "PendingApproval":
+                    @:Waiting for the Managing Director to approve it. It cannot be changed while it waits.
+                    break;
+                case "Approved":
+                    @:Approved@(q.ApprovedByName is null ? "" : " by " + q.ApprovedByName). Print or save the customer quotation, send it to the customer, then mark it as sent.
+                    break;
+                case "Sent":
+                    @:With the customer until @Fmt.Date(q.ValidUntil). When they accept, record it. If they ask for changes, reopen it as version @nextVersion.
+                    break;
+                case "Accepted":
+                    @:Accepted. Record the Sage Pastel invoice here once it has been raised.
+                    break;
+                case "Expired":
+                    @:This quote expired on @Fmt.Date(q.ValidUntil). Reopen it to make version @nextVersion with a new validity date.
+                    break;
+            }
+        </p>
+
+        @if (!a.CanSubmit && !a.CanApprove && !a.CanSend && !a.CanAccept && !a.CanReopen && !a.CanRecordInvoice)
+        {
+            <p class="small muted mb-0">There is nothing for you to do on this quote right now.</p>
+        }
+
+        <div class="btn-stack">
+            @if (a.CanSubmit)
+            {
+                <button type="button" class="btn btn-primary btn-block"
+                        data-api-action data-method="POST" data-url="@(api)submit"
+                        data-confirm="Submit @q.Reference for approval?"
+                        data-confirm-detail="It goes into the Managing Director's approval queue. You cannot change it while it waits."
+                        data-confirm-label="Submit for approval"
+                        data-success="Submitted for approval"
+                        data-success-detail="@q.Reference is now in the Managing Director's approval queue."
+                        disabled="@noLines" aria-describedby="@(noLines ? "submit-why" : null)">
+                    Submit for approval
+                </button>
+                @if (noLines)
+                {
+                    <p class="hint" id="submit-why">Add at least one costing line first.</p>
+                }
+                else if (!quotationReady)
+                {
+                    <p class="hint">The Managing Director cannot approve it until the customer quotation adds up to the costing.</p>
+                }
+            }
+
+            @if (a.CanApprove)
+            {
+                <button type="button" class="btn btn-confirm btn-block"
+                        data-api-action data-method="POST" data-url="@(api)approve"
+                        data-confirm="Approve @q.Reference?"
+                        data-confirm-detail="Version @q.VersionNo is locked and the quotation is issued with today's terms. It can then be sent to the customer."
+                        data-confirm-label="Approve" data-confirm-tone="confirm"
+                        data-success="Quote approved"
+                        data-success-detail="@q.Reference can now be sent to the customer."
+                        disabled="@(approveBlock is not null)" aria-describedby="@(approveBlock is null ? null : "approve-why")">
+                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-check" /></svg> Approve
+                </button>
+                @if (approveBlock is not null)
+                {
+                    <p class="hint" id="approve-why">@approveBlock</p>
+                }
+            }
+
+            @if (a.CanSend)
+            {
+                <button type="button" class="btn btn-primary btn-block"
+                        data-api-action data-method="POST" data-url="@(api)send"
+                        data-confirm="Mark @q.Reference as sent?"
+                        data-confirm-detail="Do this once the customer has the quotation. It stays valid until @Fmt.Date(q.ValidUntil)."
+                        data-confirm-label="Mark as sent"
+                        data-success="Marked as sent"
+                        data-success-detail="@q.Reference is now with the customer.">
+                    Mark as sent to the customer
+                </button>
+            }
+
+            @if (a.CanAccept)
+            {
+                <button type="button" class="btn btn-confirm btn-block"
+                        data-api-action data-method="POST" data-url="@(api)accept"
+                        data-confirm="Record that the customer accepted @q.Reference?"
+                        data-confirm-detail="Do this when the customer has accepted in writing or sent an order number."
+                        data-confirm-label="Record acceptance" data-confirm-tone="confirm"
+                        data-success="Acceptance recorded"
+                        data-success-detail="The Sage Pastel invoice can now be recorded against @q.Reference.">
+                    Record acceptance
+                </button>
+            }
+
+            @if (a.CanRecordInvoice)
+            {
+                <a class="btn btn-secondary btn-block" asp-action="RecordInvoice" asp-route-id="@q.Id">Record the invoice</a>
+            }
+
+            @if (a.CanReopen)
+            {
+                <button type="button" class="btn btn-secondary btn-block"
+                        data-api-action data-method="POST" data-url="@(api)reopen"
+                        data-confirm="Reopen @q.Reference as version @nextVersion?"
+                        data-confirm-detail="Version @q.VersionNo stays as it was sent and cannot be changed. Version @nextVersion starts as a copy you can edit, then goes through approval again."
+                        data-confirm-label="Reopen"
+                        data-success="Version @nextVersion started"
+                        data-success-detail="Make the changes, then submit it for approval again."
+                        data-redirect="@Url.Action("Costing", new { id = q.Id })">
+                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-edit" /></svg> Reopen for a revision
+                </button>
+            }
+        </div>
+    </div>
+</section>

@@ -19,6 +19,7 @@ public sealed class QuoteLifecycleTests
         { QuoteStatus.Sent, QuoteTransition.Accept, QuoteStatus.Accepted },
         { QuoteStatus.Sent, QuoteTransition.Reopen, QuoteStatus.Draft },
         { QuoteStatus.Accepted, QuoteTransition.Reopen, QuoteStatus.Draft },
+        { QuoteStatus.Expired, QuoteTransition.Reopen, QuoteStatus.Draft },
         { QuoteStatus.Sent, QuoteTransition.Expire, QuoteStatus.Expired },
         { QuoteStatus.Draft, QuoteTransition.Expire, QuoteStatus.Expired },
     };

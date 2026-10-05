@@ -1,263 +1,195 @@
-﻿@model TechnoSurfacesApp.Controllers.DashboardVm
+@model TechnoSurfacesApp.Controllers.DashboardVm
 @{
-    ViewData["Crumb"] = "Techno Surfaces";
-    var isMd = Model.User.Role == UserRole.ManagingDirector;
+    var pending = Model.Count("PendingApproval");
+    var drafts = Model.Count("Draft");
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>Good day, @Model.User.FullName.Split(' ')[0]</h2>
-        <p>
-            @if (isMd)
-            {
-                @:You have @Model.Pending.Count quote@(Model.Pending.Count == 1 ? "" : "s") waiting on your approval.
-            }
-            else
-            {
-                @:@Db.QuotesOwnedBy(Model.User.Id).Count(q => q.Status == QuoteStatus.Draft) draft@(Db.QuotesOwnedBy(Model.User.Id).Count(q => q.Status == QuoteStatus.Draft) == 1 ? "" : "s") in progress.
-            }
-        </p>
+        <h1>Good day, @Model.FirstName</h1>
+        @if (Model.IsManagingDirector)
+        {
+            <p>@(Model.Queue.Count == 0 ? "No quotes are waiting for your approval." : $"{Model.Queue.Count} quote{(Model.Queue.Count == 1 ? " is" : "s are")} waiting for your approval.")</p>
+        }
+        else
+        {
+            <p>@(drafts == 0 ? "You have no drafts in progress." : $"You have {drafts} draft{(drafts == 1 ? "" : "s")} in progress.")</p>
+        }
     </div>
     <div class="page-head-actions">
         <a class="btn btn-primary" asp-controller="Quotes" asp-action="Create">
-            <svg class="ico ico-sm"><use href="#i-plus" /></svg> New quote
+            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> New quote
         </a>
         <a class="btn btn-secondary" asp-controller="Quotes" asp-action="Index">All quotes</a>
     </div>
-</div>
+</header>
 
-@if (isMd && Model.StaleSuppliers.Any())
+@if (Model.StaleSuppliers.Count > 0)
 {
-    <div class="notice notice-warn">
-        <svg class="ico"><use href="#i-alert" /></svg>
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
         <div>
-            <strong>@Model.StaleSuppliers.Count supplier price list@(Model.StaleSuppliers.Count == 1 ? " is" : "s are") over a year old.</strong>
+            <strong>@Model.StaleSuppliers.Count supplier price list@(Model.StaleSuppliers.Count == 1 ? " is" : "s are") more than a year old.</strong>
             @string.Join(", ", Model.StaleSuppliers.Select(s => $"{s.Name} ({Fmt.Date(s.PriceListDated)})")).
-            Confirm current pricing before quoting from @(Model.StaleSuppliers.Count == 1 ? "it" : "them").
-            <a asp-controller="Catalogue" asp-action="Index">Review catalogue</a>
+            Check the prices with the supplier before quoting from @(Model.StaleSuppliers.Count == 1 ? "it" : "them").
+            <a asp-controller="Catalogue" asp-action="Index">Open the catalogue</a>
         </div>
     </div>
 }
 
-<div class="grid grid-4" style="margin-bottom:20px">
-    <div class="tile tile-accent amber">
-        <div class="tile-label">Awaiting approval</div>
-        <div class="tile-value">@Model.Pending.Count</div>
-        <div class="tile-note">@Fmt.Rand(Model.Pending.Sum(q => q.Total)) in value</div>
-    </div>
-    <div class="tile tile-accent blue">
-        <div class="tile-label">Out with customers</div>
-        <div class="tile-value">@Model.CountIn(QuoteStatus.Sent)</div>
-        <div class="tile-note">
-            @if (Model.ExpiringSoon > 0)
-            {
-                <span class="badge badge-warn">@Model.ExpiringSoon expiring within 7 days</span>
-            }
-            else
-            {
-                @:None expiring this week
-            }
+<section aria-labelledby="summary-title">
+    <h2 class="sr-only" id="summary-title">Summary</h2>
+    <div class="grid grid-4 mb-section">
+        @if (Model.IsManagingDirector)
+        {
+            <div class="tile tile-accent amber">
+                <div class="tile-label">Waiting for your approval</div>
+                <div class="tile-value">@Model.Queue.Count</div>
+                <div class="tile-note">@Fmt.Rand(Model.Queue.Sum(q => q.TotalExVat)) ex VAT</div>
+            </div>
+        }
+        else
+        {
+            <div class="tile tile-accent amber">
+                <div class="tile-label">Waiting for approval</div>
+                <div class="tile-value">@pending</div>
+                <div class="tile-note">submitted to the Managing Director</div>
+            </div>
+        }
+        <div class="tile tile-accent navy">
+            <div class="tile-label">Drafts in progress</div>
+            <div class="tile-value">@drafts</div>
+            <div class="tile-note">@Fmt.Rand(Model.Value("Draft")) ex VAT</div>
+        </div>
+        <div class="tile tile-accent blue">
+            <div class="tile-label">Out with customers</div>
+            <div class="tile-value">@Model.Count("Sent")</div>
+            <div class="tile-note">
+                @if (Model.ExpiringSoon > 0)
+                {
+                    <span class="badge badge-warn">@Model.ExpiringSoon expiring within 7 days</span>
+                }
+                else
+                {
+                    @:None expiring this week
+                }
+            </div>
+        </div>
+        <div class="tile tile-accent">
+            <div class="tile-label">Accepted</div>
+            <div class="tile-value">@Model.Count("Accepted")</div>
+            <div class="tile-note">@Fmt.Rand(Model.Value("Accepted")) ex VAT</div>
         </div>
     </div>
-    <div class="tile tile-accent">
-        <div class="tile-label">Accepted this period</div>
-        <div class="tile-value">@Fmt.Rand(Model.AcceptedValue)</div>
-        <div class="tile-note">@(Model.CountIn(QuoteStatus.Accepted) + Model.CountIn(QuoteStatus.Invoiced)) quotes</div>
-    </div>
-    <div class="tile">
-        <div class="tile-label">Catalogue</div>
-        <div class="tile-value">@Db.ActiveEntryCount</div>
-        <div class="tile-note">active entries across @Db.Suppliers.Count suppliers</div>
-    </div>
-</div>
+</section>
 
 <div class="grid grid-main">
-    <div>
-        @if (isMd)
+    <div class="stack-gap">
+        @if (Model.IsManagingDirector)
         {
-            <div class="card">
+            <section class="card" aria-labelledby="queue-title">
                 <div class="card-head">
-                    <svg class="ico" style="color:var(--st-pending)"><use href="#i-inbox" /></svg>
-                    <h2>Approval queue</h2>
+                    <svg class="ico" aria-hidden="true"><use href="#i-inbox" /></svg>
+                    <h2 id="queue-title">Approval queue</h2>
                     <span class="spacer"></span>
-                    <a class="btn btn-secondary btn-sm" asp-controller="Quotes" asp-action="Approvals">
-                        Open queue
-                    </a>
+                    <a class="btn btn-secondary btn-sm" asp-controller="Quotes" asp-action="Approvals">Open the queue</a>
                 </div>
-
-                @if (!Model.Pending.Any())
+                @if (Model.Queue.Count == 0)
                 {
                     <div class="empty">
-                        <svg class="ico"><use href="#i-check-circle" /></svg>
-                        <h3>Nothing waiting</h3>
-                        <p>Every estimator quote has been approved.</p>
+                        <svg class="ico" aria-hidden="true"><use href="#i-check-circle" /></svg>
+                        <h3>Nothing is waiting</h3>
+                        <p>When an estimator submits a quote it appears here, oldest first.</p>
                     </div>
                 }
                 else
                 {
-                    <div class="table-wrap">
-                        <table class="data stack">
-                            <thead>
-                                <tr>
-                                    <th>Quote</th>
-                                    <th>Customer</th>
-                                    <th>Estimator</th>
-                                    <th>Waiting</th>
-                                    <th class="right">Total</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var q in Model.Pending)
-                                {
-                                    <tr>
-                                        <td data-label="Quote">
-                                            <a class="row-link" asp-controller="Quotes" asp-action="Review" asp-route-id="@q.Id">@q.Ref</a>
-                                            <div class="tiny muted">@q.Project</div>
-                                        </td>
-                                        <td data-label="Customer">@Db.CustomerName(q.CustomerId)</td>
-                                        <td data-label="Estimator">@Db.UserName(q.OwnerUserId)</td>
-                                        <td data-label="Waiting">@((DateTime.Today - q.IssueDate).Days) days</td>
-                                        <td data-label="Total" class="right strong">@Fmt.Rand(q.Total)</td>
-                                        <td data-label="" class="right">
-                                            <a class="btn btn-primary btn-sm" asp-controller="Quotes" asp-action="Review" asp-route-id="@q.Id">Review</a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                    <partial name="_QuoteTable" model='new QuoteTable(Model.Queue.Take(5).ToList(), "Quotes waiting for approval", ShowValidity: false, ShowWaiting: true, LinkToReview: true)' />
                 }
-            </div>
+            </section>
         }
 
-        <div class="card">
+        <section class="card" aria-labelledby="recent-title">
             <div class="card-head">
-                <svg class="ico" style="color:var(--ts-blue)"><use href="#i-file" /></svg>
-                <h2>@(isMd ? "My recent quotes" : "My quotes")</h2>
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                <h2 id="recent-title">@(Model.IsManagingDirector ? "Recent quotes" : "Your quotes")</h2>
                 <span class="spacer"></span>
                 <a class="btn btn-secondary btn-sm" asp-controller="Quotes" asp-action="Index">View all</a>
             </div>
-
-            @if (!Model.MyQuotes.Any())
+            @if (Model.Recent.Count == 0)
             {
                 <div class="empty">
-                    <svg class="ico"><use href="#i-file" /></svg>
+                    <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
                     <h3>No quotes yet</h3>
-                    <p>Start one and it will appear here.</p>
-                    <a class="btn btn-primary" asp-controller="Quotes" asp-action="Create">New quote</a>
+                    <p>Start a quote and it appears here. The material price fills in from the supplier's own price list.</p>
+                    <a class="btn btn-primary" asp-controller="Quotes" asp-action="Create">Start a quote</a>
                 </div>
             }
             else
             {
-                <div class="table-wrap">
-                    <table class="data stack">
-                        <thead>
-                            <tr>
-                                <th>Quote</th>
-                                <th>Customer</th>
-                                <th>Status</th>
-                                <th>Valid until</th>
-                                <th class="right">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var q in Model.MyQuotes)
-                            {
-                                <tr>
-                                    <td data-label="Quote">
-                                        <a class="row-link" asp-controller="Quotes" asp-action="Costing" asp-route-id="@q.Id">@q.Ref</a>
-                                        <div class="tiny muted">@q.Site</div>
-                                    </td>
-                                    <td data-label="Customer">@Db.CustomerName(q.CustomerId)</td>
-                                    <td data-label="Status">
-                                        <span class="pill pill-@q.StatusKey">@q.StatusLabel</span>
-                                        @if (q.VersionNumber > 1)
-                                        {
-                                            <span class="badge" title="Revised after a counter-offer">v@q.VersionNumber</span>
-                                        }
-                                    </td>
-                                    <td data-label="Valid until">
-                                        @Fmt.Date(q.ValidUntil)
-                                        @if (q.Status == QuoteStatus.Sent && q.DaysRemaining <= 7 && q.DaysRemaining >= 0)
-                                        {
-                                            <div><span class="badge badge-warn">@q.DaysRemaining days left</span></div>
-                                        }
-                                    </td>
-                                    <td data-label="Total" class="right strong">@Fmt.Rand(q.Total)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <partial name="_QuoteTable" model='new QuoteTable(Model.Recent, "Recent quotes", ShowAuthor: Model.IsManagingDirector)' />
             }
-        </div>
+        </section>
     </div>
 
-    <div>
-        <div class="card">
-            <div class="card-head">
-                <svg class="ico" style="color:var(--ink-3)"><use href="#i-history" /></svg>
-                <h3>Recent activity</h3>
-            </div>
-            <div class="card-body" style="padding:8px 0">
-                @foreach (var a in Model.RecentActivity)
-                {
-                    <div style="display:flex;gap:11px;padding:11px 20px;border-bottom:1px solid var(--line-2)">
-                        <span class="avatar" style="width:26px;height:26px;flex-basis:26px;font-size:.6rem;background:@(a.IsPriceChange ? "var(--st-pending)" : "var(--ts-navy)")">
-                            @string.Concat(a.UserName.Split(' ').Take(2).Select(p => p[0]))
-                        </span>
-                        <div style="min-width:0">
-                            <div class="small"><strong>@a.UserName</strong> @a.Action.ToLowerInvariant()</div>
-                            <div class="tiny muted">@a.EntityRef</div>
-                            @if (a.Field is not null)
-                            {
-                                <div class="tiny" style="margin-top:3px">
-                                    <span class="muted">@a.Field:</span>
-                                    @if (a.OldValue is not null)
-                                    {
-                                        <span style="text-decoration:line-through;color:var(--ink-3)">@a.OldValue</span>
-                                        <span class="muted">&rarr;</span>
-                                    }
-                                    <strong>@a.NewValue</strong>
-                                </div>
-                            }
-                            <div class="tiny muted" style="margin-top:2px">@Fmt.DateTimeShort(a.When)</div>
-                        </div>
-                    </div>
-                }
-            </div>
-            @if (isMd)
-            {
-                <div class="card-foot">
-                    <a class="btn btn-ghost btn-sm" asp-controller="Admin" asp-action="Audit">
-                        Full audit trail
-                        <svg class="ico ico-sm"><use href="#i-chevron-right" /></svg>
-                    </a>
+    <div class="stack-gap">
+        @if (Model.IsManagingDirector)
+        {
+            <section class="card" aria-labelledby="activity-title">
+                <div class="card-head">
+                    <svg class="ico" aria-hidden="true"><use href="#i-history" /></svg>
+                    <h2 id="activity-title">Recent changes</h2>
                 </div>
-            }
-        </div>
-
-        <div class="card">
-            <div class="card-head"><h3>Quote pipeline</h3></div>
-            <div class="card-body" style="padding:14px 20px">
-                @foreach (var s in new[] { QuoteStatus.Draft, QuoteStatus.PendingApproval,
-                                           QuoteStatus.Approved, QuoteStatus.Sent,
-                                           QuoteStatus.Accepted, QuoteStatus.Invoiced })
+                @if (Model.Activity.Count == 0)
                 {
-                    var count = Model.CountIn(s);
-                    var max = Math.Max(1, Enum.GetValues<QuoteStatus>().Max(x => Model.CountIn(x)));
-                    <div style="display:flex;align-items:center;gap:11px;padding:6px 0">
-                        <span class="small" style="width:118px;flex-shrink:0;color:var(--ink-2)">
-                            @(s == QuoteStatus.PendingApproval ? "Pending approval" : s.ToString())
-                        </span>
-                        <span style="flex:1;height:7px;border-radius:4px;background:var(--line-2);overflow:hidden">
-                            <span style="display:block;height:100%;width:@(count * 100 / max)%;background:var(--ts-sage)"></span>
-                        </span>
-                        <span class="small strong num" style="width:22px;text-align:right">@count</span>
-                    </div>
+                    <div class="card-body"><p class="muted small">No changes have been recorded yet.</p></div>
                 }
+                else
+                {
+                    <ul class="activity">
+                        @foreach (var a in Model.Activity)
+                        {
+                            <li>
+                                <span class="avatar @(a.IsPriceChange ? "warn" : "")" aria-hidden="true">@string.Concat(a.UserName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => p[0]))</span>
+                                <div>
+                                    <span class="strong">@a.UserName</span>
+                                    <span>@a.Action.ToLowerInvariant() @a.PropertyName on @a.EntityName @a.EntityKey</span>
+                                    @if (a.OldValue is not null || a.NewValue is not null)
+                                    {
+                                        <span class="sub">
+                                            @if (a.OldValue is not null) { <del>@a.OldValue</del> <span aria-hidden="true">&rarr;</span><span class="sr-only">changed to</span> }
+                                            <ins>@(a.NewValue ?? "removed")</ins>
+                                        </span>
+                                    }
+                                    <span class="sub">@Fmt.DateTimeShort(a.ChangedAtLocal)</span>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                <div class="card-foot">
+                    <a class="btn btn-ghost btn-sm" asp-controller="Admin" asp-action="Audit">Open the audit trail</a>
+                </div>
+            </section>
+        }
+
+        <section class="card" aria-labelledby="pipeline-title">
+            <div class="card-head"><h2 id="pipeline-title">Where quotes are</h2></div>
+            <div class="card-body">
+                @{ var max = Math.Max(1, StatusText.All.Max(s => Model.Count(s))); }
+                <ul class="pipeline">
+                    @foreach (var s in StatusText.All)
+                    {
+                        var n = Model.Count(s);
+                        <li>
+                            <span class="pipeline-label">@StatusText.Label(s)</span>
+                            <span class="pipeline-bar" aria-hidden="true"><span style="--fill:@(n * 100 / max)%"></span></span>
+                            <span class="pipeline-count">@n</span>
+                        </li>
+                    }
+                </ul>
+                <p class="sub">Catalogue: @Model.SupplierCount suppliers.</p>
             </div>
-        </div>
+        </section>
     </div>
 </div>

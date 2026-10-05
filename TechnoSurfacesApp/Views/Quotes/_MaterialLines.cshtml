@@ -1,0 +1,103 @@
+@model TechnoSurfacesApp.Controllers.CostingLinesVm
+@*
+    The material lines. Each shows its price per sheet and where that price came
+    from (NFR-01), with the sheet's size and area (US-02). Rendered with the page
+    and again by QuotesController.CostingLines after every change, so the table is
+    written in one place only.
+*@
+@{
+    var lines = Model.Sheet.Lines.Where(l => l.LineType == "Material").ToList();
+    var totals = Model.Sheet.Totals;
+}
+<div id="material-lines">
+    @if (lines.Count == 0)
+    {
+        <div class="empty">
+            <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
+            <h3>No materials yet</h3>
+            <p>@(Model.CanEdit ? "Choose a supplier above and work through to the sheet size. The price fills in from the supplier's list." : "No material was added to this version.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data stack">
+                <caption class="sr-only">Material lines, with the price per sheet and where it came from</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Material and size</th>
+                        <th scope="col" class="right">Sheets</th>
+                        <th scope="col" class="right">Price per sheet</th>
+                        <th scope="col" class="right">Supplier discount</th>
+                        <th scope="col" class="right">Line total</th>
+                        @if (Model.CanEdit) { <th scope="col"><span class="sr-only">Remove</span></th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in lines)
+                    {
+                        var area = (l.SheetAreaM2 ?? 0) * l.Quantity;
+                        <tr data-line-row="@l.Id">
+                            <td data-label="Material">
+                                <span class="strong">@l.Description</span>
+                                <span class="line-origin">@l.PriceOrigin</span>
+                                @if (l.SheetAreaM2 is { } sheetArea)
+                                {
+                                    <span class="sub">@Fmt.Sqm(sheetArea) per sheet, @Fmt.Sqm(area) on this line</span>
+                                }
+                            </td>
+                            <td data-label="Sheets" class="right">
+                                @if (Model.CanEdit)
+                                {
+                                    <label class="sr-only" for="qty-@l.Id">Sheets of @l.Description</label>
+                                    <input class="input input-sm input-num" id="qty-@l.Id" type="number" inputmode="decimal"
+                                           min="0" step="any" required value="@Fmt.Input(l.Quantity)"
+                                           data-line="@l.Id" data-field="quantity" data-saved="@Fmt.Input(l.Quantity)" />
+                                }
+                                else
+                                {
+                                    @Fmt.Qty(l.Quantity)
+                                }
+                            </td>
+                            <td data-label="Price per sheet" class="right">@Fmt.Rand(l.UnitPrice)</td>
+                            <td data-label="Supplier discount" class="right">
+                                @if (Model.CanEdit)
+                                {
+                                    <label class="sr-only" for="disc-@l.Id">Supplier discount on @l.Description, per cent</label>
+                                    <span class="input-group input-group-sm">
+                                        <input class="input input-sm input-num" id="disc-@l.Id" type="number" inputmode="decimal"
+                                               min="0" max="100" step="any" required value="@Fmt.Input(l.SupplierDiscountPercent)"
+                                               data-line="@l.Id" data-field="supplierDiscountPercent" data-saved="@Fmt.Input(l.SupplierDiscountPercent)" />
+                                        <span class="addon" aria-hidden="true">%</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    @(l.SupplierDiscountPercent == 0 ? "None" : Fmt.Pct(l.SupplierDiscountPercent))
+                                }
+                            </td>
+                            <td data-label="Line total" class="right strong">@Fmt.Rand(l.LineTotal)</td>
+                            @if (Model.CanEdit)
+                            {
+                                <td data-label="Remove" class="right">
+                                    <button type="button" class="btn btn-ghost btn-sm btn-icon" data-remove-line="@l.Id"
+                                            data-description="@l.Description" aria-label="Remove @l.Description">
+                                        <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg>
+                                    </button>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td data-label="Material">Material in total</td>
+                        <td data-label="Sheets" class="right">@Fmt.Qty(totals.TotalSheetCount)</td>
+                        <td data-label="Total area" class="right" colspan="3">@Fmt.Sqm(totals.TotalAreaM2) of material</td>
+                        @if (Model.CanEdit) { <td aria-hidden="true"></td> }
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>

@@ -1,8 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using TechnoSurfacesApp.Data;
 using TechnoSurfacesApp.Models;
-using TechnoSurfaces.Services;
-using static System.Collections.Specialized.BitVector32;
 using Microsoft.AspNetCore.Authorization;
 using TechnoSurfacesApp.Identity;
 using System.Security.Claims;
@@ -23,7 +20,7 @@ public class AdminController : AppController
     private readonly IUserAdminService _users;
     private readonly IAuditTrailService _audit;
 
-    public AdminController(DemoSession session, IUserAdminService users, IAuditTrailService audit) : base(session)
+    public AdminController(IUserAdminService users, IAuditTrailService audit)
     {
         _users = users;
         _audit = audit;
@@ -33,27 +30,21 @@ public class AdminController : AppController
     //  Rate card
     // ======================================================================
 
-    public async Task<IActionResult> Rates()
+    public async Task<IActionResult> Rates([FromServices] ICatalogueService catalogue, CancellationToken ct)
     {
-        ViewData["Title"] = "Rate card";
-        ViewData["Page"] = "rates";
-        ViewData["Crumb"] = "Administration";
+        SetPage("Rate card", "rates", new Crumb("Administration"));
 
+        var rows = await catalogue.GetRateCardAsync(Today, ct);
         return View(new RatesVm
         {
             CanEdit = await CanAsync(Policies.CanEditCatalogue),
-            Groups = RateGroupOrder
-                .Select(g => (g, Db.RatesIn(g)))
-                .Where(x => x.Item2.Count > 0)
+            Today = Today,
+            Groups = Enum.GetNames<TechnoSurfaces.Domain.RateCategory>()
+                .Select(c => (c, rows.Where(r => r.Category == c && !r.IsRetired).OrderBy(r => r.Name).ThenBy(r => r.Supplier).ToList()))
+                .Where(g => g.Item2.Count > 0)
                 .ToList()
         });
     }
-
-    public static readonly RateGroup[] RateGroupOrder =
-    {
-        RateGroup.Fabrication, RateGroup.Consumables, RateGroup.Installation,
-        RateGroup.WoodSubstrate, RateGroup.SinksHardware, RateGroup.BelowTheLine
-    };
 
     // ======================================================================
     //  Users
@@ -63,9 +54,7 @@ public class AdminController : AppController
     [Authorize(Policy = Policies.CanManageUsers)]
     public async Task<IActionResult> Users()
     {
-        ViewData["Title"] = "Users";
-        ViewData["Page"] = "users";
-        ViewData["Crumb"] = "Administration";
+        SetPage("Users", "users", new Crumb("Administration"));
 
         return View(new UsersVm
         {
@@ -116,9 +105,7 @@ public class AdminController : AppController
 
     public async Task<IActionResult> Terms([FromServices] ICatalogueService catalogue, CancellationToken ct)
     {
-        ViewData["Title"] = "Quotation terms";
-        ViewData["Page"] = "terms";
-        ViewData["Crumb"] = "Administration";
+        SetPage("Quotation terms", "terms", new Crumb("Administration"));
 
         return View(new TermsVm
         {
@@ -135,9 +122,7 @@ public class AdminController : AppController
     [Authorize(Policy = Policies.CanViewAuditTrail)]
     public async Task<IActionResult> Audit(string? user, string? type, DateOnly? from, DateOnly? to, bool priceOnly, CancellationToken ct)
     {
-        ViewData["Title"] = "Audit trail";
-        ViewData["Page"] = "audit";
-        ViewData["Crumb"] = "Administration";
+        SetPage("Audit trail", "audit", new Crumb("Administration"));
 
         var filter = new AuditFilter(user, type, from, to, priceOnly);
         var page = await _audit.SearchAsync(filter, ct);
@@ -161,17 +146,17 @@ public class AdminController : AppController
 public class RatesVm
 {
     public bool CanEdit { get; set; }
-    public List<(RateGroup Group, List<RateItem> Rows)> Groups { get; set; } = new();
+    public DateOnly Today { get; set; }
+    public List<(string Category, List<RateCardRow> Rows)> Groups { get; set; } = new();
 
-    public string GroupName(RateGroup g) => g switch
+    /// <summary>The rate a derived item works out to: its base rate times the multiplier.</summary>
+    public decimal? DerivedAmount(RateCardRow row)
     {
-        RateGroup.Fabrication => "Fabrication",
-        RateGroup.Consumables => "Consumables",
-        RateGroup.Installation => "Installation",
-        RateGroup.WoodSubstrate => "Wood & substrate",
-        RateGroup.SinksHardware => "Sinks & hardware",
-        _ => "Below the line \u2014 cost recovery, not marked up"
-    };
+        if (row.DerivedFrom is null) return null;
+        var source = Groups.SelectMany(g => g.Rows)
+            .FirstOrDefault(r => r.Name == row.DerivedFrom && r.SupplierId == row.SupplierId && r.Amount is not null);
+        return source?.Amount is { } amount ? decimal.Round(amount * (row.Multiplier ?? 1m), 2) : null;
+    }
 }
 
 public class UsersVm

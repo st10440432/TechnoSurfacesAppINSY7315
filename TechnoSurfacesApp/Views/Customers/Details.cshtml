@@ -1,165 +1,210 @@
-﻿@model TechnoSurfacesApp.Controllers.CustomerDetailVm
+@model TechnoSurfacesApp.Controllers.CustomerDetailVm
+@*
+    One customer with its contacts and its quotes (US-15). Changes post to
+    /api/customers through app.js. Contacts and the customer are deactivated, never
+    deleted, so old quotes still show who they were for.
+*@
 @{
     var c = Model.Customer;
+    var api = Url.Content($"~/api/customers/{c.Id}");
+    var active = c.Contacts.Where(k => k.IsActive).ToList();
+    var inactive = c.Contacts.Where(k => !k.IsActive).ToList();
+    var address = string.Join(", ", new[] { c.AddressLine1, c.AddressLine2, c.City, c.PostalCode }.Where(s => !string.IsNullOrWhiteSpace(s)));
 }
 
-<div class="page-head">
+<header class="page-head">
     <div>
-        <h2>@c.CompanyName</h2>
+        <h1>@c.Name</h1>
         <p>
-            Account @c.AccountCode @if (c.VatNumber is not null) {
-            <text>&middot; VAT @c.VatNumber</text>
+            @(string.IsNullOrEmpty(c.AccountCode) ? "No Pastel account code" : "Pastel account " + c.AccountCode).
+            @if (!c.IsActive)
+            {
+                <span class="badge">Inactive</span>
+            }
+        </p>
+    </div>
+    <div class="page-head-actions">
+        @if (c.IsActive && active.Count > 0)
+        {
+            <a class="btn btn-primary" asp-controller="Quotes" asp-action="Create" asp-route-customerId="@c.Id">
+                <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> New quote for @c.Name
+            </a>
         }
-    </p>
-</div>
-<div class="page-head-actions">
-    <a class="btn btn-secondary" asp-action="Index">
-        <svg class="ico ico-sm"><use href="#i-arrow-left" /></svg> Customers
-    </a>
-    <a class="btn btn-primary" asp-controller="Quotes" asp-action="Create">
-        <svg class="ico ico-sm"><use href="#i-plus" /></svg> New quote
-    </a>
-</div>
-</div>
+    </div>
+</header>
 
-<div class="grid grid-3" style="margin-bottom:20px">
-    <div class="tile tile-accent blue">
-        <div class="tile-label">Quotes</div>
-        <div class="tile-value">@Model.Quotes.Count</div>
-        <div class="tile-note">@Model.OpenCount still open</div>
+@if (!c.IsActive)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+        <div><strong>Inactive.</strong> This customer cannot be chosen on a new quote. Old quotes still show it.</div>
     </div>
-    <div class="tile tile-accent">
-        <div class="tile-label">Accepted value</div>
-        <div class="tile-value">@Fmt.Rand(Model.WonValue)</div>
-        <div class="tile-note">of @Fmt.Rand(Model.TotalValue) quoted</div>
+}
+else if (active.Count == 0)
+{
+    <div class="notice notice-warn" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div><strong>No active contacts.</strong> A quote is addressed to a person, so add a contact before quoting this customer.</div>
     </div>
-    <div class="tile">
-        <div class="tile-label">Contacts</div>
-        <div class="tile-value">@c.Contacts.Count</div>
-        <div class="tile-note">people who send requests</div>
-    </div>
-</div>
+}
 
 <div class="grid grid-main">
-    <div>
-        <div class="card">
+    <div class="stack-gap">
+        <section class="card" aria-labelledby="contacts-title">
             <div class="card-head">
-                <svg class="ico" style="color:var(--ts-blue)"><use href="#i-file" /></svg>
-                <h2>Quote history</h2>
+                <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                <h2 id="contacts-title">Contacts</h2>
+                <span class="spacer"></span>
+                <span class="badge">@active.Count active</span>
             </div>
 
-            @if (Model.Quotes.Count == 0)
+            @if (c.Contacts.Count == 0)
             {
                 <div class="empty">
-                    <svg class="ico"><use href="#i-file" /></svg>
-                    <h3>No quotes yet</h3>
-                    <p>Nothing has been quoted for this customer.</p>
-                    <a class="btn btn-primary" asp-controller="Quotes" asp-action="Create">New quote</a>
+                    <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                    <h3>No contacts yet</h3>
+                    <p>Add the people who send requests. A quote is addressed to one of them.</p>
                 </div>
             }
             else
             {
-                <div class="table-wrap">
-                    <table class="data stack">
-                        <thead>
-                            <tr>
-                                <th>Quote</th>
-                                <th>Project</th>
-                                <th>Estimator</th>
-                                <th>Status</th>
-                                <th class="right">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var q in Model.Quotes)
-                            {
-                                <tr>
-                                    <td data-label="Quote">
-                                        <a class="row-link" asp-controller="Quotes" asp-action="Costing" asp-route-id="@q.Id">@q.Ref</a>
-                                        <div class="tiny muted">@Fmt.Date(q.IssueDate)</div>
-                                    </td>
-                                    <td data-label="Project">
-                                        <div class="small">@q.Project</div>
-                                        <div class="tiny muted">@q.Site</div>
-                                    </td>
-                                    <td data-label="Estimator" class="small">@Db.UserName(q.OwnerUserId)</td>
-                                    <td data-label="Status">
-                                        <span class="pill pill-@q.StatusKey">@q.StatusLabel</span>
-                                        @if (q.PastelInvoiceNo is not null)
+                <ul class="contact-list">
+                    @foreach (var k in active.Concat(inactive))
+                    {
+                        <li class="contact @(k.IsActive ? null : "is-inactive")">
+                            <div class="contact-main">
+                                <span class="strong">@k.FullName</span>
+                                @if (!k.IsActive) { <span class="badge">Inactive</span> }
+                                @if (!string.IsNullOrEmpty(k.Position)) { <span class="sub">@k.Position</span> }
+                                <span class="contact-ways">
+                                    @if (!string.IsNullOrEmpty(k.Email)) { <a href="mailto:@k.Email">@k.Email</a> }
+                                    @if (!string.IsNullOrEmpty(k.Phone)) { <a href="tel:@k.Phone">@k.Phone</a> }
+                                    @if (string.IsNullOrEmpty(k.Email) && string.IsNullOrEmpty(k.Phone)) { <span class="sub">No email or phone</span> }
+                                </span>
+                            </div>
+                            <details class="disclosure">
+                                <summary class="btn btn-ghost btn-sm">
+                                    <svg class="ico ico-sm" aria-hidden="true"><use href="#i-edit" /></svg> Change<span class="sr-only"> @k.FullName</span>
+                                </summary>
+                                <form class="disclosure-body" novalidate data-api-form data-method="PUT" data-url="@api/contacts/@k.Id"
+                                      data-success="Contact saved" data-success-detail="@k.FullName has been updated.">
+                                    <partial name="_ContactFields" model='(k, $"contact-{k.Id}")' />
+                                    <div class="btn-row">
+                                        <button type="submit" class="btn btn-primary btn-sm">Save @k.FullName</button>
+                                        @if (k.IsActive)
                                         {
-                                            <div class="tiny muted">@q.PastelInvoiceNo</div>
+                                            <button type="button" class="btn btn-danger btn-sm"
+                                                    data-api-action data-method="POST" data-url="@api/contacts/@k.Id/deactivate"
+                                                    data-confirm="Deactivate @k.FullName?"
+                                                    data-confirm-detail="New quotes cannot be addressed to them. Quotes already sent to them still show their name."
+                                                    data-confirm-label="Deactivate" data-confirm-tone="danger"
+                                                    data-success="Contact deactivated" data-success-detail="@k.FullName can be reactivated at any time.">
+                                                Deactivate
+                                            </button>
                                         }
-                                    </td>
-                                    <td data-label="Total" class="right strong">@Fmt.Rand(q.Total)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-secondary btn-sm"
+                                                    data-api-action data-method="POST" data-url="@api/contacts/@k.Id/reactivate"
+                                                    data-success="Contact reactivated" data-success-detail="@k.FullName can be chosen on new quotes again.">
+                                                Reactivate
+                                            </button>
+                                        }
+                                    </div>
+                                </form>
+                            </details>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <details class="disclosure card-body-top" open="@(c.Contacts.Count == 0)">
+                <summary class="disclosure-summary">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> Add a contact
+                </summary>
+                <form class="disclosure-body" novalidate data-api-form data-method="POST" data-url="@api/contacts"
+                      data-success="Contact added" data-success-detail="They can now be chosen on a new quote.">
+                    <partial name="_ContactFields" model='((TechnoSurfaces.Application.Customers.ContactView?)null, "new-contact")' />
+                    <button type="submit" class="btn btn-primary">Add the contact</button>
+                </form>
+            </details>
+        </section>
+
+        <section class="card" aria-labelledby="quotes-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                <h2 id="quotes-title">Quotes for @c.Name</h2>
+                <span class="spacer"></span>
+                <span class="badge">@Model.Quotes.Count</span>
+            </div>
+            @if (Model.Quotes.Count == 0)
+            {
+                <div class="empty">
+                    <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                    <h3>No quotes yet</h3>
+                    <p>Quotes billed to this customer appear here.</p>
                 </div>
             }
-        </div>
+            else
+            {
+                <partial name="_QuoteTable" model='new QuoteTable(Model.Quotes, "Quotes for " + c.Name, ShowCustomer: false)' />
+            }
+        </section>
     </div>
 
-    <div>
-        <div class="card">
+    <div class="stack-gap">
+        <section class="card" aria-labelledby="details-title">
             <div class="card-head">
-                <svg class="ico" style="color:var(--ts-sage)"><use href="#i-users" /></svg>
-                <h3>Contacts</h3>
-                <span class="spacer"></span>
-                @if (Model.CanManage)
+                <svg class="ico" aria-hidden="true"><use href="#i-building" /></svg>
+                <h2 id="details-title">Company details</h2>
+            </div>
+            <div class="card-body">
+                <dl class="facts">
+                    <dt>Account code</dt>
+                    <dd class="mono">@(c.AccountCode ?? "Not given")</dd>
+                    <dt>VAT number</dt>
+                    <dd class="mono">@(c.VatNumber ?? "Not given")</dd>
+                    <dt>Address</dt>
+                    <dd>@(address.Length > 0 ? address : "Not given")</dd>
+                </dl>
+            </div>
+            <details class="disclosure card-body-top">
+                <summary class="disclosure-summary">
+                    <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg> Change the company details
+                </summary>
+                <form class="disclosure-body" novalidate data-api-form data-method="PUT" data-url="@api"
+                      data-success="Customer saved" data-success-detail="The new details show on quotes from now on.">
+                    <partial name="_CustomerFields" model="c" />
+                    <button type="submit" class="btn btn-primary">Save the details</button>
+                </form>
+            </details>
+        </section>
+
+        <section class="card" aria-labelledby="status-title">
+            <div class="card-head"><h2 id="status-title">Status</h2></div>
+            <div class="card-body">
+                @if (c.IsActive)
                 {
-                    <button class="btn btn-ghost btn-sm" type="button">
-                        <svg class="ico ico-sm"><use href="#i-plus" /></svg>
+                    <p class="small">Active. It can be chosen on a new quote.</p>
+                    <button type="button" class="btn btn-danger btn-block"
+                            data-api-action data-method="POST" data-url="@api/deactivate"
+                            data-confirm="Deactivate @c.Name?"
+                            data-confirm-detail="It can no longer be chosen on a new quote. Its quotes are kept and still show it. You can reactivate it later."
+                            data-confirm-label="Deactivate" data-confirm-tone="danger"
+                            data-success="Customer deactivated">
+                        Deactivate the customer
+                    </button>
+                }
+                else
+                {
+                    <p class="small">Inactive. It cannot be chosen on a new quote.</p>
+                    <button type="button" class="btn btn-secondary btn-block"
+                            data-api-action data-method="POST" data-url="@api/reactivate"
+                            data-success="Customer reactivated" data-success-detail="It can be chosen on new quotes again.">
+                        Reactivate the customer
                     </button>
                 }
             </div>
-            <div class="card-body" style="padding:8px 0">
-                @foreach (var k in c.Contacts)
-                {
-                    <div style="display:flex;gap:11px;padding:11px 20px;border-bottom:1px solid var(--line-2)">
-                        <span class="avatar sage" style="width:32px;height:32px;flex-basis:32px;font-size:.68rem">
-                            @string.Concat(k.Name.Split(' ').Take(2).Select(p => p[0]))
-                        </span>
-                        <div style="min-width:0">
-                            <div class="small strong">@k.Name</div>
-                            @if (k.JobTitle is not null)
-                            {
-                                <div class="tiny muted">@k.JobTitle</div>
-                            }
-                            <div class="tiny muted" style="margin-top:3px">@k.Tel</div>
-                            <div class="tiny muted">@k.Email</div>
-                        </div>
-                    </div>
-                }
-            </div>
-            <div class="card-foot">
-                <span class="tiny muted">
-                    A quote is addressed to a contact, not a company &mdash; some customers have
-                    four or five people who send requests.
-                </span>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head"><h3>Account</h3></div>
-            <div class="card-body">
-                <div class="field">
-                    <label class="label">Billing address</label>
-                    <div class="small">@c.BillingAddress</div>
-                </div>
-                <div class="field">
-                    <label class="label">Pastel account code</label>
-                    <div class="small mono">@c.AccountCode</div>
-                </div>
-                <div class="field">
-                    <label class="label">VAT number</label>
-                    <div class="small mono">@(c.VatNumber ?? "Not registered")</div>
-                </div>
-                <div class="hint">
-                    Delivery addresses are held per quote, not here &mdash; the bill-to and
-                    deliver-to on a job are often different.
-                </div>
-            </div>
-        </div>
+        </section>
     </div>
 </div>

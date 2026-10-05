@@ -1,0 +1,21 @@
+@model ChangeStory
+@* One change: the sentence first, then who and when underneath. *@
+<li class="change">
+    <p class="change-what">
+        @Model.Summary
+        @if (Model.IsPriceChange)
+        {
+            <span class="badge badge-warn">Price</span>
+        }
+    </p>
+    @if (Model.Details.Count > 0)
+    {
+        <ul class="change-details">
+            @foreach (var d in Model.Details)
+            {
+                <li>@d</li>
+            }
+        </ul>
+    }
+    <p class="change-who">@Model.UserName, <time>@Fmt.DateTimeShort(Model.WhenLocal)</time></p>
+</li>

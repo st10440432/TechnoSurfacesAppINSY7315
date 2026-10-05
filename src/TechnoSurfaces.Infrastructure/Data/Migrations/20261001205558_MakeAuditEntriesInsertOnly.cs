@@ -10,7 +10,9 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            //
+            // NFR-04: the audit trail is insert-only in the database itself, not just
+            // by having no update path in the code. Any UPDATE or DELETE is rejected,
+            // whoever issues it.
             // Created through EXEC because the idempotent migration script wraps each
             // migration in IF NOT EXISTS ... BEGIN ... END, and CREATE TRIGGER must be
             // the first statement in a batch. Single quotes inside are doubled.
