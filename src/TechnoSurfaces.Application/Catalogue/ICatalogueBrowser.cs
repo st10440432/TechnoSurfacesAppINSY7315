@@ -13,7 +13,8 @@ public sealed record ColourOption(int Id, string Name, string SupplierCode, stri
 public sealed record SheetSizeOption(int Id, int LengthMm, int WidthMm, decimal AreaM2);
 
 /// <summary>A line on the rate card that can be added to a quote.</summary>
-public sealed record RateItemOption(int Id, string Name, string Category, string Unit, string Derivation, bool IsBelowTheLine);
+/// <summary>A rate card item that can go on a quote. DerivationFactor scales a calculated quantity: two per sheet for silicon.</summary>
+public sealed record RateItemOption(int Id, string Name, string Category, string Unit, string Derivation, bool IsBelowTheLine, decimal DerivationFactor = 1m);
 
 /// <summary>
 /// Read-only lists for the costing sheet's cascading choice (US-01):

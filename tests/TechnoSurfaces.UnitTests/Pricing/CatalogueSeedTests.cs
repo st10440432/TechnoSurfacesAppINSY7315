@@ -98,16 +98,14 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("Max on Top")]
     [InlineData("Woodcentre CPT")]
     public async Task Every_item_priced_sheet_resolves_to_the_whole_rand_figure_on_the_list(string supplierName)
     {
-        // Every price on the Max on Top and Woodcentre lists is a whole rand amount.
-        // Those suppliers publish only a sheet price, so the per-square-metre figure
-        // is derived from it; if that derivation loses precision the sheet price
-        // comes back a cent or two out. Several of their sheet sizes have areas that
-        // do not round cleanly to four places, for example 3658 x 760 at 2,78008
-        // square metres, so this is the case where drift would appear.
+        // Every sheet price on the Woodcentre list is a whole rand amount. Woodcentre
+        // publishes only a sheet price, so the per-square-metre figure is derived from
+        // it; if that derivation loses precision the sheet price comes back a cent or
+        // two out. Max on Top is not here: its list prices the square metre, and its
+        // sheet price is that times the area, so it is not a whole rand amount.
         var supplier = await _db.Suppliers.AsNoTracking().FirstAsync(s => s.Name == supplierName);
 
         var rows = await _db.Colours
@@ -140,6 +138,94 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
 
         Assert.True(drifted.Count == 0,
             "These prices did not round back to the published whole-rand figure: " + string.Join("; ", drifted));
+    }
+
+    [Theory]
+    [InlineData("Alaskan Stone 4312", 8292.98)]      // R2 983 per m2 on a 3658 x 760 sheet
+    [InlineData("Arctica 9015", 4670.66)]            // R1 670 per m2 on a 3680 x 760 sheet
+    [InlineData("GetaCore Glacier White GC2011", 3901.50)] // R1 530 per m2 on a 2040 x 1250 sheet
+    public async Task A_max_on_top_sheet_price_is_the_list_price_per_square_metre_times_the_area(string colourName, double sheetPrice)
+    {
+        var colour = await _db.Colours.AsNoTracking().FirstAsync(c => c.Name == colourName);
+        var size = await _db.SheetSizes.AsNoTracking().FirstAsync(s => s.ProductLineId == colour.ProductLineId
+            && _db.MaterialPrices.Any(p => p.ColourId == colour.Id && p.SheetSizeId == s.Id));
+
+        var result = await _resolver.ResolveAsync(new PriceKey(colour.Id, size.Id), Today);
+
+        Assert.True(result.Resolved);
+        Assert.Equal((decimal)sheetPrice, result.UnitPrice);
+    }
+
+    [Fact]
+    public async Task A_database_seeded_with_the_old_max_on_top_prices_is_corrected_and_a_price_since_changed_is_kept()
+    {
+        // An earlier seeder stored R1 670,1230 per m2 for Arctica, worked back from a
+        // rounded sheet price. A price the Managing Director typed is a rand or more
+        // away from the list figure, and must survive the correction.
+        var arctica = await _db.MaterialPrices.FirstAsync(p => p.Colour!.Name == "Arctica 9015");
+        var bone = await _db.MaterialPrices.FirstAsync(p => p.Colour!.Name == "Bone 8010");
+        arctica.PricePerSqm = 1670.1230m;
+        bone.PricePerSqm = 1715m;
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        await CatalogueSeeder.SeedAsync(_db);
+        _db.ChangeTracker.Clear();
+
+        Assert.Equal(1670m, (await _db.MaterialPrices.AsNoTracking().FirstAsync(p => p.Id == arctica.Id)).PricePerSqm);
+        Assert.Equal(1715m, (await _db.MaterialPrices.AsNoTracking().FirstAsync(p => p.Id == bone.Id)).PricePerSqm);
+    }
+
+    [Fact]
+    public async Task The_seed_follows_the_supplier_sheets_on_phase_outs_sizes_and_thickness()
+    {
+        var phasing = await _db.Colours.AsNoTracking()
+            .Where(c => c.Status == CatalogueStatus.PhasingOut)
+            .Select(c => c.Name)
+            .OrderBy(n => n)
+            .ToListAsync();
+        Assert.Equal(new[] { "Alaskan Stone 4312", "Bronze 7830", "Jurassic 7711", "Malt 7810", "Snowfall 8090" }, phasing);
+
+        var infinito6 = await _db.SheetSizes.AsNoTracking()
+            .SingleAsync(s => s.ProductLine!.Name == "Infinito Full Acrylic" && s.ProductLine.ThicknessMm == 6);
+        Assert.Equal((3050, 750), (infinito6.LengthMm, infinito6.WidthMm));
+
+        var wide = await _db.SheetSizes.AsNoTracking().Include(s => s.ProductLine)
+            .SingleAsync(s => s.LengthMm == 3660 && s.WidthMm == 900);
+        var classicWhite900 = await _db.Colours.AsNoTracking().SingleAsync(c => c.Name == "Classic White 900");
+        Assert.Equal(20, wide.ProductLine!.ThicknessMm);
+        Assert.Equal(wide.ProductLineId, classicWhite900.ProductLineId);
+    }
+
+    [Fact]
+    public async Task A_database_seeded_before_the_supplier_sheet_corrections_is_put_right()
+    {
+        // Put the catalogue back the way the earlier seeder left it.
+        foreach (var colour in await _db.Colours.Where(c => c.Status == CatalogueStatus.PhasingOut).ToListAsync())
+            colour.Status = CatalogueStatus.Active;
+        var infinito6 = await _db.SheetSizes.SingleAsync(s => s.ProductLine!.Name == "Infinito Full Acrylic" && s.ProductLine.ThicknessMm == 6);
+        infinito6.WidthMm = 760;
+        var perago12 = await _db.ProductLines.SingleAsync(p => p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 12);
+        var perago20 = await _db.ProductLines.SingleAsync(p => p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 20);
+        var wide = await _db.SheetSizes.SingleAsync(s => s.LengthMm == 3660 && s.WidthMm == 900);
+        var classicWhite900 = await _db.Colours.SingleAsync(c => c.Name == "Classic White 900");
+        wide.ProductLineId = perago12.Id;
+        classicWhite900.ProductLineId = perago12.Id;
+        await _db.SaveChangesAsync();
+        _db.ProductLines.Remove(perago20);
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        await CatalogueSeeder.SeedAsync(_db);
+        await CatalogueSeeder.SeedAsync(_db);   // a second start-up changes nothing more
+        _db.ChangeTracker.Clear();
+
+        Assert.Equal(5, await _db.Colours.CountAsync(c => c.Status == CatalogueStatus.PhasingOut));
+        Assert.Equal(750, (await _db.SheetSizes.SingleAsync(s => s.Id == infinito6.Id)).WidthMm);
+        var moved = await _db.SheetSizes.Include(s => s.ProductLine).SingleAsync(s => s.Id == wide.Id);
+        Assert.Equal(20, moved.ProductLine!.ThicknessMm);
+        Assert.Equal(moved.ProductLineId, (await _db.Colours.SingleAsync(c => c.Id == classicWhite900.Id)).ProductLineId);
+        Assert.Equal(1, await _db.ProductLines.CountAsync(p => p.Name == "Perago 100% Acrylic" && p.ThicknessMm == 20));
     }
 
     [Fact]
@@ -213,7 +299,7 @@ public sealed class CatalogueSeedTests : IAsyncLifetime
         var result = await _resolver.ResolveAsync(new PriceKey(colour.Id, size.Id), Today);
 
         Assert.True(result.Resolved);
-        Assert.Equal(3991.00m, result.UnitPrice);   // published on the August 2026 list
+        Assert.Equal(3991.03m, result.UnitPrice);   // R1 427 per m2 x 2,7968 m2 on the August 2026 list
     }
 
     [Fact]

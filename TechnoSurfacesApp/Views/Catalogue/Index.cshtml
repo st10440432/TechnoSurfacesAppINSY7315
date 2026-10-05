@@ -99,6 +99,10 @@
                                     {
                                         <span class="badge stacked">Retired</span>
                                     }
+                                    else if (r.IsPhasingOut)
+                                    {
+                                        <span class="badge badge-warn stacked">Being phased out</span>
+                                    }
                                 </td>
                                 <td data-label="Supplier and range">
                                     @r.Supplier

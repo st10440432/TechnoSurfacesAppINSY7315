@@ -1393,3 +1393,18 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 #costing table.data th { white-space: normal; }
 #costing table.data .input-sm { width: 5.25rem; }
 #costing .input-group-sm { width: 6.75rem; }
+
+/* ==========================================================================
+   Rate card grid on the costing sheet: a quantity box on every item
+   ========================================================================== */
+
+.grid-help { color: var(--ink-secondary); font-size: var(--text-sm); padding-bottom: var(--space-3); }
+.rate-grid tr.is-used td { background: var(--brand-green-tint); }
+.rate-grid tr.is-used td:first-child { box-shadow: inset 3px 0 0 var(--brand-green); }
+.rate-grid tr.is-saving { opacity: .6; }
+.rate-grid .group-row th { padding-top: var(--space-4); }
+.grid-include { display: inline-flex; align-items: center; gap: var(--space-2); margin-right: var(--space-2); white-space: nowrap; }
+.grid-include input { width: 1.1rem; height: 1.1rem; accent-color: var(--brand-navy); }
+@media (max-width: 767.98px) {
+    .rate-grid tr.is-used td:first-child { box-shadow: none; }
+}

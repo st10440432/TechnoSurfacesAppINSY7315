@@ -153,7 +153,7 @@
                 var fresh = new DOMParser().parseFromString(html, "text/html");
                 var active = document.activeElement;
                 var activeId = active && active.id;
-                var typed = active && active.matches && active.matches("input[data-line]") && active.value !== active.dataset.saved
+                var typed = active && active.matches && active.matches("input[data-saved]") && active.value !== active.dataset.saved
                     ? active.value : null;
 
                 ["material-lines", "rate-lines", "costing-side"].forEach(function (id) {
@@ -523,7 +523,8 @@
                 function (c) {
                     // Some suppliers price a whole range as one band of the same name; the band is shown only when it adds something.
                     var band = c.priceBand && c.priceBand !== c.name ? ", band " + c.priceBand : "";
-                    return c.name + (c.supplierCode ? ", " + c.supplierCode : "") + band;
+                    return c.name + (c.supplierCode ? ", " + c.supplierCode : "") + band +
+                        (c.status === "PhasingOut" ? " (being phased out)" : "");
                 },
                 "Choose a colour", "colours");
         });
@@ -636,149 +637,136 @@
         });
     }
 
-    // ------------------------------------------------------------ adding from the rate card
+    // ------------------------------------------------------------ the rate card grid
+    //
+    // Every rate card item has a quantity box. Typing a quantity adds the line;
+    // clearing it, or typing 0, takes the line off. An item with no rate-card price
+    // needs its rate typed first. Calculated items (sandpaper, silicon) are ticked in.
 
-    var rateForm = document.getElementById("add-rate");
-    if (rateForm) {
-        var rateItem = document.getElementById("rate-item");
-        var rateQuantity = document.getElementById("rate-quantity");
-        var rateQuantityHint = document.getElementById("rate-quantity-hint");
-        var ratePriceField = document.getElementById("rate-price-field");
-        var ratePrice = document.getElementById("rate-price");
-        var ratePreview = document.getElementById("rate-preview");
-        var addRate = document.getElementById("add-rate-button");
-        var addRateWhy = document.getElementById("add-rate-why");
-        var rateUrl = root.dataset.rateUrl;
-        var rateLookup = 0;
-        var needsPrice = false;
+    function gridRow(input) { return input.closest("[data-grid-row]"); }
 
-        var blockedRate = function (why) {
-            addRate.disabled = true;
-            addRate.setAttribute("aria-describedby", "add-rate-why");
-            addRateWhy.textContent = why;
-        };
-
-        var resetRate = function () {
-            ratePreview.replaceChildren();
-            ratePriceField.hidden = true;
-            ratePrice.required = false;
-            ratePrice.value = "";
-            needsPrice = false;
-            rateQuantity.disabled = false;
-            rateQuantityHint.textContent = "How many, in the item's unit.";
-        };
-
-        rateItem.addEventListener("change", function () {
-            resetRate();
-            if (!rateItem.value) { blockedRate("Choose an item to see its rate."); return; }
-
-            var option = rateItem.options[rateItem.selectedIndex];
-            var name = option.textContent;
-            var unit = option.dataset.unit;
-            var derived = option.dataset.derived;
-            var ticket = ++rateLookup;
-
-            if (derived) {
-                rateQuantity.value = "0";
-                rateQuantity.disabled = true;
-                rateQuantityHint.textContent = derived + ". It follows the materials, so there is nothing to type.";
-            }
-
-            skeleton(ratePreview);
-            blockedRate("Finding the rate.");
-
-            TS.api("GET", withQuery(rateUrl, { rateItemId: rateItem.value })).then(function (result) {
-                if (ticket !== rateLookup) return;
-
-                if (!result.ok) {
-                    showUnresolved(ratePreview, "The rate could not be checked", TS.describeProblem(result.problem),
-                        "Choose the item again to retry.");
-                    blockedRate("The rate could not be checked.");
-                    return;
-                }
-
-                var p = result.data;
-                var facts = [fact("Rate", F.rand(p.unitPrice || 0), unit)];
-                if (option.dataset.below) facts.push(fact("Markup", "Not marked up", "Added after the markup, at cost"));
-
-                if (p.resolved) {
-                    showResolved(ratePreview, facts, p.origin, p.pricedAsAt);
-                    addRate.disabled = false;
-                    addRate.removeAttribute("aria-describedby");
-                    addRateWhy.textContent = "";
-                    announce("cascade-status", name + ": " + F.rand(p.unitPrice) + " " + unit + ". From " + p.origin + ".");
-                } else {
-                    // No rate on the card yet: the estimator may enter one for this job only.
-                    ratePreview.replaceChildren();
-                    var note = el("div", "notice notice-warn");
-                    note.setAttribute("role", "note");
-                    note.appendChild(icon("i-alert"));
-                    var body = el("div");
-                    body.appendChild(el("strong", null, "No rate on the rate card for " + name + "."));
-                    body.appendChild(document.createTextNode(" " + p.reason + " Enter the price for this job. The line will say the price was entered on the quote."));
-                    note.appendChild(body);
-                    ratePreview.appendChild(note);
-                    ratePriceField.hidden = false;
-                    ratePrice.required = true;
-                    needsPrice = true;
-                    addRate.disabled = false;
-                    addRate.removeAttribute("aria-describedby");
-                    addRateWhy.textContent = "";
-                    announce("cascade-status", "No rate on the rate card for " + name + ". Enter the price for this job.");
-                }
-            });
-        });
-
-        rateForm.addEventListener("submit", function (e) {
-            e.preventDefault();
-            TS.clearFieldErrors(rateForm);
-            [rateQuantity, ratePrice].forEach(clearFieldError);
-
-            var bad = null;
-            if (!rateQuantity.disabled) {
-                var q = problemWith(rateQuantity);
-                if (q) { fieldError(rateQuantity, q); bad = bad || rateQuantity; }
-            }
-            if (needsPrice) {
-                var pp = problemWith(ratePrice);
-                if (pp) { fieldError(ratePrice, pp === "Enter a number." ? "Enter the price for this job." : pp); bad = bad || ratePrice; }
-            }
-            if (bad) { bad.focus(); return; }
-
-            var body = { type: "rate", rateItemId: Number(rateItem.value), quantity: Number(rateQuantity.value || 0) };
-            if (needsPrice) body.unitPrice = Number(ratePrice.value);
-
-            TS.busy(addRate, true);
-            saving(+1);
-            totalsBusy(true);
-
-            TS.api("POST", api + "lines", body).then(function (result) {
-                TS.busy(addRate, false);
-                if (result.ok) {
-                    saveSucceeded();
-                    var line = result.data.line;
-                    showTotals(result.data.totals);
-                    TS.toast("success", "Added to the costing",
-                        line.description + " at " + F.rand(line.unitPrice) + (line.isDerived ? ", with the quantity calculated from the materials." : "."));
-                    rateItem.value = "";
-                    rateQuantity.value = "1";
-                    resetRate();
-                    blockedRate("Choose an item to see its rate.");
-                    return refresh().then(function () { saving(-1); rateItem.focus(); });
-                }
-
-                saving(-1);
-                saveFailed();
-                totalsBusy(false);
-                var said = describe(result, "The line was not added");
-                if (result.status === 422) {
-                    showUnresolved(ratePreview, said.title, said.detail, "Nothing has been added to the quote.");
-                } else if (result.status === 400 && result.problem.errors) {
-                    TS.showFieldErrors(rateForm, result.problem.errors);
-                } else {
-                    TS.toast("error", said.title, said.detail);
-                }
-            });
-        });
+    function afterGridChange(result, success) {
+        if (result.ok) {
+            saveSucceeded();
+            if (result.data && result.data.totals) showTotals(result.data.totals);
+            if (success) TS.toast("success", success.title, success.detail || "");
+            return (result.data && result.data.totals ? Promise.resolve() : reloadTotals()).then(refresh).then(function () { saving(-1); });
+        }
+        saving(-1);
+        saveFailed();
+        totalsBusy(false);
+        var said = describe(result, "The change was not saved");
+        TS.toast("error", said.title, said.detail);
+        return Promise.resolve();
     }
+
+    function saveGridQuantity(input) {
+        if (input.value === input.dataset.saved || input.dataset.inflight === input.value) return;
+        var row = gridRow(input);
+        var name = row.dataset.name;
+        var lineId = row.dataset.line;
+        var raw = input.value.trim();
+        var removing = raw === "" || Number(raw) === 0;
+
+        if (!removing) {
+            var problem = problemWith(input);
+            if (problem) { fieldError(input, problem); return; }
+        }
+        clearFieldError(input);
+
+        // Nothing on the quote and nothing typed: nothing to do.
+        if (removing && !lineId) { input.dataset.saved = input.value; return; }
+
+        var rateInput = row.querySelector("[data-grid-rate]");
+        var resolved = row.dataset.resolved === "true";
+        var typedRate = rateInput ? rateInput.value.trim() : "";
+
+        if (!removing && !lineId && !resolved) {
+            var rateProblem = typedRate === "" ? "Type the rate for this job first." : problemWith(rateInput);
+            if (rateProblem) { fieldError(rateInput, rateProblem); rateInput.focus(); return; }
+        }
+
+        input.dataset.inflight = input.value;
+        saving(+1);
+        totalsBusy(true);
+        row.classList.add("is-saving");
+
+        var request;
+        if (removing) {
+            request = TS.api("DELETE", api + "lines/" + lineId).then(function (result) {
+                return afterGridChange(result, { title: "Removed from the costing", detail: name });
+            });
+        } else if (lineId) {
+            request = TS.api("PUT", api + "lines/" + lineId, { quantity: Number(raw) }).then(function (result) {
+                return afterGridChange(result, null);
+            });
+        } else {
+            var body = { type: "rate", rateItemId: Number(row.dataset.item), quantity: Number(raw) };
+            if (!resolved) body.unitPrice = Number(typedRate);
+            // A rate typed over the card price before the quantity becomes an override once the line exists.
+            var override = resolved && typedRate !== "" && Number(typedRate) !== Number(row.dataset.card) ? Number(typedRate) : null;
+            request = TS.api("POST", api + "lines", body).then(function (result) {
+                if (result.ok && override !== null) {
+                    return TS.api("PUT", api + "lines/" + result.data.line.id, { unitPrice: override }).then(function (second) {
+                        return afterGridChange(second.ok ? second : result, null);
+                    });
+                }
+                return afterGridChange(result, null);
+            });
+        }
+        request.then(function () { delete input.dataset.inflight; row.classList.remove("is-saving"); });
+    }
+
+    function checkGridRate(input) {
+        var raw = input.value.trim();
+        if (raw === "") { clearFieldError(input); return; }
+        var problem = problemWith(input);
+        if (problem) fieldError(input, problem); else clearFieldError(input);
+    }
+
+    function toggleCalculated(box) {
+        var row = gridRow(box);
+        var name = row.dataset.name;
+        saving(+1);
+        totalsBusy(true);
+        row.classList.add("is-saving");
+        var request = box.checked
+            ? TS.api("POST", api + "lines", { type: "rate", rateItemId: Number(row.dataset.item), quantity: 0 }).then(function (result) {
+                return afterGridChange(result, { title: "Added to the costing", detail: name + ", with the quantity calculated from the materials." });
+            })
+            : TS.api("DELETE", api + "lines/" + row.dataset.line).then(function (result) {
+                return afterGridChange(result, { title: "Removed from the costing", detail: name });
+            });
+        request.then(function () { row.classList.remove("is-saving"); });
+    }
+
+    root.addEventListener("change", function (e) {
+        var qty = e.target.closest("input[data-grid-qty]");
+        if (qty) { saveGridQuantity(qty); return; }
+        var rate = e.target.closest("input[data-grid-rate]");
+        if (rate) { checkGridRate(rate); return; }
+        var include = e.target.closest("input[data-grid-include]");
+        if (include) toggleCalculated(include);
+    }, true);
+
+    // Enter saves and moves down to the next item's quantity, as in a spreadsheet column.
+    function nextQuantity(from) {
+        var boxes = Array.prototype.slice.call(document.querySelectorAll("#rate-lines input[data-grid-qty], #rate-lines input[data-grid-include]"));
+        var at = boxes.indexOf(from);
+        return at >= 0 && at + 1 < boxes.length ? boxes[at + 1] : null;
+    }
+
+    root.addEventListener("keydown", function (e) {
+        var qty = e.target.closest("input[data-grid-qty]");
+        if (!qty) return;
+        if (e.key === "Enter") {
+            e.preventDefault();
+            var next = nextQuantity(qty);
+            if (next) next.focus();
+            saveGridQuantity(qty);
+        } else if (e.key === "Escape" && qty.value !== qty.dataset.saved) {
+            qty.value = qty.dataset.saved;
+            clearFieldError(qty);
+        }
+    });
 })();
