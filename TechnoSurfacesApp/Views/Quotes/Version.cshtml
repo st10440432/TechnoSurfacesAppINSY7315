@@ -1,0 +1,156 @@
+@model TechnoSurfacesApp.Controllers.VersionVm
+@*
+    One version of a quote, read only (US-21): its costing and the customer quotation
+    as they were when it was issued. An earlier version is sealed, so it shows the
+    prices, quantities, terms and heading it carried then, whatever has changed since.
+    Only the customer quotation prints; the costing is for Techno Surfaces only.
+*@
+@using TechnoSurfaces.Application.Auditing
+@{
+    var q = Model.Quote;
+    var v = Model.This;
+    var d = Model.Document;
+    var t = Model.Sheet.Totals;
+    var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, false);
+}
+
+<header class="page-head no-print">
+    <div>
+        <h1>Version @v.VersionNo</h1>
+        <p>@q.Reference for @q.CustomerName. Version @v.VersionNo of @Model.Versions.Count.</p>
+    </div>
+    <div class="page-head-actions">
+        @if (Model.IsCurrent && !v.IsSealed)
+        {
+            <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
+                <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg> Open the costing sheet
+            </a>
+        }
+        <button type="button" class="btn btn-secondary" data-print>
+            <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print or save the quotation as PDF
+        </button>
+    </div>
+</header>
+
+<div class="no-print">
+    <partial name="_QuoteHeader" model="q" />
+    <partial name="_QuoteTabs" model="q" />
+
+    <nav class="tabs" aria-label="Versions of @q.Reference">
+        @foreach (var each in Model.Versions)
+        {
+            <a asp-action="Version" asp-route-id="@q.Id" asp-route-number="@each.VersionNo"
+               aria-current="@(each.VersionNo == v.VersionNo ? "page" : null)">
+                Version @each.VersionNo
+                @if (each.VersionNo == q.VersionNo)
+                {
+                    <span class="sr-only"> (current)</span>
+                }
+            </a>
+        }
+    </nav>
+
+    @if (!Model.IsCurrent && d.IsIssued)
+    {
+        <div class="notice notice-info" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+            <div>
+                <strong>Read only. This is the version the customer was sent.</strong>
+                @if (v.IsIssued)
+                {
+                    @:Approved by @(v.IssuedByName ?? "the Managing Director") on @Fmt.DateTimeShort(AuditTime.ToLocal(v.IssuedAtUtc!.Value)),
+                }
+                then replaced by version @(Model.Next?.VersionNo ?? v.VersionNo + 1). It shows the prices, quantities and terms it was issued with, even where they have changed since.
+                @if (!d.HeadingAsIssued)
+                {
+                    <span class="d-block">It was approved before the heading was recorded with each version, so the attention, site, project and validity date below are the quote's details as they stand now.</span>
+                }
+            </div>
+        </div>
+    }
+    else if (!Model.IsCurrent)
+    {
+        <div class="notice notice-info" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+            <div>
+                <strong>Read only. This version was never issued.</strong>
+                It was replaced by version @(Model.Next?.VersionNo ?? v.VersionNo + 1) before it was approved, so the customer never received it.
+            </div>
+        </div>
+    }
+    else if (v.IsSealed)
+    {
+        <div class="notice notice-info" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+            <div>
+                <strong>This is the current version, and it is locked.</strong>
+                @if (v.IsIssued)
+                {
+                    @:Approved by @(v.IssuedByName ?? "the Managing Director") on @Fmt.DateTimeShort(AuditTime.ToLocal(v.IssuedAtUtc!.Value)).
+                }
+                To change it, reopen the quote as a new version.
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="notice notice-info" role="note">
+            <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+            <div>
+                <strong>This is the current version, and it is still open.</strong>
+                It is shown here read only. Changes are made on the costing sheet and the customer quotation.
+            </div>
+        </div>
+    }
+
+    <div class="grid grid-main mb-section">
+        <section class="card" aria-labelledby="version-costing-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-calc" /></svg>
+                <h2 id="version-costing-title">The costing for version @v.VersionNo</h2>
+                <span class="spacer"></span>
+                <span class="badge">For Techno Surfaces only</span>
+            </div>
+            <partial name="_MaterialLines" model="lines" />
+            <partial name="_RateLines" model="lines" />
+        </section>
+
+        <div class="stack-gap">
+            <section class="card" aria-labelledby="version-totals-title">
+                <div class="card-head"><h2 id="version-totals-title">Totals</h2></div>
+                <div class="card-body">
+                    <div class="totals-row"><span class="lbl">Sub total</span><span class="val">@Fmt.Rand(t.SubTotalExVat)</span></div>
+                    <div class="totals-row"><span class="lbl">Markup @Fmt.Pct(t.MarkupPercent)</span><span class="val">@Fmt.Rand(t.MarkupAmount)</span></div>
+                    <div class="totals-row"><span class="lbl">Transport</span><span class="val">@Fmt.Rand(t.TransportAmount)</span></div>
+                    <div class="totals-row"><span class="lbl">Cut-outs, grooves and transport</span><span class="val">@Fmt.Rand(t.BelowTheLineTotal)</span></div>
+                    <div class="totals-row total-line"><span class="lbl">Total ex VAT</span><span class="val">@Fmt.Rand(t.TotalExVat)</span></div>
+                    <div class="totals-row"><span class="lbl">VAT at @Fmt.Pct(t.VatRate * 100)</span><span class="val">@Fmt.Rand(t.VatAmount)</span></div>
+                    <div class="totals-row grand"><span class="lbl">Total inc VAT</span><span class="val">@Fmt.Rand(t.TotalIncVat)</span></div>
+                    <dl class="facts facts-tight">
+                        <dt>Total area</dt><dd>@Fmt.Sqm(t.TotalAreaM2)</dd>
+                        <dt>Sheets</dt><dd>@Fmt.Qty(t.TotalSheetCount)</dd>
+                        <dt>Rand per m², ex VAT</dt><dd>@(t.TotalAreaM2 > 0 ? Fmt.Rand(t.TotalExVat / t.TotalAreaM2) : "Not yet")</dd>
+                    </dl>
+                </div>
+            </section>
+
+            <section class="card" aria-labelledby="version-facts-title">
+                <div class="card-head"><h2 id="version-facts-title">About this version</h2></div>
+                <div class="card-body">
+                    <dl class="facts">
+                        <dt>Started</dt>
+                        <dd>@Fmt.DateTimeShort(AuditTime.ToLocal(v.CreatedAtUtc)) by @v.CreatedByName</dd>
+                        <dt>Approved</dt>
+                        <dd>@(v.IsIssued ? $"{Fmt.DateTimeShort(AuditTime.ToLocal(v.IssuedAtUtc!.Value))} by {v.IssuedByName ?? "the Managing Director"}" : d.IsIssued ? "Yes, before approvals were recorded with each version" : "Not approved")</dd>
+                        <dt>Locked</dt>
+                        <dd>@(v.IsSealed ? "Yes" : "No, still open")</dd>
+                    </dl>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <h2 class="section-label">The customer quotation for version @v.VersionNo</h2>
+</div>
+
+<partial name="_QuotationDocument" model="d" />

@@ -143,7 +143,11 @@ public static class ChangeStories
         if (group.Any(r => r.IsDeletion))
             return new(first.ChangedAtLocal, first.UserName, $"Removed {called}.", [], priced);
 
-        var visible = group.Where(r => !Hidden.Contains(r.PropertyName) && !r.PropertyName.EndsWith("Id", StringComparison.Ordinal)).ToList();
+        // The heading copied onto a version when it is approved repeats what the quote
+        // already says; the approval itself is told by the status change.
+        var visible = group.Where(r => !Hidden.Contains(r.PropertyName)
+            && !r.PropertyName.EndsWith("Id", StringComparison.Ordinal)
+            && !r.PropertyName.StartsWith("Issued", StringComparison.Ordinal)).ToList();
         var created = group.Count > 2 && group.All(r => r.OldValue is null);
 
         if (created)

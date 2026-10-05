@@ -79,6 +79,50 @@ public class QuoteVersion
 
     public bool HasRecordedTerms => _terms.Count > 0;
 
+    // ---- What the customer was issued (US-21). Recorded once, when the version is
+    // ---- approved, because the quote's own details move on after a reopen: the
+    // ---- validity period starts again and the site or contact can be corrected.
+
+    /// <summary>When the version was approved and issued. Null for a version never issued.</summary>
+    public DateTime? IssuedAtUtc { get; private set; }
+
+    /// <summary>Who approved it. The quote's own approver is cleared when it is reopened.</summary>
+    public string? IssuedByUserId { get; private set; }
+
+    public string? IssuedAttention { get; private set; }
+    public string? IssuedCompany { get; private set; }
+    public string? IssuedTel { get; private set; }
+    public string? IssuedEmail { get; private set; }
+    public string? IssuedSite { get; private set; }
+    public string? IssuedProject { get; private set; }
+    public string? IssuedCustomerReference { get; private set; }
+    public DateOnly? IssuedValidUntil { get; private set; }
+
+    public bool IsIssued => IssuedAtUtc is not null;
+
+    /// <summary>
+    /// Records the heading the quotation was issued with. Called by
+    /// <see cref="Quote.Approve"/> immediately before the version is sealed, so an
+    /// earlier version can be read later exactly as the customer received it.
+    /// </summary>
+    internal void RecordIssue(IssuedHeading heading, string issuedByUserId)
+    {
+        EnsureUnsealed();
+        if (IsIssued)
+            throw new InvalidOperationException($"Version {VersionNo} has already been issued.");
+
+        IssuedAtUtc = DateTime.UtcNow;
+        IssuedByUserId = issuedByUserId;
+        IssuedAttention = heading.Attention;
+        IssuedCompany = heading.Company;
+        IssuedTel = heading.Tel;
+        IssuedEmail = heading.Email;
+        IssuedSite = heading.Site;
+        IssuedProject = heading.Project;
+        IssuedCustomerReference = heading.CustomerReference;
+        IssuedValidUntil = heading.ValidUntil;
+    }
+
     public void AddCostingLine(CostingLine line)
     {
         EnsureUnsealed();
@@ -281,3 +325,14 @@ public class QuoteVersion
     private static decimal Round(decimal value) =>
         decimal.Round(value, 2, MidpointRounding.AwayFromZero);
 }
+
+/// <summary>The heading of the customer quotation at the moment a version was issued.</summary>
+public sealed record IssuedHeading(
+    string Attention,
+    string Company,
+    string? Tel,
+    string? Email,
+    string? Site,
+    string? Project,
+    string? CustomerReference,
+    DateOnly ValidUntil);

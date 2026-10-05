@@ -122,6 +122,18 @@ public sealed class QuoteVersionConfiguration : IEntityTypeConfiguration<QuoteVe
         e.Navigation(x => x.Warranties).UsePropertyAccessMode(PropertyAccessMode.Field);
 
         e.Ignore(x => x.HasRecordedTerms);
+        e.Ignore(x => x.IsIssued);
+
+        // The heading the version was issued with. Lengths match the columns the
+        // values are copied from, so a copy can never be truncated.
+        e.Property(x => x.IssuedByUserId).HasMaxLength(450);
+        e.Property(x => x.IssuedAttention).HasMaxLength(200);
+        e.Property(x => x.IssuedCompany).HasMaxLength(200);
+        e.Property(x => x.IssuedTel).HasMaxLength(40);
+        e.Property(x => x.IssuedEmail).HasMaxLength(200);
+        e.Property(x => x.IssuedSite).HasMaxLength(200);
+        e.Property(x => x.IssuedProject).HasMaxLength(200);
+        e.Property(x => x.IssuedCustomerReference).HasMaxLength(100);
 
         // Version numbers are sequential within a quote.
         e.HasIndex(x => new { x.QuoteId, x.VersionNo }).IsUnique();

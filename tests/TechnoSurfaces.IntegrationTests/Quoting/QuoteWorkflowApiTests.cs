@@ -225,4 +225,61 @@ public sealed class QuoteWorkflowApiTests
         await Assert.ThrowsAsync<SqlException>(() => duplicate);
         Assert.Equal(1, await db.QuoteVersions.CountAsync(v => v.QuoteId == id));
     }
+
+    [Fact]
+    public async Task Every_version_stays_readable_as_it_was_issued_after_a_revision()
+    {
+        var md = await AsAsync(AppFactory.ManagingDirectorEmail);
+        var estimator = await AsAsync(AppFactory.EstimatorEmail);
+        var id = await CreatePricedQuoteAsync(md);
+
+        // Version 1 is issued and sent, then reopened after a counter-offer.
+        Assert.Equal("Approved", Status(await JsonAsync(await md.PostAsync($"/api/quotes/{id}/approve"))));
+        Assert.Equal("Sent", Status(await JsonAsync(await md.PostAsync($"/api/quotes/{id}/send"))));
+        Assert.Equal(2, (await JsonAsync(await md.PostAsync($"/api/quotes/{id}/reopen"))).GetProperty("versionNo").GetInt32());
+
+        // Version 2 changes: a new markup, a new site and another quotation line.
+        Assert.Equal(HttpStatusCode.OK, (await md.PutAsync($"/api/quotes/{id}/costing", new { markupPercent = 60m })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await md.PutAsync($"/api/quotes/{id}/details", new { site = "Constantia", project = "Kitchen" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await md.PostAsync($"/api/quotes/{id}/quotation-lines",
+            new { room = "Scullery", description = "Scullery top", amountExVat = 39m })).StatusCode);
+
+        // Version 1 reads exactly as issued, to anyone signed in.
+        var first = await JsonAsync(await estimator.GetAsync($"/api/quotes/{id}/versions/1/quotation"));
+        Assert.Equal(1, first.GetProperty("versionNo").GetInt32());
+        Assert.False(first.GetProperty("isCurrentVersion").GetBoolean());
+        Assert.True(first.GetProperty("headingAsIssued").GetBoolean());
+        Assert.Equal("Tokai", first.GetProperty("header").GetProperty("site").GetString());
+        Assert.Equal(1, first.GetProperty("lines").GetArrayLength());
+        Assert.Equal(441m, first.GetProperty("totals").GetProperty("subtotalExVat").GetDecimal());
+
+        var firstCosting = await JsonAsync(await estimator.GetAsync($"/api/quotes/{id}/versions/1/costing"));
+        Assert.True(firstCosting.GetProperty("isSealed").GetBoolean());
+        Assert.Equal(47m, firstCosting.GetProperty("totals").GetProperty("markupPercent").GetDecimal());
+        Assert.Equal(441m, firstCosting.GetProperty("totals").GetProperty("totalExVat").GetDecimal());
+
+        // Version 2 is the quote as it stands.
+        var second = await JsonAsync(await md.GetAsync($"/api/quotes/{id}/versions/2/quotation"));
+        Assert.True(second.GetProperty("isCurrentVersion").GetBoolean());
+        Assert.Equal("Constantia", second.GetProperty("header").GetProperty("site").GetString());
+        Assert.Equal(2, second.GetProperty("lines").GetArrayLength());
+        var secondCosting = await JsonAsync(await md.GetAsync($"/api/quotes/{id}/versions/2/costing"));
+        Assert.Equal(60m, secondCosting.GetProperty("totals").GetProperty("markupPercent").GetDecimal());
+
+        // The history says who approved version 1, and a version that does not exist is 404.
+        var versions = await JsonAsync(await estimator.GetAsync($"/api/quotes/{id}/versions"));
+        Assert.True(versions[0].GetProperty("isIssued").GetBoolean());
+        Assert.False(versions[1].GetProperty("isIssued").GetBoolean());
+        Assert.Equal(HttpStatusCode.NotFound, (await md.GetAsync($"/api/quotes/{id}/versions/9/quotation")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await md.GetAsync($"/api/quotes/{id}/versions/9/costing")).StatusCode);
+
+        // The screen opens for both versions.
+        var page = await estimator.GetAsync($"/Quotes/Version/{id}?number=1");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+        Assert.Contains("This is the version the customer was sent", html);
+        Assert.Contains("Countertop, fabricate and install", html);
+        Assert.DoesNotContain("Scullery top", html);
+        Assert.Equal(HttpStatusCode.OK, (await md.GetAsync($"/Quotes/Version/{id}?number=2")).StatusCode);
+    }
 }

@@ -106,7 +106,7 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
         if (quote is null)
             return null;
 
-        var names = await NamesAsync(quote.Versions.Select(v => v.CreatedByUserId), ct);
+        var names = await NamesAsync(quote.Versions.SelectMany(v => new[] { v.CreatedByUserId, v.IssuedByUserId }), ct);
         return quote.Versions
             .OrderBy(v => v.VersionNo)
             .Select(v =>
@@ -114,7 +114,8 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
                 var totals = _calculator.Calculate(v);
                 return new QuoteVersionSummary(
                     v.VersionNo, v.CreatedAtUtc, v.CreatedByUserId, Name(names, v.CreatedByUserId),
-                    v.IsSealed, v.MarkupPercent, totals.TotalExVat, totals.TotalIncVat);
+                    v.IsSealed, v.MarkupPercent, totals.TotalExVat, totals.TotalIncVat,
+                    v.IssuedAtUtc, v.IssuedByUserId is null ? null : Name(names, v.IssuedByUserId));
             })
             .ToList();
     }

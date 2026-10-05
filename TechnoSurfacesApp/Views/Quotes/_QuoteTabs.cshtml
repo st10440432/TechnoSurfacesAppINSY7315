@@ -20,7 +20,7 @@
             <svg class="ico ico-sm" aria-hidden="true"><use href="#i-check-circle" /></svg> Review
         </a>
     }
-    <a asp-action="Versions" asp-route-id="@Model.Id" aria-current="@Current("Versions")">
+    <a asp-action="Versions" asp-route-id="@Model.Id" aria-current="@(Current("Versions") ?? Current("Version"))">
         <svg class="ico ico-sm" aria-hidden="true"><use href="#i-history" /></svg> Versions
         @if (Model.VersionNo > 1)
         {
