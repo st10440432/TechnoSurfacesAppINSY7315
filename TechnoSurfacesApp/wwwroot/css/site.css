@@ -981,6 +981,10 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
 .auth-panel { display: grid; place-items: center; padding: var(--space-10) var(--space-6); background: var(--surface); }
 .auth-form { width: 100%; max-width: 24rem; }
 .auth-form h1 { margin-bottom: var(--space-2); }
+.auth-back { margin-bottom: var(--space-4); padding-left: 0; }
+.auth-steps { padding-left: var(--space-5); margin-bottom: var(--space-6); }
+.auth-steps li { margin-bottom: var(--space-2); line-height: var(--leading-normal); }
+.auth-action { margin-top: var(--space-6); }
 .brand-logo-sm { display: inline-block; padding: var(--space-4) var(--space-5); background: var(--surface); border-radius: var(--radius); }
 .brand-logo-sm img { display: block; height: 7rem; width: auto; }
 

@@ -95,33 +95,16 @@ public class AccountController : Controller
     [HttpGet]
     public IActionResult AccessDenied() => View();
 
-    // Forgot-password and activation are rebuilt on Thursday (user admin).
-    // They remain the prototype's placeholder screens until then.
+    // Forgotten password and account activation (Task 1 8.2). There is no email
+    // service, so neither sends a link: the Managing Director issues a temporary
+    // password and the user replaces it at the first sign-in. Both pages explain
+    // the steps and accept no input, so there is nothing to post.
 
     [AllowAnonymous]
     [HttpGet]
     public IActionResult ForgotPassword() => View();
 
     [AllowAnonymous]
-    [HttpPost]
-    [ActionName("ForgotPassword")]
-    public IActionResult ForgotPasswordPost(string? email)
-    {
-        ViewData["Sent"] = true;
-        ViewData["Email"] = email;
-        return View("ForgotPassword");
-    }
-
-    [AllowAnonymous]
     [HttpGet]
     public IActionResult Activate() => View();
-
-    [AllowAnonymous]
-    [HttpPost]
-    [ActionName("Activate")]
-    public IActionResult ActivatePost()
-    {
-        ViewData["Done"] = true;
-        return View("Activate");
-    }
 }

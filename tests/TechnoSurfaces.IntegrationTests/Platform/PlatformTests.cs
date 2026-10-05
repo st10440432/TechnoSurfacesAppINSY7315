@@ -71,6 +71,21 @@ public sealed class PlatformTests
         Assert.DoesNotContain("Development Mode", html);
     }
 
+    [Theory]
+    [InlineData("/Account/ForgotPassword")]
+    [InlineData("/Account/Activate")]
+    public async Task The_password_help_pages_need_no_sign_in_and_send_nothing(string path)
+    {
+        // There is no email service (Task 1 8.2): the Managing Director issues a
+        // temporary password. These pages explain that and take no input.
+        var response = await _app.CreateBrowser().GetAsync(path);
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("temporary password", html);
+        Assert.DoesNotContain("<form", html);
+    }
+
     [Fact]
     public async Task A_seeded_demo_account_can_sign_in_and_reach_the_dashboard()
     {
