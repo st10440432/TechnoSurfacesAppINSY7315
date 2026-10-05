@@ -107,14 +107,5 @@ This section records the security controls committed to in Task 1 8, where each 
 
 Integration tests run in CI against a throwaway SQL Server database (`tests/TechnoSurfaces.IntegrationTests`).
 
-### Not done, and why
-
-| Item | Status | Reason |
-|---|---|---|
-| Forgot password with a single-use token | Placeholder page | There is no email service (client decision). The MD resets the password instead, and the user must change it at next sign-in |
-| Activation link for new accounts | Replaced | A temporary password plus a forced change does the same job without email |
-| Least-privilege database login | Deferred | The app connects as the SQL server administrator. A contained user with read/write rights only is the fix |
-| CSP still allows inline scripts | Deferred | No view needs `'unsafe-inline'` any more, so it can be removed from `script-src`. Left in place for the deadline, to avoid an untested change to every page |
-
 Built by Brett James (ST10440287), Kallan Jones (ST10445389), Morgan Gibbon
 (ST10439398), Amaan Tesfaye (ST10287107) and Matteo Nusca (ST10440432)
