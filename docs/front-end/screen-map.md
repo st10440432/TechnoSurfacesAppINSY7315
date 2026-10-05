@@ -2,7 +2,7 @@
 
 The twenty screens from the Task 1 journey maps, who can use each one, and where each screen gets its data. This is the checklist for connecting the front end to the back end.
 
-"Ready" means the data source is merged into `develop` today. The status column records the state of the repository on 2 October 2026 and should be updated as branches merge.
+"Ready" means the screen reads and writes through its data source on `develop`. Updated on 5 October 2026, when every signed-in screen was checked against a running copy of the app: each one reads and saves through the database, and the prototype's in-memory data has been removed. Forgot password and activate account were not part of that check, so their rows are unchanged.
 
 ## Who can use each screen
 
@@ -40,23 +40,23 @@ Estimators can see every price, including cost prices. That is a decision the cl
 | Sign in | Credentials, lockout, deactivated accounts refused | ASP.NET Core Identity and `ISignInService` | Amaan | Yes |
 | Forgot password | Single use, time limited reset token | User administration | Amaan | No |
 | Activate account | First password for an account the Managing Director created | User administration | Amaan | No |
-| Dashboard | Approval queue for the Managing Director, own quotes for an estimator | Quote workflow | Morgan | No |
-| Quote list | Quotes filtered by status | Quote workflow | Morgan | No |
-| New quote | Customer, contact, site, project, markup | Quote workflow | Morgan | No |
-| Costing sheet | Supplier, product line, colour and sheet size lists; add, change and remove lines; totals | `/api/catalogue/*` and `/api/quotes/{id}/lines` endpoints | Morgan | No |
-| Customer quotation | Quotation lines with no cost fields, standing terms, warranty by brand | Quotation generation | Morgan | No |
-| Approval queue | Quotes waiting for approval | Approval workflow | Morgan | No |
-| Review quote | Correct and approve in one step, the changes made to the quote | Approval workflow and the audit trail | Morgan, Amaan | No |
-| Version history | Every version with its date, author and total | Quote versioning | Morgan | No |
-| Invoice record | Pastel invoice number, date and amount | Invoice record | Morgan | No |
-| Material catalogue | Suppliers, product lines, colours, sheet sizes and prices | `CatalogueService`, reading the seeded catalogue | Amaan | No. The catalogue data is merged, the service is not built yet |
-| Price editor | Change a price from a date without overwriting the old one | `CatalogueService`, which saves through Kallan's `IPriceHistory.SetMaterialPriceAsync` | Amaan, with Kallan's `IPriceHistory` underneath | No. `IPriceHistory` is merged, the service is not built yet |
-| Customers | Customer list | Customers and contacts | Morgan | No |
-| Customer detail | A customer with its contacts | Customers and contacts | Morgan | No |
-| Rate card | Rates, including the nine still awaiting the client's figures | `CatalogueService`, which saves through Kallan's `IPriceHistory.SetRateAsync` | Amaan, with Kallan's `IPriceHistory` underneath | No. The rate card and `IPriceHistory` are merged, the service is not built yet |
-| Users | List, create, deactivate, reactivate, reset password | User administration | Amaan | No |
-| Quotation terms | Standing terms held in one place | Quotation generation | Morgan | No |
-| Audit trail | Changes filtered by user, entity and date | Audit interceptor and user administration | Amaan | Partly. The audit interceptor is merged, the screen's data is not built yet |
+| Dashboard | Approval queue for the Managing Director, own quotes for an estimator | Quote workflow | Morgan | Yes |
+| Quote list | Quotes filtered by status | Quote workflow | Morgan | Yes |
+| New quote | Customer, contact, site, project, markup | Quote workflow | Morgan | Yes |
+| Costing sheet | Supplier, product line, colour and sheet size lists; add, change and remove lines; totals | `/api/catalogue/*` and `/api/quotes/{id}/lines` endpoints | Morgan | Yes |
+| Customer quotation | Quotation lines with no cost fields, standing terms, warranty by brand | Quotation generation | Morgan | Yes |
+| Approval queue | Quotes waiting for approval | Approval workflow | Morgan | Yes |
+| Review quote | Correct and approve in one step, the changes made to the quote | Approval workflow and the audit trail | Morgan, Amaan | Yes |
+| Version history | Every version with its date, author and total | Quote versioning | Morgan | Yes |
+| Invoice record | Pastel invoice number, date and amount | Invoice record | Morgan | Yes |
+| Material catalogue | Suppliers, product lines, colours, sheet sizes and prices | `CatalogueService`, reading the seeded catalogue | Amaan | Yes |
+| Price editor | Change a price from a date without overwriting the old one | `CatalogueService`, which saves through Kallan's `IPriceHistory.SetMaterialPriceAsync` | Amaan, with Kallan's `IPriceHistory` underneath | Yes |
+| Customers | Customer list | Customers and contacts | Morgan | Yes |
+| Customer detail | A customer with its contacts | Customers and contacts | Morgan | Yes |
+| Rate card | Rates, including the nine still awaiting the client's figures | `CatalogueService`, which saves through Kallan's `IPriceHistory.SetRateAsync` | Amaan, with Kallan's `IPriceHistory` underneath | Yes |
+| Users | List, create, deactivate, reactivate, reset password | User administration | Amaan | Yes |
+| Quotation terms | Standing terms held in one place | Quotation generation | Morgan | Yes |
+| Audit trail | Changes filtered by user, entity and date | Audit interceptor and user administration | Amaan | Yes |
 
 Kallan's price resolution and calculation engine are merged and sit underneath the costing sheet. The screen reaches them through Morgan's endpoints.
 

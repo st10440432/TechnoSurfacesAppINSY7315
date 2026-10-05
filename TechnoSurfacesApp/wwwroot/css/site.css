@@ -796,7 +796,8 @@ table.data tr.group-row td {
 .qstrip-value { margin-top: 2px; font-weight: var(--weight-medium); }
 
 /* Totals panel */
-.totals { position: sticky; top: calc(var(--topbar-height) + var(--space-5)); }
+/* Not sticky: it shares its column with the quotation check, next step and changes, which a sticky panel would cover */
+.totals { position: static; }
 .totals-row { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-2) 0; }
 .totals-row .lbl { color: var(--ink); }
 .totals-row .val { margin-left: auto; font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
@@ -1286,3 +1287,109 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 .disclosure[open] > .disclosure-summary { border-bottom: 1px solid var(--line); }
 .disclosure-body { padding: var(--space-4) var(--space-5) var(--space-5); }
 .contact .disclosure-body { padding: var(--space-4) 0 0; }
+
+/* ==========================================================================
+   Change history: one sentence per change, who and when underneath
+   ========================================================================== */
+
+.changes { margin: 0; padding: 0; list-style: none; }
+.change { padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.change:first-child { padding-top: 0; }
+.change:last-child { border-bottom: 0; padding-bottom: 0; }
+.change-what { margin: 0; line-height: var(--leading-normal); }
+.change-what .badge { margin-left: var(--space-2); vertical-align: 0.1em; }
+.change-details { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
+.change-details li { margin-top: var(--space-1); }
+.change-who { margin: var(--space-1) 0 0; color: var(--ink-secondary); font-size: var(--text-sm); }
+.changes-more { margin-top: var(--space-3); }
+.changes-more > .changes { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--line); }
+
+/* ==========================================================================
+   Labelled filter rows on the catalogue, rate card and audit trail
+   ========================================================================== */
+
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-4); align-items: end; padding: var(--space-5); border-bottom: 1px solid var(--line); }
+.filters .field { margin: 0; }
+.filters .btn-row { align-self: end; }
+
+/* A price or rate change form, opened from its row */
+.row-edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--space-4); align-items: end; }
+.row-edit .field { margin: 0; }
+
+/* Permission summary on the users screen */
+.matrix td, .matrix th { text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.user-actions { margin-top: var(--space-2); }
+.user-actions form { display: inline; }
+.temp-password { font-size: var(--text-md); font-weight: var(--weight-bold); padding: var(--space-1) var(--space-3); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); letter-spacing: .05em; user-select: all; }
+
+/* Quotation terms: one labelled box per line, its buttons underneath */
+.term-line { padding-bottom: var(--space-4); margin-bottom: var(--space-4); border-bottom: 1px solid var(--line); }
+.term-line textarea { width: 100%; }
+.term-line .btn-row { margin-top: var(--space-2); }
+.term-line form { margin: 0; }
+.term-text { margin: 0 0 var(--space-2); }
+.term-add { margin-top: var(--space-2); }
+.field-row-action { display: flex; gap: var(--space-2); }
+.field-row-action .input { flex: 1; min-width: 0; }
+.term-retired { margin-top: var(--space-3); }
+.term-retired ul { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.brand-warranty + .brand-warranty { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--line); }
+.brand-warranty h3 { font-size: var(--text-base); margin: 0 0 var(--space-2); }
+.mt-section { margin-top: var(--space-6); }
+
+/* The four material choices wrap to two per row before their text is cut off */
+.field-row.cascade-row { grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.data tbody th[scope="row"] { text-transform: none; letter-spacing: 0; font-size: var(--text-base); font-weight: var(--weight-medium); color: var(--ink); background: none; }
+
+/* Keeps visually hidden header text inside the table's own scroll box */
+.table-wrap { position: relative; }
+.data .mono { overflow-wrap: anywhere; }
+
+@media (max-width: 1100px) {
+    /* Wide tables, such as the catalogue, become cards on a tablet as well */
+    table.stack-md, table.stack-md thead, table.stack-md tbody, table.stack-md tfoot,
+    table.stack-md tr, table.stack-md th, table.stack-md td { display: block; }
+    table.stack-md thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    table.stack-md tr { margin: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+    table.stack-md tbody tr:hover { background: var(--surface); }
+    table.stack-md td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-4);
+        padding: var(--space-2) var(--space-3);
+        border-bottom: 1px solid var(--line);
+        text-align: right;
+    }
+    table.stack-md td:last-child { border-bottom: 0; }
+    table.stack-md td[data-label]::before {
+        content: attr(data-label);
+        flex-shrink: 0;
+        font-size: var(--text-xs);
+        font-weight: var(--weight-bold);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-secondary);
+        text-align: left;
+    }
+    table.stack-md td:first-child { display: block; text-align: left; background: var(--surface-raised); }
+    table.stack-md td:first-child::before { display: none; }
+}
+
+/* In a card row, a value's second line sits under the value, not beside it */
+@media (max-width: 767.98px) {
+    table.stack td { flex-wrap: wrap; }
+    table.stack td:not(:first-child) > .sub { flex-basis: 100%; text-align: right; margin-top: 0; }
+    table.stack td:not(:first-child) > .stacked { flex: 0 0 auto; margin-left: auto; }
+}
+@media (max-width: 1100px) {
+    table.stack-md td { flex-wrap: wrap; }
+    table.stack-md td:not(:first-child) > .sub { flex-basis: 100%; text-align: right; margin-top: 0; }
+    table.stack-md td:not(:first-child) > .stacked { flex: 0 0 auto; margin-left: auto; }
+}
+
+/* The costing sheet's line tables fit their column at laptop width: short number boxes, headings that wrap */
+#costing table.data th { white-space: normal; }
+#costing table.data .input-sm { width: 5.25rem; }
+#costing .input-group-sm { width: 6.75rem; }

@@ -40,7 +40,7 @@ The logo green and the logo light blue are both light colours. Neither can carry
 | Logo light blue | `#A5BBD7` | Labels on the navy side menu, accents |
 | Green ink | `#65713D` | Confirm buttons, the approved status, green text |
 | Body text | `#16202E` | All main text |
-| Secondary text | `#707070` | Hints, field labels, secondary details |
+| Secondary text | `#55606E` | Hints, field labels, secondary details |
 | Page background | `#F5F7FA` | Behind the cards |
 | Card background | `#FFFFFF` | Cards, tables, forms |
 | Input border | `#8A8A8A` | Edges of text boxes and dropdowns |
@@ -67,8 +67,8 @@ Measured with the WCAG 2.1 relative luminance formula. Text needs 4.5 to 1. The 
 |---|---|---|---:|---:|---|
 | Body text | `#16202E` | `#FFFFFF` | 16.40 | 4.5 | Pass |
 | Body text on page background | `#16202E` | `#F5F7FA` | 15.28 | 4.5 | Pass |
-| Secondary text | `#707070` | `#FFFFFF` | 4.95 | 4.5 | Pass |
-| Secondary text on page background | `#707070` | `#F5F7FA` | 4.61 | 4.5 | Pass |
+| Secondary text | `#55606E` | `#FFFFFF` | 6.39 | 4.5 | Pass |
+| Secondary text on page background | `#55606E` | `#F5F7FA` | 5.96 | 4.5 | Pass |
 | Links | `#03376E` | `#FFFFFF` | 11.83 | 4.5 | Pass |
 | Primary button and side menu | `#FFFFFF` | `#03376E` | 11.83 | 4.5 | Pass |
 | Side menu labels | `#A5BBD7` | `#03376E` | 6.02 | 4.5 | Pass |

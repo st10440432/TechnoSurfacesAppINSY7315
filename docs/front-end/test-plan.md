@@ -46,23 +46,31 @@ Not yet means the screen has not been tested in its final form.
 | Sign in | Not yet | Not yet | Not yet | Not yet | Not yet |
 | Forgot password | Not yet | Not yet | Not yet | Not yet | Not yet |
 | Activate account | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Dashboard | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Quote list | Not yet | Not yet | Not yet | Not yet | Not yet |
-| New quote | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Costing sheet | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Customer quotation | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Approval queue | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Review quote | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Version history | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Invoice record | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Material catalogue | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Price editor | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Customers | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Customer detail | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Rate card | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Users | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Quotation terms | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Audit trail | Not yet | Not yet | Not yet | Not yet | Not yet |
+| Dashboard | Pass | Pass | Pass | Not yet | Not yet |
+| Quote list | Pass | Pass | Pass | Not yet | Not yet |
+| New quote | Pass | Pass | Pass | Not yet | Not yet |
+| Costing sheet | Pass | Pass | Pass | Not yet | Not yet |
+| Customer quotation | Pass | Pass | Pass | Not yet | Not yet |
+| Approval queue | Pass | Pass | Pass | Not yet | Not yet |
+| Review quote | Pass | Pass | Pass | Not yet | Not yet |
+| Version history | Pass | Pass | Pass | Not yet | Not yet |
+| Invoice record | Pass | Pass | Pass | Not yet | Not yet |
+| Material catalogue | Pass | Pass | Pass | Not yet | Not yet |
+| Price editor | Pass | Pass | Pass | Not yet | Not yet |
+| Customers | Pass | Pass | Pass | Not yet | Not yet |
+| Customer detail | Pass | Pass | Pass | Not yet | Not yet |
+| Rate card | Pass | Pass | Pass | Not yet | Not yet |
+| Users | Pass | Pass | Pass | Not yet | Not yet |
+| Quotation terms | Pass | Pass | Pass | Not yet | Not yet |
+| Audit trail | Pass | Pass | Pass | Not yet | Not yet |
+
+### How the results above were checked (5 October 2026)
+
+Each signed-in screen was opened in Chrome at 375, 768 and 1440 pixels wide, signed in as the Managing Director and as an estimator, against a local copy of the app with the seeded catalogue, rate card and terms. A screen passes a width when nothing scrolls sideways and nothing is cut off. Tables turn into labelled cards below 768 pixels, and the material catalogue does so below 1100 pixels as well, because it has the most columns.
+
+The same screens were checked for structure with a script run in the page: exactly one main heading, headings in order, a label tied to every form field, a name on every button and link, alt text on every image, and no repeated ids. All seventeen passed.
+
+Sign in, forgot password and activate account were not part of this pass. Keyboard-only use and 200% zoom have not been tested yet.
 
 ## Tool scores
 

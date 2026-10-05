@@ -1,18 +1,23 @@
-﻿@{
+@{
     ViewData["Title"] = "Managing Director only";
-    ViewData["Crumb"] = "Access";
+    ViewData["Page"] = "";
 }
 
-<div class="notice notice-info" role="status">
-    <svg class="ico"><use href="#i-lock" /></svg>
+<header class="page-head">
     <div>
-        <strong>This page is for the Managing Director.</strong>
-        User accounts and the audit trail are managed by the Managing Director only.
-        If you need an account changed or want to know who changed a quote, ask the
-        Managing Director.
+        <h1>This page is for the Managing Director</h1>
+        <p>User accounts and the audit trail are managed by the Managing Director only.</p>
+    </div>
+</header>
+
+<div class="notice notice-info" role="note">
+    <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+    <div>
+        If you need an account changed, or want to know who changed a quote, ask the Managing Director.
+        The changes to each of your quotes are listed on its costing sheet.
     </div>
 </div>
 
-<p style="margin-top:18px">
-    <a class="btn btn-secondary" asp-controller="Home" asp-action="Dashboard">Back to dashboard</a>
+<p class="mt-section">
+    <a class="btn btn-secondary" asp-controller="Home" asp-action="Dashboard">Back to the dashboard</a>
 </p>
