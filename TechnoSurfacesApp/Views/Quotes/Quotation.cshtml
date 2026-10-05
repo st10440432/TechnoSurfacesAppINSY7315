@@ -79,6 +79,24 @@
                     Write one line for each room or element, with its size, material and colour, as the customer would describe it.
                     The lines must add up to the costing total of @Fmt.Rand(check.CostingTotalExVat) ex VAT before the quote can be approved.
                 </p>
+                @if (Model.Quote.CostingLineCount > 0)
+                {
+                    <div class="from-costing">
+                        <button type="button" class="btn btn-secondary"
+                                data-api-action data-method="POST" data-url="@Url.Content($"~/api/quotes/{d.QuoteId}/quotation-lines/from-costing")"
+                                data-confirm="Add the materials from the costing sheet?"
+                                data-confirm-detail="@(d.Lines.Count == 0
+                                    ? "Each material becomes a line at its selling price, and the labour, consumables and extras become one more line, so the lines add up to the costing total. You can change or remove any of them afterwards."
+                                    : "Each material becomes a line at its selling price, and the labour, consumables and extras become one more line. They are added after the lines already here, so the quotation will come to more than the costing until you remove or change lines.")"
+                                data-confirm-label="Add the lines"
+                                data-success="Lines added from the costing"
+                                data-success-detail="Check the descriptions read the way the customer would describe the work."
+                                aria-describedby="from-costing-hint">
+                            <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg> Add the materials from the costing sheet
+                        </button>
+                        <span class="hint" id="from-costing-hint">One line per material at its selling price, and one line for the labour, consumables and extras. No cost price or markup is shown.</span>
+                    </div>
+                }
             </div>
 
             @if (d.Lines.Count > 0)

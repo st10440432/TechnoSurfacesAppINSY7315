@@ -259,6 +259,100 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         Assert.Equal(QuotationOutcome.VersionSealed, refused.Outcome);
     }
 
+    /// <summary>A second quote with only the given material lines, each one sheet at its price.</summary>
+    private async Task<int> AddMaterialOnlyQuoteAsync(string reference, decimal markupPercent, params decimal[] sheetPrices)
+    {
+        await using var db = new TechnoSurfacesDbContext(_options);
+        var customer = await db.Customers.Include(c => c.Contacts).SingleAsync();
+        var price = await db.MaterialPrices.FirstAsync(p => p.PriceBand != null);
+
+        var quote = new Quote(reference, customer.Id, customer.Contacts.Single().Id, "estimator", new DateOnly(2026, 10, 4));
+        var version = quote.StartNewVersion("estimator", markupPercent);
+        for (var i = 0; i < sheetPrices.Length; i++)
+            version.AddCostingLine(CostingLine.ForMaterial(price.Id, $"Material {i + 1}", sheetPrices[i], "Price band", 1m, 2.7968m));
+        db.Quotes.Add(quote);
+        await db.SaveChangesAsync();
+        return quote.Id;
+    }
+
+    [Fact]
+    public async Task Copying_the_costing_gives_a_line_per_material_and_one_for_the_rest_that_add_up_to_it()
+    {
+        // Costing: R1 000 material + R200 sanding = R1 200, plus 50% markup = R1 800.
+        var result = await WithServiceAsync(s => s.AddLinesFromCostingAsync(_quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(_quoteId));
+
+        Assert.Equal(QuotationOutcome.Ok, result.Outcome);
+        Assert.True(result.Check!.Matches);
+        Assert.Collection(document!.Lines,
+            material =>
+            {
+                Assert.Equal("Infinito material line", material.Description);
+                Assert.Equal(1m, material.Quantity);
+                Assert.Equal(1500m, material.AmountExVat);
+            },
+            rest =>
+            {
+                Assert.Equal(QuotationGenerationService.OtherCostsDescription, rest.Description);
+                Assert.Equal(300m, rest.AmountExVat);
+            });
+    }
+
+    [Fact]
+    public async Task Copying_the_costing_puts_no_cost_or_price_origin_on_the_document()
+    {
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(_quoteId));
+
+        var json = JsonSerializer.Serialize(await WithServiceAsync(s => s.GenerateAsync(_quoteId)));
+
+        Assert.DoesNotContain("Sanding time", json);
+        Assert.DoesNotContain("Rate card", json);
+        Assert.DoesNotContain("price band", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("1000", json);
+        Assert.DoesNotContain("markup", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Copying_the_costing_keeps_the_lines_already_written_and_adds_after_them()
+    {
+        await WithServiceAsync(s => s.AddLineAsync(_quoteId, new QuotationLineInput("Written by hand", 100m, "Kitchen")));
+
+        var result = await WithServiceAsync(s => s.AddLinesFromCostingAsync(_quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(_quoteId));
+
+        Assert.Equal(new[] { "Written by hand", "Infinito material line", QuotationGenerationService.OtherCostsDescription },
+            document!.Lines.Select(l => l.Description));
+        Assert.False(result.Check!.Matches);
+        Assert.Equal(100m, result.Check.Difference);
+    }
+
+    [Fact]
+    public async Task Copying_materials_only_puts_the_rounding_on_the_last_material()
+    {
+        // Each R333,33 sheet marked up 12,5% is R374,99625, so R375,00 a line once
+        // rounded. The costing totals R999,99 + R125,00 = R1 124,99, a cent less.
+        var quoteId = await AddMaterialOnlyQuoteAsync("TS-QTN-ROUND", 12.5m, 333.33m, 333.33m, 333.33m);
+
+        var result = await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(quoteId));
+
+        Assert.True(result.Check!.Matches);
+        Assert.Equal(1124.99m, document!.Totals.SubtotalExVat);
+        Assert.Equal(new[] { 375.00m, 375.00m, 374.99m }, document.Lines.Select(l => l.AmountExVat));
+        Assert.DoesNotContain(document.Lines, l => l.Description == QuotationGenerationService.OtherCostsDescription);
+    }
+
+    [Fact]
+    public async Task Copying_an_empty_costing_is_refused()
+    {
+        var quoteId = await AddMaterialOnlyQuoteAsync("TS-QTN-EMPTY", 35m);
+
+        var result = await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+
+        Assert.Equal(QuotationOutcome.Invalid, result.Outcome);
+        Assert.Empty((await WithServiceAsync(s => s.GenerateAsync(quoteId)))!.Lines);
+    }
+
     [Fact]
     public async Task An_unknown_quote_has_no_document()
     {

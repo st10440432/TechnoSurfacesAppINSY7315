@@ -1194,6 +1194,7 @@ table.data .input-sm { width: 6.5rem; margin-left: auto; }
 /* The material cascade and the price it finds */
 h3.section-label { margin: 0 0 var(--space-1); }
 .card-body-top { border-top: 1px solid var(--line); }
+.from-costing { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .cascade-qty { margin-top: var(--space-4); }
 .field-action { display: flex; flex-direction: column; justify-content: flex-end; }
 .resolved-price.is-loading { display: block; }
