@@ -43,34 +43,40 @@ Not yet means the screen has not been tested in its final form.
 
 | Screen | 375 | 768 | 1440 | Keyboard | 200% zoom |
 |---|---|---|---|---|---|
-| Sign in | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Forgot password | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Activate account | Not yet | Not yet | Not yet | Not yet | Not yet |
-| Dashboard | Pass | Pass | Pass | Not yet | Not yet |
-| Quote list | Pass | Pass | Pass | Not yet | Not yet |
-| New quote | Pass | Pass | Pass | Not yet | Not yet |
-| Costing sheet | Pass | Pass | Pass | Not yet | Not yet |
-| Customer quotation | Pass | Pass | Pass | Not yet | Not yet |
-| Approval queue | Pass | Pass | Pass | Not yet | Not yet |
-| Review quote | Pass | Pass | Pass | Not yet | Not yet |
-| Version history | Pass | Pass | Pass | Not yet | Not yet |
-| Invoice record | Pass | Pass | Pass | Not yet | Not yet |
-| Material catalogue | Pass | Pass | Pass | Not yet | Not yet |
-| Price editor | Pass | Pass | Pass | Not yet | Not yet |
-| Customers | Pass | Pass | Pass | Not yet | Not yet |
-| Customer detail | Pass | Pass | Pass | Not yet | Not yet |
-| Rate card | Pass | Pass | Pass | Not yet | Not yet |
-| Users | Pass | Pass | Pass | Not yet | Not yet |
-| Quotation terms | Pass | Pass | Pass | Not yet | Not yet |
-| Audit trail | Pass | Pass | Pass | Not yet | Not yet |
+| Sign in | Pass | Pass | Pass | Pass | Pass |
+| Forgot password | Pass | Pass | Pass | Pass | Pass |
+| Activate account | Pass | Pass | Pass | Pass | Pass |
+| Dashboard | Pass | Pass | Pass | Pass | Pass |
+| Quote list | Pass | Pass | Pass | Pass | Pass |
+| New quote | Pass | Pass | Pass | Pass | Pass |
+| Costing sheet | Pass | Pass | Pass | Pass | Pass |
+| Customer quotation | Pass | Pass | Pass | Pass | Pass |
+| Approval queue | Pass | Pass | Pass | Pass | Pass |
+| Review quote | Pass | Pass | Pass | Pass | Pass |
+| Version history | Pass | Pass | Pass | Pass | Pass |
+| Invoice record | Pass | Pass | Pass | Pass | Pass |
+| Material catalogue | Pass | Pass | Pass | Pass | Pass |
+| Price editor | Pass | Pass | Pass | Pass | Pass |
+| Customers | Pass | Pass | Pass | Pass | Pass |
+| Customer detail | Pass | Pass | Pass | Pass | Pass |
+| Rate card | Pass | Pass | Pass | Pass | Pass |
+| Users | Pass | Pass | Pass | Pass | Pass |
+| Quotation terms | Pass | Pass | Pass | Pass | Pass |
+| Audit trail | Pass | Pass | Pass | Pass | Pass |
 
 ### How the results above were checked (5 October 2026)
 
-Each signed-in screen was opened in Chrome at 375, 768 and 1440 pixels wide, signed in as the Managing Director and as an estimator, against a local copy of the app with the seeded catalogue, rate card and terms. A screen passes a width when nothing scrolls sideways and nothing is cut off. Tables turn into labelled cards below 768 pixels, and the material catalogue does so below 1100 pixels as well, because it has the most columns.
+Each screen was opened in Chrome at 375, 768 and 1440 pixels wide against a local copy of the app with the seeded catalogue, rate card and terms and two test quotes, one written by the Managing Director and one by an estimator. The screens behind sign in were checked as the Managing Director and again as an estimator. A screen passes a width when nothing scrolls sideways and nothing runs past the edge of the screen. Tables turn into labelled cards below 768 pixels, and the material catalogue does so below 1100 pixels as well, because it has the most columns.
 
-The same screens were checked for structure with a script run in the page: exactly one main heading, headings in order, a label tied to every form field, a name on every button and link, alt text on every image, and no repeated ids. All seventeen passed.
+At every width the same script was run in the page. It checks for exactly one main heading, headings in order, the `main` landmark, the skip link as the first thing to receive focus, a label tied to every form field, a name on every button and link, alt text on every image, no repeated ids, no `aria-describedby` or `aria-labelledby` pointing at something that is not there, and no inline styles. All twenty screens passed at all three widths.
 
-Sign in, forgot password and activate account were not part of this pass. Keyboard-only use and 200% zoom have not been tested yet.
+**Keyboard.** On every screen the Tab key was pressed through the whole page with a real keyboard event, and every control that received focus was recorded. Every one showed a visible focus ring, and every visible control was reached in the order it appears. On the costing sheet the skip link was also used: Enter on it moves focus into the main content, past the menu. Disabled steps of the material choice are skipped until the step before them is chosen.
+
+**200% zoom.** Zooming a 1440 pixel window to 200% gives the page 720 pixels to work with, so the costing sheet, customer quotation, material catalogue, rate card, new quote, users and audit trail were checked at exactly 720 pixels, and nothing scrolled sideways or was cut off. Every size in the stylesheet is in rem, so text grows with the zoom, and at 720 pixels the phone layout applies, which every screen passed at 375 pixels.
+
+**Estimator view.** Signed in as an estimator, the side menu shows five screens and leaves out the six for the Managing Director. Opened by their address, the approval queue, price editor, rate card and quotation terms show their content read only, with a note saying only the Managing Director changes them and no form to change anything. Users and the audit trail show a page saying they are for the Managing Director, not an error. A quote written by someone else opens read only, with the reason given.
+
+**Faults found and fixed during this pass.** The menu button showed on desktop, where the side menu is always open, because a later button rule overrode the rule hiding it. The activate account page scrolled sideways on a phone, because a long button label would not wrap. On a phone the brand panel on the sign in pages pushed the form below the bottom of the screen, so it is now a short band.
 
 ## Tool scores
 
@@ -82,4 +88,4 @@ Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome e
 | Quote list | Not run yet | Not run yet | Not run yet |
 | Customer quotation | Not run yet | Not run yet | Not run yet |
 
-The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page.
+The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
