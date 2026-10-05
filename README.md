@@ -13,7 +13,7 @@ When Loading the app. one might have to clear cache and cookies upon entering th
 | Production | https://tsqa-app-production.azurewebsites.net |
 | Staging | https://tsqa-app-staging.azurewebsites.net |
 | Health check | `/health` on either address |
-| Presentation | TO ADD: link to the slides or the recorded video |
+| Presentation | https://www.youtube.com/watch?v=EoP8_cdqwwg |
 
 ## Contents
 
