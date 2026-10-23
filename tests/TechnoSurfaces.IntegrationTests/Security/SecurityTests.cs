@@ -156,6 +156,48 @@ public sealed class SecurityTests
         Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
     }
 
+    /// <summary>Posts the sign-in form with a given antiforgery token, as a browser would.</summary>
+    private static Task<HttpResponseMessage> PostSignInFormAsync(HttpClient client, string token) =>
+        client.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = AppFactory.EstimatorEmail,
+            ["Password"] = AppFactory.DemoPassword,
+            ["__RequestVerificationToken"] = token
+        }));
+
+    [Fact]
+    public async Task A_sign_in_form_loaded_before_signing_in_takes_a_signed_in_user_to_the_dashboard()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var browser = Browser(server);
+
+        // The clear-your-cookies bug: the form was loaded while signed out (a second
+        // tab, or a link from another site), then the person signed in elsewhere.
+        var staleToken = await SignIn.AntiforgeryTokenAsync(browser);
+        await SignIn.AsAsync(browser, AppFactory.EstimatorEmail);
+
+        var response = await PostSignInFormAsync(browser, staleToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Home/Dashboard", response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_stale_sign_in_form_returns_to_a_fresh_form_without_signing_anyone_in()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var browser = Browser(server);
+        await SignIn.AntiforgeryTokenAsync(browser);   // sets the antiforgery cookie, as loading the page does
+
+        var response = await PostSignInFormAsync(browser, "token-from-an-expired-page");
+        var after = await browser.GetAsync("/Home/Dashboard");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.StartsWith("/Account/Login?expired=", response.Headers.Location!.OriginalString, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.Redirect, after.StatusCode);
+        Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
+    }
+
     [Fact]
     public async Task Five_wrong_passwords_lock_the_account()
     {
