@@ -70,21 +70,16 @@ public sealed class AuditTrailService : IAuditTrailService
             .Select(Key)
             .ToList();
 
-        // A costing line can be removed, but the audit row written when it was added
-        // still records which version it belonged to, so its history stays visible.
-        var lineKeys = await _db.AuditEntries.AsNoTracking()
-            .Where(a => a.EntityName == nameof(CostingLine)
-                     && a.PropertyName == nameof(CostingLine.QuoteVersionId)
-                     && a.NewValue != null
-                     && versionKeys.Contains(a.NewValue!))
-            .Select(a => a.EntityKey)
-            .Distinct()
-            .ToListAsync(ct);
+        var lineKeys = await ChildKeysAsync(nameof(CostingLine), nameof(CostingLine.QuoteVersionId), versionKeys, ct);
+        var quotationLineKeys = await ChildKeysAsync(nameof(QuotationLine), nameof(QuotationLine.QuoteVersionId), versionKeys, ct);
+        var invoiceKeys = await ChildKeysAsync(nameof(InvoiceRecord), nameof(InvoiceRecord.QuoteId), [quoteKey], ct);
 
         var entries = await _db.AuditEntries.AsNoTracking()
             .Where(a => (a.EntityName == nameof(Quote) && a.EntityKey == quoteKey)
                      || (a.EntityName == nameof(QuoteVersion) && versionKeys.Contains(a.EntityKey))
-                     || (a.EntityName == nameof(CostingLine) && lineKeys.Contains(a.EntityKey)))
+                     || (a.EntityName == nameof(CostingLine) && lineKeys.Contains(a.EntityKey))
+                     || (a.EntityName == nameof(QuotationLine) && quotationLineKeys.Contains(a.EntityKey))
+                     || (a.EntityName == nameof(InvoiceRecord) && invoiceKeys.Contains(a.EntityKey)))
             .OrderByDescending(a => a.ChangedAtUtc).ThenByDescending(a => a.Id)
             .ToListAsync(ct);
 
@@ -132,6 +127,21 @@ public sealed class AuditTrailService : IAuditTrailService
                 e.EntityName, e.EntityKey, e.PropertyName, e.OldValue, e.NewValue))
             .ToList();
     }
+
+    /// <summary>
+    /// The keys of every <paramref name="entityName"/> row whose audit trail records it
+    /// being created under one of <paramref name="parentKeys"/>.
+    /// </summary>
+    private Task<List<string>> ChildKeysAsync(
+        string entityName, string parentProperty, List<string> parentKeys, CancellationToken ct) =>
+        _db.AuditEntries.AsNoTracking()
+            .Where(a => a.EntityName == entityName
+                     && a.PropertyName == parentProperty
+                     && a.NewValue != null
+                     && parentKeys.Contains(a.NewValue!))
+            .Select(a => a.EntityKey)
+            .Distinct()
+            .ToListAsync(ct);
 
     private Task<Dictionary<string, string>> NamesAsync(List<string> userIds, CancellationToken ct) =>
         _db.Users.AsNoTracking()
