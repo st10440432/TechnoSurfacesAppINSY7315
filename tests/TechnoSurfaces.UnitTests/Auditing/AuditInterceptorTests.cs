@@ -5,6 +5,8 @@ using TechnoSurfaces.Domain;
 using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfaces.Infrastructure.Data;
 using TechnoSurfaces.Infrastructure.Data.Auditing;
+using TechnoSurfaces.Domain.People;
+using TechnoSurfaces.Domain.Quoting;
 
 namespace TechnoSurfaces.UnitTests.Auditing;
 
