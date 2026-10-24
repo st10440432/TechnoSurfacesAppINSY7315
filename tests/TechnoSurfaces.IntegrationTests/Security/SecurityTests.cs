@@ -228,4 +228,19 @@ public sealed class SecurityTests
             Assert.True(await users.IsLockedOutAsync(account!));
         }
     }
+
+    [Fact]
+    public async Task The_session_cookie_is_http_only_secure_and_same_site_lax()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var browser = Browser(server);
+
+        var response = await SignIn.PostAsync(browser, AppFactory.EstimatorEmail, AppFactory.DemoPassword);
+
+        var cookie = response.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith("TechnoSurfaces.Auth=", StringComparison.Ordinal));
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
+    }
 }
