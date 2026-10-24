@@ -111,6 +111,7 @@ builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
     options.Filters.Add<MustChangePasswordFilter>();
+    options.Filters.Add<SignInFormExpiredFilter>();
 });
 // US-27: no page is reachable without an authenticated session. Anything not
 // explicitly marked [AllowAnonymous] requires sign-in, so a forgotten attribute

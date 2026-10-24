@@ -193,7 +193,9 @@ public sealed class SecurityTests
         var after = await browser.GetAsync("/Home/Dashboard");
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.StartsWith("/Account/Login?expired=", response.Headers.Location!.OriginalString, StringComparison.OrdinalIgnoreCase);
+        var location = response.Headers.Location!.OriginalString;
+        Assert.Contains("expired=True", location, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Dashboard", location, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(HttpStatusCode.Redirect, after.StatusCode);
         Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
     }
