@@ -65,8 +65,12 @@ public sealed class SignInService : ISignInService
             return SignInOutcome.Deactivated;
         }
 
+        account.LastSignInUtc = DateTime.UtcNow;
+        await _userManager.UpdateAsync(account);
+
         await _signInManager.SignInAsync(account, rememberMe);
         return SignInOutcome.Succeeded;
+
     }
 
     public Task SignOutAsync() => _signInManager.SignOutAsync();

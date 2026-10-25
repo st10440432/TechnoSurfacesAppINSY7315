@@ -157,6 +157,22 @@ public sealed class SecurityTests
     }
 
     [Fact]
+    public async Task Signing_in_records_the_time_on_the_account()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var before = DateTime.UtcNow.AddSeconds(-1);
+
+        await SignIn.AsAsync(Browser(server), AppFactory.EstimatorEmail);
+
+        using var scope = server.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+        var account = await users.FindByEmailAsync(AppFactory.EstimatorEmail);
+
+        Assert.NotNull(account!.LastSignInUtc);
+        Assert.True(account.LastSignInUtc >= before);
+    }
+
+    [Fact]
     public async Task Five_wrong_passwords_lock_the_account()
     {
         await using var server = _app.WithWebHostBuilder(_ => { });
