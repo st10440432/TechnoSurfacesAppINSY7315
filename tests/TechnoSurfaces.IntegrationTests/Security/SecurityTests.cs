@@ -200,4 +200,17 @@ public sealed class SecurityTests
             Assert.True(await users.IsLockedOutAsync(account!));
         }
     }
+
+    [Fact]
+    public async Task The_users_screen_shows_the_last_sign_in()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var md = Browser(server);
+        await SignIn.AsAsync(md, AppFactory.ManagingDirectorEmail);
+
+        var html = await md.GetStringAsync("/Admin/Users");
+
+        Assert.Contains("Last sign-in", html);
+        Assert.Contains("data-label=\"Last sign-in\"", html);
+    }
 }

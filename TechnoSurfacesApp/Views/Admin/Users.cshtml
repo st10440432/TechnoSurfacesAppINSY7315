@@ -46,6 +46,7 @@
                         <th scope="col">Person</th>
                         <th scope="col">Role</th>
                         <th scope="col">Status</th>
+                        <th scope="col">Last sign-in</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -105,6 +106,11 @@
                                     <span class="sub">Has not chosen a password yet</span>
                                 }
                             </td>
+                                <td data-label="Last sign-in">
+                                    @(u.LastLogin is { } last
+                                        ? Fmt.DateTimeShort(TechnoSurfaces.Application.Auditing.AuditTime.ToLocal(last))
+                                        : "Never")
+                                </td>
                         </tr>
                     }
                 </tbody>
