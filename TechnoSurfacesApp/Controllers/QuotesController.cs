@@ -206,10 +206,16 @@ public class QuotesController : AppController
         var items = await _catalogue.RateItemsAsync(ct);
         var rateLines = sheet.Lines.Where(l => l.LineType == "Rate").ToList();
 
+        // The whole card in one query, not two or more per item (NFR-05).
+        var prices = await _rates.ResolveRateCardAsync(issueDate, ct);
+
         var rows = new List<RateGridRow>();
         foreach (var item in items)
         {
-            var card = PricePreviewResult.From(await _rates.ResolveAsync(item.Id, supplierId: null, issueDate, ct), issueDate);
+            var resolution = prices.TryGetValue(item.Id, out var found)
+                ? found
+                : PriceResolution.Failure($"Rate item {item.Id} is not on the rate card.");
+            var card = PricePreviewResult.From(resolution, issueDate);
             // The same rule the calculator applies, so the figure shown before the
             // line is added is the one it is added with.
             var calculated = Enum.TryParse<DerivationRule>(item.Derivation, out var rule)
