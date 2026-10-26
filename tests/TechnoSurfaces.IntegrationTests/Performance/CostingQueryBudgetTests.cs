@@ -34,8 +34,11 @@ public sealed class CostingQueryBudgetTests
         _output = output;
     }
 
-    /// <summary>A quote with one material line and the two most used rate lines, as an estimator's draft.</summary>
-    private async Task<(int QuoteId, int LineId)> QuoteWithLinesAsync(HttpClient browser, string token)
+    /// <summary>
+    /// A quote with one material line and the two most used rate lines, as an
+    /// estimator's draft. Returns the material line and the last rate line.
+    /// </summary>
+    private async Task<(int QuoteId, int MaterialLineId, int RateLineId)> QuoteWithLinesAsync(HttpClient browser, string token)
     {
         int quoteId, colourId, sheetSizeId, fabricationId, sandingId;
         using (var scope = _app.Services.CreateScope())
@@ -70,16 +73,21 @@ public sealed class CostingQueryBudgetTests
         var material = await PostAsync(browser, token, $"/api/quotes/{quoteId}/lines",
             new { type = "material", colourId, sheetSizeId, quantity = 3m });
         Assert.Equal(HttpStatusCode.Created, material.StatusCode);
-        var lineId = (await material.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("line").GetProperty("id").GetInt32();
+        var materialLineId = await LineIdAsync(material);
 
+        var rateLineId = 0;
         foreach (var rateItemId in new[] { fabricationId, sandingId })
         {
             var rate = await PostAsync(browser, token, $"/api/quotes/{quoteId}/lines", new { type = "rate", rateItemId, quantity = 4m });
             Assert.Equal(HttpStatusCode.Created, rate.StatusCode);
+            rateLineId = await LineIdAsync(rate);
         }
 
-        return (quoteId, lineId);
+        return (quoteId, materialLineId, rateLineId);
     }
+
+    private static async Task<int> LineIdAsync(HttpResponseMessage created) =>
+        (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("line").GetProperty("id").GetInt32();
 
     private static Task<HttpResponseMessage> PostAsync<T>(HttpClient client, string token, string path, T body) =>
         SendAsync(client, token, HttpMethod.Post, path, body);
@@ -122,22 +130,34 @@ public sealed class CostingQueryBudgetTests
         await SignIn.AsAsync(browser, AppFactory.EstimatorEmail);
         var token = await SignIn.AntiforgeryTokenAsync(browser, "/Home/Dashboard");
 
-        var (quoteId, lineId) = await QuoteWithLinesAsync(browser, token);
+        var (quoteId, materialLineId, rateLineId) = await QuoteWithLinesAsync(browser, token);
 
         var page = await CountAsync(counter, "Costing sheet page", () => browser.GetAsync($"/Quotes/Costing/{quoteId}"));
-        var edit = await CountAsync(counter, "Change a quantity", () =>
-            SendAsync(browser, token, HttpMethod.Put, $"/api/quotes/{quoteId}/lines/{lineId}", new { quantity = 4m }));
-        var totals = await CountAsync(counter, "Totals", () => browser.GetAsync($"/api/quotes/{quoteId}/totals"));
+
+        // What the costing sheet sends for each kind of edit: the change, then the
+        // refresh of the line tables. The change answers with the new totals, so the
+        // sheet does not call /totals as well.
+        var change = await CountAsync(counter, "Change a quantity", () =>
+            SendAsync(browser, token, HttpMethod.Put, $"/api/quotes/{quoteId}/lines/{materialLineId}", new { quantity = 4m }));
         var refresh = await CountAsync(counter, "Refresh the line tables", () => browser.GetAsync($"/Quotes/CostingLines/{quoteId}"));
 
-        _output.WriteLine($"One edit as the costing sheet makes it (change, totals, refresh): {edit + totals + refresh} SQL commands");
+        HttpResponseMessage? removed = null;
+        var remove = await CountAsync(counter, "Remove a line", async () =>
+            removed = await SendAsync(browser, token, HttpMethod.Delete, $"/api/quotes/{quoteId}/lines/{rateLineId}", new { }));
+        Assert.True((await removed!.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("totals", out _),
+            "Removing a line must answer with the new totals, so the sheet need not ask for them.");
+
+        _output.WriteLine($"Changing a quantity as the costing sheet does it: {change + refresh} SQL commands");
+        _output.WriteLine($"Removing a line as the costing sheet does it: {remove + refresh} SQL commands");
 
         Assert.True(page <= PageBudget, $"The costing sheet page took {page} SQL commands; the budget is {PageBudget}.");
-        Assert.True(edit <= EditBudget, $"Changing a quantity took {edit} SQL commands; the budget is {EditBudget}.");
+        Assert.True(change <= ChangeBudget, $"Changing a quantity took {change} SQL commands; the budget is {ChangeBudget}.");
+        Assert.True(remove <= RemoveBudget, $"Removing a line took {remove} SQL commands; the budget is {RemoveBudget}.");
         Assert.True(refresh <= RefreshBudget, $"Refreshing the line tables took {refresh} SQL commands; the budget is {RefreshBudget}.");
     }
 
     private const int PageBudget = 17;
-    private const int EditBudget = 8;
+    private const int ChangeBudget = 8;
+    private const int RemoveBudget = 8;
     private const int RefreshBudget = 15;
 }
