@@ -96,6 +96,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     }
 });
 
+builder.Services.AddAntiforgery(options =>
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always);
+
 // RFC 9457 problem details for every API error.
 builder.Services.AddProblemDetails();
 
