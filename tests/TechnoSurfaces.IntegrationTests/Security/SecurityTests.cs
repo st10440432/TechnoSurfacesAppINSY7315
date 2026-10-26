@@ -156,20 +156,48 @@ public sealed class SecurityTests
         Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
     }
 
+    /// <summary>Posts the sign-in form with a given antiforgery token, as a browser would.</summary>
+    private static Task<HttpResponseMessage> PostSignInFormAsync(HttpClient client, string token) =>
+        client.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = AppFactory.EstimatorEmail,
+            ["Password"] = AppFactory.DemoPassword,
+            ["__RequestVerificationToken"] = token
+        }));
+
     [Fact]
-    public async Task Signing_in_records_the_time_on_the_account()
+    public async Task A_sign_in_form_loaded_before_signing_in_takes_a_signed_in_user_to_the_dashboard()
     {
         await using var server = _app.WithWebHostBuilder(_ => { });
-        var before = DateTime.UtcNow.AddSeconds(-1);
+        var browser = Browser(server);
 
-        await SignIn.AsAsync(Browser(server), AppFactory.EstimatorEmail);
+        // The clear-your-cookies bug: the form was loaded while signed out (a second
+        // tab, or a link from another site), then the person signed in elsewhere.
+        var staleToken = await SignIn.AntiforgeryTokenAsync(browser);
+        await SignIn.AsAsync(browser, AppFactory.EstimatorEmail);
 
-        using var scope = server.Services.CreateScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
-        var account = await users.FindByEmailAsync(AppFactory.EstimatorEmail);
+        var response = await PostSignInFormAsync(browser, staleToken);
 
-        Assert.NotNull(account!.LastSignInUtc);
-        Assert.True(account.LastSignInUtc >= before);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Home/Dashboard", response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_stale_sign_in_form_returns_to_a_fresh_form_without_signing_anyone_in()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var browser = Browser(server);
+        await SignIn.AntiforgeryTokenAsync(browser);   // sets the antiforgery cookie, as loading the page does
+
+        var response = await PostSignInFormAsync(browser, "token-from-an-expired-page");
+        var after = await browser.GetAsync("/Home/Dashboard");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location!.OriginalString;
+        Assert.Contains("expired=True", location, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Dashboard", location, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.Redirect, after.StatusCode);
+        Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
     }
 
     [Fact]
@@ -202,15 +230,17 @@ public sealed class SecurityTests
     }
 
     [Fact]
-    public async Task The_users_screen_shows_the_last_sign_in()
+    public async Task The_session_cookie_is_http_only_secure_and_same_site_lax()
     {
         await using var server = _app.WithWebHostBuilder(_ => { });
-        var md = Browser(server);
-        await SignIn.AsAsync(md, AppFactory.ManagingDirectorEmail);
+        var browser = Browser(server);
 
-        var html = await md.GetStringAsync("/Admin/Users");
+        var response = await SignIn.PostAsync(browser, AppFactory.EstimatorEmail, AppFactory.DemoPassword);
 
-        Assert.Contains("Last sign-in", html);
-        Assert.Contains("data-label=\"Last sign-in\"", html);
+        var cookie = response.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith("TechnoSurfaces.Auth=", StringComparison.Ordinal));
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
     }
 }

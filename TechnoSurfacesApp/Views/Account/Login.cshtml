@@ -21,6 +21,14 @@
     </div>
 }
 
+@if (formError is null && ViewData["SignInExpired"] is true)
+{
+    <div class="notice notice-info" role="status">
+        <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+        <div>That sign-in page had expired. Please sign in again.</div>
+    </div>
+}
+
 <form asp-action="Login" method="post" novalidate>
     <input type="hidden" asp-for="ReturnUrl" />
 

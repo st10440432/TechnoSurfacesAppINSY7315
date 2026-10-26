@@ -18,11 +18,13 @@ public class AccountController : Controller
 
     [AllowAnonymous]
     [HttpGet]
-    public IActionResult Login(string? returnUrl = null)
+    public IActionResult Login(string? returnUrl = null, bool expired = false)
     {
         if (User.Identity?.IsAuthenticated == true)
             return RedirectToAction("Dashboard", "Home");
 
+        // Set by SignInFormExpiredFilter when a stale sign-in form was posted.
+        ViewData["SignInExpired"] = expired;
         return View(new LoginViewModel { ReturnUrl = returnUrl });
     }
 
