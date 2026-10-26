@@ -35,6 +35,13 @@ public interface IQuoteWorkflowService
 
     Task<WorkflowResult> GetAsync(int quoteId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The detail for a quote already loaded in this request, for screens that load
+    /// it once and use it for everything. Call <see cref="ExpireLapsedAsync"/> before
+    /// loading it, as <see cref="GetAsync"/> does, so a lapsed quote shows as expired.
+    /// </summary>
+    Task<QuoteDetail?> DescribeAsync(Quote quote, CancellationToken ct = default);
+
     /// <summary>Every version of a quote with its date, author and total (US-21). Null for an unknown quote.</summary>
     Task<IReadOnlyList<QuoteVersionSummary>?> VersionsAsync(int quoteId, CancellationToken ct = default);
 
@@ -122,6 +129,9 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
         await ExpireLapsedAsync(ct);
         return await Detail(quoteId, ct);
     }
+
+    public Task<QuoteDetail?> DescribeAsync(Quote quote, CancellationToken ct = default) =>
+        _queries.DescribeAsync(quote, Today, ct);
 
     public Task<IReadOnlyList<QuoteVersionSummary>?> VersionsAsync(int quoteId, CancellationToken ct = default) =>
         _queries.VersionsAsync(quoteId, ct);
