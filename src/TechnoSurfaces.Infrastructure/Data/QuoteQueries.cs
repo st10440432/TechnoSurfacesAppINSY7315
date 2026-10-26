@@ -67,7 +67,12 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
     public async Task<QuoteDetail?> GetAsync(int quoteId, DateOnly today, CancellationToken ct = default)
     {
         var quote = await WithCosting().FirstOrDefaultAsync(q => q.Id == quoteId, ct);
-        if (quote?.CurrentVersion is not { } version)
+        return quote is null ? null : await DescribeAsync(quote, today, ct);
+    }
+
+    public async Task<QuoteDetail?> DescribeAsync(Quote quote, DateOnly today, CancellationToken ct = default)
+    {
+        if (quote.CurrentVersion is not { } version)
             return null;
 
         var names = await NamesAsync(new[] { quote.CreatedByUserId, quote.ApprovedByUserId }, ct);

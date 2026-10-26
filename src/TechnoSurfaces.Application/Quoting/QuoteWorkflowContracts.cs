@@ -131,6 +131,12 @@ public interface IQuoteQueries
 
     Task<QuoteDetail?> GetAsync(int quoteId, DateOnly today, CancellationToken ct = default);
 
+    /// <summary>
+    /// The same detail for a quote the caller has already loaded, with its customer,
+    /// contact and current version's costing lines, so it is not queried again.
+    /// </summary>
+    Task<QuoteDetail?> DescribeAsync(Quote quote, DateOnly today, CancellationToken ct = default);
+
     Task<IReadOnlyList<QuoteVersionSummary>?> VersionsAsync(int quoteId, CancellationToken ct = default);
 }
 
