@@ -27,6 +27,12 @@ public interface IQuoteWorkflowService
     /// <summary>The quote list. Lapsed quotes are expired first, so the list shows the right status.</summary>
     Task<IReadOnlyList<QuoteSummary>> ListAsync(QuoteListFilter filter, CancellationToken ct = default);
 
+    /// <summary>
+    /// One page of the quote list, <see cref="QuoteWorkflowService.ListPageSize"/> quotes
+    /// at a time. Lapsed quotes are expired first, as <see cref="ListAsync"/> does.
+    /// </summary>
+    Task<QuotePage> ListPageAsync(QuoteListFilter filter, int page, CancellationToken ct = default);
+
     /// <summary>The Managing Director's approval queue (US-17).</summary>
     Task<IReadOnlyList<QuoteSummary>> ApprovalQueueAsync(CancellationToken ct = default);
 
@@ -80,6 +86,9 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
     /// </summary>
     public const int MaxValidForDays = 365;
 
+    /// <summary>Quotes on one page of the quote list.</summary>
+    public const int ListPageSize = 25;
+
     private readonly IQuoteRepository _quotes;
     private readonly IQuoteQueries _queries;
     private readonly ILapsedQuotes _lapsed;
@@ -117,6 +126,12 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
     {
         await ExpireLapsedAsync(ct);
         return await _queries.ListAsync(filter, Today, ct);
+    }
+
+    public async Task<QuotePage> ListPageAsync(QuoteListFilter filter, int page, CancellationToken ct = default)
+    {
+        await ExpireLapsedAsync(ct);
+        return await _queries.ListPageAsync(filter, page, ListPageSize, Today, ct);
     }
 
     public Task<IReadOnlyList<QuoteSummary>> ApprovalQueueAsync(CancellationToken ct = default) =>

@@ -52,6 +52,22 @@ public sealed record QuoteSummary(
     decimal TotalExVat,
     decimal TotalIncVat);
 
+/// <summary>
+/// One page of the quote list, newest first. <paramref name="Page"/> counts from 1
+/// and is always a page that exists, so asking past the end returns the last page.
+/// </summary>
+public sealed record QuotePage(IReadOnlyList<QuoteSummary> Quotes, int TotalCount, int Page, int PageSize)
+{
+    public int PageCount => Math.Max(1, (TotalCount + PageSize - 1) / PageSize);
+    public bool HasPrevious => Page > 1;
+    public bool HasNext => Page < PageCount;
+
+    /// <summary>The position of the first quote on this page, counting from 1; 0 when there are none.</summary>
+    public int First => TotalCount == 0 ? 0 : (Page - 1) * PageSize + 1;
+
+    public int Last => (Page - 1) * PageSize + Quotes.Count;
+}
+
 /// <summary>One quote with its current version's totals, for the review and quote screens.</summary>
 public sealed record QuoteDetail(
     int Id,
@@ -123,6 +139,9 @@ public sealed record WorkflowResult(
 public interface IQuoteQueries
 {
     Task<IReadOnlyList<QuoteSummary>> ListAsync(QuoteListFilter filter, DateOnly today, CancellationToken ct = default);
+
+    /// <summary>One page of the quote list, counted and loaded on the database rather than in memory.</summary>
+    Task<QuotePage> ListPageAsync(QuoteListFilter filter, int page, int pageSize, DateOnly today, CancellationToken ct = default);
 
     /// <summary>Quotes waiting for approval, oldest first, on the (Status, IssueDate) index.</summary>
     Task<IReadOnlyList<QuoteSummary>> ApprovalQueueAsync(DateOnly today, CancellationToken ct = default);

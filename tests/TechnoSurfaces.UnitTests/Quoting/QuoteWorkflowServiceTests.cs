@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Application.Costing;
@@ -420,5 +420,76 @@ public sealed class QuoteWorkflowServiceTests : IAsyncLifetime
         Assert.Equal(WorkflowOutcome.NotFound, (await AsAsync(Md, s => s.GetAsync(999))).Outcome);
         Assert.Equal(WorkflowOutcome.NotFound, (await AsAsync(Md, s => s.ApproveAsync(999))).Outcome);
         Assert.Null(await AsAsync(Md, s => s.VersionsAsync(999)));
+    }
+
+    [Fact]
+    public async Task The_quote_list_comes_a_page_at_a_time_newest_first()
+    {
+        for (var i = 1; i <= 30; i++)
+            await CreateAsync(Md, $"TS-PAGE-{i:00}");
+
+        var first = await AsAsync(Md, s => s.ListPageAsync(new QuoteListFilter(), 1));
+        var second = await AsAsync(Md, s => s.ListPageAsync(new QuoteListFilter(), 2));
+
+        Assert.Equal(30, first.TotalCount);
+        Assert.Equal(2, first.PageCount);
+        Assert.Equal(QuoteWorkflowService.ListPageSize, first.Quotes.Count);
+        Assert.Equal("TS-PAGE-30", first.Quotes[0].Reference);
+        Assert.Equal((1, 25), (first.First, first.Last));
+        Assert.True(first.HasNext);
+        Assert.False(first.HasPrevious);
+
+        Assert.Equal(5, second.Quotes.Count);
+        Assert.Equal("TS-PAGE-01", second.Quotes[^1].Reference);
+        Assert.Equal((26, 30), (second.First, second.Last));
+        Assert.False(second.HasNext);
+        Assert.Empty(first.Quotes.Select(q => q.Id).Intersect(second.Quotes.Select(q => q.Id)));
+    }
+
+    [Fact]
+    public async Task A_page_past_the_end_shows_the_last_page_and_the_filters_apply_to_the_count()
+    {
+        for (var i = 1; i <= 27; i++)
+            await CreateAsync(i % 3 == 0 ? Estimator : Md, $"TS-FILTER-{i:00}");
+
+        var pastTheEnd = await AsAsync(Md, s => s.ListPageAsync(new QuoteListFilter(), 9));
+        var estimators = await AsAsync(Md, s => s.ListPageAsync(new QuoteListFilter(AuthorId: Estimator), 1));
+        var none = await AsAsync(Md, s => s.ListPageAsync(new QuoteListFilter(Search: "NO-SUCH-QUOTE"), 1));
+
+        Assert.Equal(2, pastTheEnd.Page);
+        Assert.Equal(2, pastTheEnd.Quotes.Count);
+        Assert.Equal(9, estimators.TotalCount);
+        Assert.Equal(1, estimators.PageCount);
+        Assert.All(estimators.Quotes, q => Assert.Equal(Estimator, q.AuthorId));
+        Assert.Equal((0, 1, 0), (none.TotalCount, none.PageCount, none.First));
+    }
+
+    [Fact]
+    public async Task A_reopened_quote_is_listed_with_its_current_version_and_total()
+    {
+        var id = await CreateAsync(Md);
+        await AddLineAsync(id);
+        await AsAsync(Md, s => s.ApproveAsync(id));
+        await AsAsync(Md, s => s.MarkSentAsync(id));
+        await AsAsync(Md, s => s.ReopenAsync(id));
+
+        // Version 2 is changed after the reopen; version 1 keeps the total it was sent at.
+        await using (var db = new TechnoSurfacesDbContext(_options))
+        {
+            var quote = await new QuoteRepository(db).GetAsync(id);
+            var v2 = quote!.CurrentVersion!;
+            v2.ChangeQuantity(v2.CostingLines.Single(), 5m);
+            await db.SaveChangesAsync();
+        }
+
+        var listed = (await AsAsync(Md, s => s.ListPageAsync(new QuoteListFilter(), 1))).Quotes.Single(q => q.Id == id);
+        var detail = (await AsAsync(Md, s => s.GetAsync(id))).Quote!;
+        var versions = await AsAsync(Md, s => s.VersionsAsync(id));
+
+        Assert.Equal(2, listed.VersionNo);
+        Assert.Equal(735.00m, listed.TotalExVat);   // 5 hours of sanding at R100, plus 47%
+        Assert.Equal(listed.TotalExVat, detail.Totals.TotalExVat);
+        Assert.Equal(441.00m, versions![0].TotalExVat);
+        Assert.Equal(735.00m, versions[1].TotalExVat);
     }
 }
