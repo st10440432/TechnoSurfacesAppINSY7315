@@ -59,6 +59,15 @@ public sealed class AuditTrailService : IAuditTrailService
         return new AuditPage(await ToRowsAsync(entries, ct), total, total > entries.Count);
     }
 
+    public async Task<IReadOnlyList<AuditRow>> RecentAsync(int count, CancellationToken ct = default)
+    {
+        var entries = await _db.AuditEntries.AsNoTracking()
+            .OrderByDescending(a => a.ChangedAtUtc).ThenByDescending(a => a.Id)
+            .Take(Math.Clamp(count, 1, RowLimit))
+            .ToListAsync(ct);
+        return await ToRowsAsync(entries, ct);
+    }
+
     public async Task<IReadOnlyList<AuditRow>> ForQuoteAsync(int quoteId, CancellationToken ct = default)
     {
         var quoteKey = Key(quoteId);
