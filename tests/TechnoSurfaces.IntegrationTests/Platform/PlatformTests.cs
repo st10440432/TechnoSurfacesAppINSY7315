@@ -53,15 +53,29 @@ public sealed class PlatformTests
     {
         var response = await _app.CreateBrowser().GetAsync("/Account/Login");
         var csp = response.Headers.GetValues("Content-Security-Policy").Single();
+        var styleSrc = csp.Split(';').Select(d => d.Trim()).Single(d => d.StartsWith("style-src"));
+        Assert.Equal("style-src 'self'", styleSrc);
 
         Assert.Contains("default-src 'self'", csp);
         Assert.Contains("frame-ancestors 'none'", csp);
+
 
         // Task 1 8.7: scripts from the application's own origin only, never inline.
         var scriptSrc = csp.Split(';').Select(d => d.Trim()).Single(d => d.StartsWith("script-src"));
         Assert.Equal("script-src 'self'", scriptSrc);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("strict-origin-when-cross-origin", response.Headers.GetValues("Referrer-Policy").Single());
+    }
+
+    [Fact]
+    public async Task The_antiforgery_cookie_is_secure_and_http_only()
+    {
+        var response = await _app.CreateBrowser().GetAsync("/Account/Login");
+
+        var cookie = response.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith(".AspNetCore.Antiforgery.", StringComparison.Ordinal));
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
