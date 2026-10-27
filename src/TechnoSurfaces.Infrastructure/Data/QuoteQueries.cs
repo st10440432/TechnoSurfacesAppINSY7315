@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using TechnoSurfaces.Application.Costing;
 using TechnoSurfaces.Application.Quoting;
 using TechnoSurfaces.Domain;
