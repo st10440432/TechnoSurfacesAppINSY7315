@@ -397,7 +397,6 @@ These are the differences between what the Task 1 document describes and what wa
 **Calculation**
 
 - **Transport.** Task 1 and US-05 describe transport charged per sheet, separate from petrol and delivery. Only the petrol and delivery amount, typed per job, is built so far. See Known gaps.
-- **Calculated quantities are rounded up.** Sandpaper and silicon are worked out from the material and rounded up to whole units (team decision). Task 1 section 4.2.3 has sandpaper equal to the total area exactly. This is waiting for the client to confirm.
 - **Rate card figures.** Taken from the client's costing workbook, using the highest figure where the workbook's copies disagree. Nine items have no figure in the workbook and are left without a price, so the system says so rather than pricing them at an invented figure. The client still has to confirm the rate card.
 - **Silicon.** Task 1 assumed two per sheet. The workbook types it by hand with "2/sheet" as a reminder. The system works it out at two per sheet and the estimator can type over it, as Task 1 assumed.
 
@@ -418,7 +417,6 @@ These are the differences between what the Task 1 document describes and what wa
 ## Known gaps and the plan for Task 3
 
 - **Transport per sheet (US-05).** Add a transport line to the rate card worked out from the sheet count, added after the markup, for the materials it applies to, and rename the typed amount on screen to "Petrol / delivery". Waiting for the client's rate and the list of materials it applies to.
-- **Rounding of calculated quantities.** Confirm with the client, or go back to the exact figures.
 - **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check is built. The old price list check needs no client input and will be added; the other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
 - **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns are stored but are not foreign keys yet.
 - **Quote list paging.** The quote list loads every quote and totals it on each visit. Fine at today's volume, but it needs paging before two years of quotes build up.
