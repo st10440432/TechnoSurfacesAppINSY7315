@@ -26,8 +26,33 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
 
     public async Task<IReadOnlyList<QuoteSummary>> ListAsync(QuoteListFilter filter, DateOnly today, CancellationToken ct = default)
     {
-        var query = WithCosting();
+        var quotes = await Filtered(WithCurrentCosting(), filter)
+            .OrderByDescending(q => q.IssueDate).ThenByDescending(q => q.Id)
+            .ToListAsync(ct);
+        return await SummariseAsync(quotes, today, ct);
+    }
 
+    public async Task<QuotePage> ListPageAsync(QuoteListFilter filter, int page, int pageSize, DateOnly today, CancellationToken ct = default)
+    {
+        if (pageSize < 1)
+            throw new ArgumentOutOfRangeException(nameof(pageSize), "A page holds at least one quote.");
+
+        // Counted on the quotes alone, then only the page is loaded with its lines.
+        var total = await Filtered(_db.Quotes.AsNoTracking(), filter).CountAsync(ct);
+        var pageCount = Math.Max(1, (total + pageSize - 1) / pageSize);
+        page = Math.Clamp(page, 1, pageCount);
+
+        var quotes = await Filtered(WithCurrentCosting(), filter)
+            .OrderByDescending(q => q.IssueDate).ThenByDescending(q => q.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+        return new QuotePage(await SummariseAsync(quotes, today, ct), total, page, pageSize);
+    }
+
+    /// <summary>The quote list's filters, applied the same way to the count and to the page.</summary>
+    private static IQueryable<Quote> Filtered(IQueryable<Quote> query, QuoteListFilter filter)
+    {
         if (Enum.TryParse<QuoteStatus>(filter.Status, ignoreCase: true, out var status))
             query = query.Where(q => q.Status == status);
         if (filter.CustomerId is { } customerId)
@@ -44,17 +69,14 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
                 || q.Customer!.Name.Contains(term));
         }
 
-        var quotes = await query
-            .OrderByDescending(q => q.IssueDate).ThenByDescending(q => q.Id)
-            .ToListAsync(ct);
-        return await SummariseAsync(quotes, today, ct);
+        return query;
     }
 
     public async Task<IReadOnlyList<QuoteSummary>> ApprovalQueueAsync(DateOnly today, CancellationToken ct = default)
     {
         // Filtered and ordered on the (Status, IssueDate) index: oldest first, so the
         // quote that has waited longest is at the top.
-        var quotes = await WithCosting()
+        var quotes = await WithCurrentCosting()
             .Where(q => q.Status == QuoteStatus.PendingApproval)
             .OrderBy(q => q.IssueDate).ThenBy(q => q.Id)
             .ToListAsync(ct);
@@ -66,7 +88,7 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
 
     public async Task<QuoteDetail?> GetAsync(int quoteId, DateOnly today, CancellationToken ct = default)
     {
-        var quote = await WithCosting().FirstOrDefaultAsync(q => q.Id == quoteId, ct);
+        var quote = await WithCurrentCosting().FirstOrDefaultAsync(q => q.Id == quoteId, ct);
         return quote is null ? null : await DescribeAsync(quote, today, ct);
     }
 
@@ -136,6 +158,19 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
             .Include(q => q.Customer)
             .Include(q => q.Contact)
             .Include(q => q.Versions).ThenInclude(v => v.CostingLines)
+            .AsSplitQuery();
+
+    /// <summary>
+    /// As <see cref="WithCosting"/>, but with only the current version and its lines:
+    /// a list or a header totals the current version and never reads an earlier one,
+    /// and a quote reopened several times would otherwise bring every version back.
+    /// </summary>
+    private IQueryable<Quote> WithCurrentCosting() =>
+        _db.Quotes
+            .AsNoTracking()
+            .Include(q => q.Customer)
+            .Include(q => q.Contact)
+            .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.CostingLines)
             .AsSplitQuery();
 
     private async Task<IReadOnlyList<QuoteSummary>> SummariseAsync(List<Quote> quotes, DateOnly today, CancellationToken ct)
