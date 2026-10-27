@@ -71,7 +71,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.Name = "TechnoSurfaces.Auth";
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.ExpireTimeSpan = TimeSpan.FromHours(1);
     options.SlidingExpiration = true;
     options.LoginPath = "/Account/Login";
@@ -111,6 +111,7 @@ builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
     options.Filters.Add<MustChangePasswordFilter>();
+    options.Filters.Add<SignInFormExpiredFilter>();
 });
 // US-27: no page is reachable without an authenticated session. Anything not
 // explicitly marked [AllowAnonymous] requires sign-in, so a forgotten attribute
