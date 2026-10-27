@@ -8,8 +8,9 @@ namespace TechnoSurfacesApp.Services;
 /// <summary>
 /// The person signed in, as the page chrome shows them: name, initials and role.
 /// The role comes from the Identity role claim, which is what the authorisation
-/// policies check; the name comes from the domain user, which shares the Identity id.
-/// Loaded once per request.
+/// policies check; the name comes from the full-name claim the session carries, or
+/// from the domain user, which shares the Identity id, for an older session.
+/// Worked out once per request.
 /// </summary>
 public sealed class SignedInUser
 {
@@ -37,13 +38,21 @@ public sealed class SignedInUser
             return _profile;
 
         var email = Principal?.Identity?.Name ?? "";
+        var role = IsManagingDirector ? "Managing Director" : "Estimator";
+
+        // The name travels in the session (AppClaimsPrincipalFactory), so the side
+        // menu on every page needs no query for it (NFR-05).
+        if (Principal?.FindFirstValue(AppClaimsPrincipalFactory.FullNameClaim) is { Length: > 0 } fullName)
+            return _profile = new Profile(fullName, email, Initials(fullName), role);
+
+        // A session issued before the name was carried in it, until the security
+        // stamp check rebuilds it within a minute.
         var user = string.IsNullOrEmpty(Id)
             ? null
             : await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == Id);
 
         var name = string.IsNullOrWhiteSpace(user?.FullName) ? email : user!.FullName;
-        _profile = new Profile(name, user?.Email ?? email, Initials(name),
-            IsManagingDirector ? "Managing Director" : "Estimator");
+        _profile = new Profile(name, user?.Email ?? email, Initials(name), role);
         return _profile;
     }
 
