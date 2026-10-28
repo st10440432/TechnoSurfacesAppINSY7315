@@ -15,14 +15,17 @@ public sealed record UserRow(
         FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => p[0]))
         .ToUpperInvariant();
 }
-
 /// <summary>The outcome of an account change. A temporary password is shown once.</summary>
 public sealed record UserAdminResult(bool Succeeded, string? Error = null, string? TemporaryPassword = null)
 {
     public static UserAdminResult Ok(string? temporaryPassword = null) => new(true, null, temporaryPassword);
     public static UserAdminResult Fail(string error) => new(false, error);
 }
-
+/// <summary>
+/// Account administration for the Managing Director (US-26). There is no
+/// self-registration and no email: the MD creates each account and hands over a
+/// temporary password, which must be changed at first sign-in (Task 1 8.2).
+/// </summary>
 public interface IUserAdminService
 {
     Task<IReadOnlyList<UserRow>> ListAsync();

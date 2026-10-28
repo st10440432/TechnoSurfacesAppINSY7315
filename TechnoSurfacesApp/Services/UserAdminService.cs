@@ -11,9 +11,9 @@ using DomainUser = TechnoSurfaces.Domain.People.AppUser;
 namespace TechnoSurfacesApp.Services;
 
 /// <summary>
-/// Account administration for the Managing Director (US-26). There is no
-/// self-registration and no email: the MD creates each account and hands over a
-/// temporary password, which must be changed at first sign-in (Task 1 8.2).
+/// Managing Director only - enforced by the CanManageUsers policy on every action
+/// that calls this service. Each person is an Identity account (credentials) and a
+/// domain AppUser (name, role, active flag) sharing one Id.
 /// </summary>
 public sealed class UserAdminService : IUserAdminService
 {

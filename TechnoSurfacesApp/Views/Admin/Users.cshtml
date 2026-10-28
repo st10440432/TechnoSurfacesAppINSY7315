@@ -107,9 +107,7 @@
                                 }
                             </td>
                                 <td data-label="Last sign-in">
-                                    @(u.LastLogin is { } last
-                                        ? Fmt.DateTimeShort(TechnoSurfaces.Application.Auditing.AuditTime.ToLocal(last))
-                                        : "Never")
+                                @(u.LastLogin is { } last? Fmt.DateTimeShort(TechnoSurfaces.Application.Auditing.AuditTime.ToLocal(last)) : "Never")
                                 </td>
                         </tr>
                     }
