@@ -7,6 +7,8 @@ using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfaces.Infrastructure.Data;
 using TechnoSurfaces.IntegrationTests.Infrastructure;
 using TechnoSurfacesApp.Identity;
+using TechnoSurfaces.Application.Auditing;
+using TechnoSurfacesApp.Helpers;
 
 namespace TechnoSurfaces.IntegrationTests.Security;
 
@@ -182,7 +184,12 @@ public sealed class SecurityTests
         var html = await md.GetStringAsync("/Admin/Users");
 
         Assert.Contains("Last sign-in", html);
-        Assert.Contains("data-label=\"Last sign-in\"", html);
+
+        // The page must show the time actually recorded, not "Never".
+        using var scope = server.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+        var account = await users.FindByEmailAsync(AppFactory.ManagingDirectorEmail);
+        Assert.Contains(Fmt.DateTimeShort(AuditTime.ToLocal(account!.LastSignInUtc!.Value)), html);
     }
 
     /// <summary>Posts the sign-in form with a given antiforgery token, as a browser would.</summary>
