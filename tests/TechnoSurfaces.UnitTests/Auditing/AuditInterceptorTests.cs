@@ -207,4 +207,25 @@ public sealed class AuditInterceptorTests : IAsyncLifetime
         Assert.Equal(invoice.Id.ToString(), entry.EntityKey);
         Assert.Equal("IN114400", entry.NewValue);
     }
+
+    [Fact]
+    public async Task A_contacts_personal_details_are_not_stored_in_the_audit_trail()
+    {
+        var (_, contact) = await AddCustomerAsync();
+
+        contact.Email = "new.address@example.co.za";
+        await _db.SaveChangesAsync();
+
+        // The change is recorded: which field, against which contact.
+        var entry = await _db.AuditEntries.SingleAsync(a =>
+            a.EntityName == nameof(Contact) && a.PropertyName == nameof(Contact.Email));
+        Assert.Equal(contact.Id.ToString(), entry.EntityKey);
+        Assert.Equal(AuditInterceptor.NotRecorded, entry.OldValue);
+        Assert.Equal(AuditInterceptor.NotRecorded, entry.NewValue);
+
+        // Neither the new email nor the name given when the contact was added is stored.
+        Assert.False(await _db.AuditEntries.AnyAsync(a =>
+            a.OldValue == "new.address@example.co.za" || a.NewValue == "new.address@example.co.za"));
+        Assert.False(await _db.AuditEntries.AnyAsync(a => a.NewValue == "Test Contact"));
+    }
 }
