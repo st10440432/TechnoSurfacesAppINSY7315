@@ -70,9 +70,29 @@ public sealed class AuditTrailService : IAuditTrailService
             .Select(Key)
             .ToList();
 
-        var lineKeys = await ChildKeysAsync(nameof(CostingLine), nameof(CostingLine.QuoteVersionId), versionKeys, ct);
-        var quotationLineKeys = await ChildKeysAsync(nameof(QuotationLine), nameof(QuotationLine.QuoteVersionId), versionKeys, ct);
-        var invoiceKeys = await ChildKeysAsync(nameof(InvoiceRecord), nameof(InvoiceRecord.QuoteId), [quoteKey], ct);
+        // A costing or quotation line can be removed, but the audit row written when
+        // it was added still records which version it belonged to, so its history
+        // stays visible. An invoice record is found the same way, through its quote.
+        // One query for all three: this runs on every costing sheet page, which has a
+        // budget of SQL round trips (CostingQueryBudgetTests).
+        var children = await _db.AuditEntries.AsNoTracking()
+            .Where(a => a.NewValue != null
+                     && (((a.EntityName == nameof(CostingLine) || a.EntityName == nameof(QuotationLine))
+                          && a.PropertyName == nameof(CostingLine.QuoteVersionId)
+                          && versionKeys.Contains(a.NewValue!))
+                      || (a.EntityName == nameof(InvoiceRecord)
+                          && a.PropertyName == nameof(InvoiceRecord.QuoteId)
+                          && a.NewValue == quoteKey)))
+            .Select(a => new { a.EntityName, a.EntityKey })
+            .Distinct()
+            .ToListAsync(ct);
+
+        List<string> KeysOf(string entityName) =>
+            children.Where(c => c.EntityName == entityName).Select(c => c.EntityKey).ToList();
+
+        var lineKeys = KeysOf(nameof(CostingLine));
+        var quotationLineKeys = KeysOf(nameof(QuotationLine));
+        var invoiceKeys = KeysOf(nameof(InvoiceRecord));
 
         var entries = await _db.AuditEntries.AsNoTracking()
             .Where(a => (a.EntityName == nameof(Quote) && a.EntityKey == quoteKey)
