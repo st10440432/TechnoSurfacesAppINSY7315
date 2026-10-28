@@ -96,9 +96,8 @@ builder.Services.ConfigureApplicationCookie(options =>
     }
 });
 
-// ZAP: the antiforgery cookie was sent without the Secure flag, because App
-// Service passes requests to the app over HTTP inside Azure. Always Secure, like
-// the session cookie.
+// ZAP: the antiforgery cookie was sent without the Secure flag, because its
+// SecurePolicy defaults to None. Always Secure, like the session cookie.
 builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always);
 

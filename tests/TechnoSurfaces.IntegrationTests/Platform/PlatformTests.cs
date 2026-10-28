@@ -163,7 +163,7 @@ public sealed class PlatformTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
 
-        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"<script(?![^>]*\ssrc=)[^>]*>", System.Text.RegularExpressions.RegexOptions.IgnoreCase), html);
-        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\son[a-z]+\s*=", System.Text.RegularExpressions.RegexOptions.IgnoreCase), html);
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\sstyle\s*=", System.Text.RegularExpressions.RegexOptions.IgnoreCase), html);
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"<style[\s>]", System.Text.RegularExpressions.RegexOptions.IgnoreCase), html);
     }
 }
