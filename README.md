@@ -231,7 +231,7 @@ These are the controls committed to in Task 1 section 8 and where each one is. P
 
 ### Audit trail
 
-- An EF Core `SaveChangesInterceptor` (`src/TechnoSurfaces.Infrastructure/Data/Auditing/AuditInterceptor.cs`) records every change to prices, rates, quotes, versions, costing lines, the catalogue (suppliers, product lines, sheet sizes, bands, colours), user accounts, quotation terms and brand warranties, with the old value, new value, user and time. No service can skip it.
+   - An EF Core `SaveChangesInterceptor` (`src/TechnoSurfaces.Infrastructure/Data/Auditing/AuditInterceptor.cs`) records every change to prices, rates, quotes, versions, costing lines, the catalogue (suppliers, product lines, sheet sizes, bands, colours), user accounts, quotation terms, brand warranties, customer quotation lines, Pastel invoice records, customers and contacts, with the old value, new value, user and time. Personal details (names, addresses, phone numbers and email addresses) are recorded as changed, but their values are stored as "(not recorded)" (POPIA). No service can skip it.
 - The audit rows are written in the same transaction as the change, so if they fail the change is rolled back.
 - A database trigger refuses any update or delete on the audit table.
 
