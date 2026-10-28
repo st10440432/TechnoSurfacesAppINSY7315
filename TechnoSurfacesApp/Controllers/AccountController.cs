@@ -45,16 +45,16 @@ public class AccountController : Controller
                 : RedirectToAction("Dashboard", "Home");
         }
 
-        // One message for an unknown email and a wrong password, so the form
-        // cannot be used to discover which accounts exist.
+        // One message for an unknown email, a wrong password and a locked account.
+        // Only a real account can be locked, so a separate lockout message would tell
+        // anyone who tried five wrong passwords that the account exists. The
+        // deactivated message is safe: it appears only after the right password.
         ModelState.AddModelError(string.Empty, outcome switch
         {
-            SignInOutcome.LockedOut =>
-                "Too many failed attempts. This account is temporarily locked - try again later or ask the Managing Director.",
             SignInOutcome.Deactivated =>
                 "This account has been deactivated. Ask the Managing Director if you need access.",
             _ =>
-                "The email address or password is incorrect."
+                "The email address or password is incorrect. After five failed attempts an account is locked for 15 minutes."
         });
 
         model.Password = string.Empty;
