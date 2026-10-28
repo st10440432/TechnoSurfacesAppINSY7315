@@ -230,6 +230,36 @@ public sealed class SecurityTests
     }
 
     [Fact]
+    public async Task A_locked_account_gets_the_same_message_as_an_unknown_email()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+
+        // A throwaway account, so no other suite's account is locked.
+        const string email = "enumeration-test@technosurfaces.co.za";
+        using (var scope = server.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+            var created = await users.CreateAsync(
+                new UserAccount { UserName = email, Email = email, MustChangePassword = false },
+                AppFactory.DemoPassword);
+            Assert.True(created.Succeeded);
+        }
+
+        var client = Browser(server);
+        for (var attempt = 0; attempt < 5; attempt++)
+            await SignIn.PostAsync(client, email, "Wrong-Password-2026");
+
+        var locked = await (await SignIn.PostAsync(client, email, "Wrong-Password-2026"))
+            .Content.ReadAsStringAsync();
+        var unknown = await (await SignIn.PostAsync(client, "nobody-here@technosurfaces.co.za", "Wrong-Password-2026"))
+            .Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("Too many failed attempts", locked);
+        Assert.Contains("The email address or password is incorrect.", locked);
+        Assert.Contains("The email address or password is incorrect.", unknown);
+    }
+
+    [Fact]
     public async Task The_session_cookie_is_http_only_secure_and_same_site_lax()
     {
         await using var server = _app.WithWebHostBuilder(_ => { });
