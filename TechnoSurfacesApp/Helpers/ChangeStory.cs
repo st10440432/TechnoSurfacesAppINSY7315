@@ -126,7 +126,7 @@ public static class ChangeStories
         // A line is named by its description wherever one was recorded, so a later
         // change to "line 12" can say which line it was.
         var names = all
-            .Where(r => r.PropertyName is "Description" or "Name" or "FullName" or "Reference" && r.NewValue is not null and not "(AuditInterceptor.NotRecorded)")
+            .Where(r => r.PropertyName is "Description" or "Name" or "FullName" or "Reference" && r.NewValue is not null and not AuditInterceptor.NotRecorded)
             .GroupBy(r => (r.EntityName, r.EntityKey))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.ChangedAtUtc).First().NewValue!);
 
