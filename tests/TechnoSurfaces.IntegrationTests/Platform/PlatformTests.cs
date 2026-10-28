@@ -59,7 +59,6 @@ public sealed class PlatformTests
         Assert.Contains("default-src 'self'", csp);
         Assert.Contains("frame-ancestors 'none'", csp);
 
-
         // Task 1 8.7: scripts from the application's own origin only, never inline.
         var scriptSrc = csp.Split(';').Select(d => d.Trim()).Single(d => d.StartsWith("script-src"));
         Assert.Equal("script-src 'self'", scriptSrc);
