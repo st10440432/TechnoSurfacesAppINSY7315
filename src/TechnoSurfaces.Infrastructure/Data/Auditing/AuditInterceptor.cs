@@ -65,6 +65,12 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
         (typeof(QuoteVersion), nameof(QuoteVersion.IssuedAttention)),
         (typeof(QuoteVersion), nameof(QuoteVersion.IssuedTel)),
         (typeof(QuoteVersion), nameof(QuoteVersion.IssuedEmail)),
+        (typeof(QuoteVersion), nameof(QuoteVersion.IssuedSite)),
+        (typeof(Quote), nameof(Quote.Site)),
+        (typeof(Quote), nameof(Quote.DeliveryAddress)),
+        (typeof(AppUser), nameof(AppUser.FullName)),
+        (typeof(AppUser), nameof(AppUser.Email)),
+        (typeof(AppUser), nameof(AppUser.UserName)),
     };
 
     /// <summary>Stored as the old and new value of a personal detail.</summary>

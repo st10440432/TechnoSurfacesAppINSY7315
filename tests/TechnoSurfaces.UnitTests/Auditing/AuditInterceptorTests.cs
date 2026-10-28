@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Domain;
 using TechnoSurfaces.Domain.Catalogue;
-using TechnoSurfaces.Infrastructure.Data;
-using TechnoSurfaces.Infrastructure.Data.Auditing;
 using TechnoSurfaces.Domain.People;
 using TechnoSurfaces.Domain.Quoting;
+using TechnoSurfaces.Infrastructure.Data;
+using TechnoSurfaces.Infrastructure.Data.Auditing;
 
 namespace TechnoSurfaces.UnitTests.Auditing;
 
