@@ -148,21 +148,6 @@ public sealed class AuditTrailService : IAuditTrailService
             .ToList();
     }
 
-    /// <summary>
-    /// The keys of every <paramref name="entityName"/> row whose audit trail records it
-    /// being created under one of <paramref name="parentKeys"/>.
-    /// </summary>
-    private Task<List<string>> ChildKeysAsync(
-        string entityName, string parentProperty, List<string> parentKeys, CancellationToken ct) =>
-        _db.AuditEntries.AsNoTracking()
-            .Where(a => a.EntityName == entityName
-                     && a.PropertyName == parentProperty
-                     && a.NewValue != null
-                     && parentKeys.Contains(a.NewValue!))
-            .Select(a => a.EntityKey)
-            .Distinct()
-            .ToListAsync(ct);
-
     private Task<Dictionary<string, string>> NamesAsync(List<string> userIds, CancellationToken ct) =>
         _db.Users.AsNoTracking()
             .Where(u => userIds.Contains(u.Id))
