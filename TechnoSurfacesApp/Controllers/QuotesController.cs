@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Catalogue;
@@ -154,9 +154,7 @@ public class QuotesController : AppController
 
     public async Task<IActionResult> Costing(int id, CancellationToken ct)
     {
-        var detail = await DetailAsync(id, ct);
-        var costing = await _costing.GetAsync(id, ct);
-        if (detail is null || costing.Outcome != CostingOutcome.Ok)
+        if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return QuoteNotFound(id);
 
         var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
@@ -183,9 +181,7 @@ public class QuotesController : AppController
     /// </summary>
     public async Task<IActionResult> CostingLines(int id, CancellationToken ct)
     {
-        var detail = await DetailAsync(id, ct);
-        var costing = await _costing.GetAsync(id, ct);
-        if (detail is null || costing.Outcome != CostingOutcome.Ok)
+        if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return NotFound();
 
         var actions = await ActionsForAsync(costing.Quote!);
@@ -206,10 +202,16 @@ public class QuotesController : AppController
         var items = await _catalogue.RateItemsAsync(ct);
         var rateLines = sheet.Lines.Where(l => l.LineType == "Rate").ToList();
 
+        // The whole card in one query, not two or more per item (NFR-05).
+        var prices = await _rates.ResolveRateCardAsync(issueDate, ct);
+
         var rows = new List<RateGridRow>();
         foreach (var item in items)
         {
-            var card = PricePreviewResult.From(await _rates.ResolveAsync(item.Id, supplierId: null, issueDate, ct), issueDate);
+            var resolution = prices.TryGetValue(item.Id, out var found)
+                ? found
+                : PriceResolution.Failure($"Rate item {item.Id} is not on the rate card.");
+            var card = PricePreviewResult.From(resolution, issueDate);
             // The same rule the calculator applies, so the figure shown before the
             // line is added is the one it is added with.
             var calculated = Enum.TryParse<DerivationRule>(item.Derivation, out var rule)
@@ -302,9 +304,7 @@ public class QuotesController : AppController
 
     public async Task<IActionResult> Review(int id, CancellationToken ct)
     {
-        var detail = await DetailAsync(id, ct);
-        var costing = await _costing.GetAsync(id, ct);
-        if (detail is null || costing.Outcome != CostingOutcome.Ok)
+        if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return QuoteNotFound(id);
 
         var vm = new ReviewVm
@@ -401,6 +401,23 @@ public class QuotesController : AppController
     // ======================================================================
     //  Shared
     // ======================================================================
+
+    /// <summary>
+    /// The quote for a screen that shows its costing, loaded once and used for the
+    /// header, the lines, the buttons and the quotation check, instead of once for
+    /// each (NFR-05). Lapsed quotes are expired first, as DetailAsync does, so the
+    /// header shows the right status. Null when there is no such quote.
+    /// </summary>
+    private async Task<(QuoteDetail Detail, CostingResult Costing)?> CostingScreenAsync(int id, CancellationToken ct)
+    {
+        await _workflow.ExpireLapsedAsync(ct);
+        var costing = await _costing.GetAsync(id, ct);
+        if (costing.Outcome != CostingOutcome.Ok)
+            return null;
+
+        var detail = await _workflow.DescribeAsync(costing.Quote!, ct);
+        return detail is null ? null : (detail, costing);
+    }
 
     private async Task<QuoteDetail?> DetailAsync(int id, CancellationToken ct)
     {

@@ -1,4 +1,5 @@
 using System.Globalization;
+using TechnoSurfaces.Domain.Catalogue;
 
 namespace TechnoSurfaces.Application.Pricing;
 
@@ -19,6 +20,13 @@ namespace TechnoSurfaces.Application.Pricing;
 public interface IRateResolver
 {
     Task<PriceResolution> ResolveAsync(int rateItemId, int? supplierId, DateOnly asAt, CancellationToken ct = default);
+
+    /// <summary>
+    /// Every item on the rate card, resolved for all suppliers as at a date, by rate
+    /// item id. The same rules as <see cref="ResolveAsync"/>, from one query instead
+    /// of two or more per item, for the costing sheet's rate grid.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, PriceResolution>> ResolveRateCardAsync(DateOnly asAt, CancellationToken ct = default);
 }
 
 public sealed class RateResolver : IRateResolver
@@ -35,20 +43,31 @@ public sealed class RateResolver : IRateResolver
     public RateResolver(ICatalogueReader catalogue) => _catalogue = catalogue;
 
     public Task<PriceResolution> ResolveAsync(int rateItemId, int? supplierId, DateOnly asAt, CancellationToken ct = default) =>
-        ResolveAsync(rateItemId, supplierId, asAt, depth: 0, ct);
+        ResolveAsync(new CatalogueSource(_catalogue, supplierId, asAt), rateItemId, asAt, depth: 0, ct);
 
-    private async Task<PriceResolution> ResolveAsync(int rateItemId, int? supplierId, DateOnly asAt, int depth, CancellationToken ct)
+    public async Task<IReadOnlyDictionary<int, PriceResolution>> ResolveRateCardAsync(DateOnly asAt, CancellationToken ct = default)
+    {
+        var card = new LoadedCardSource(await _catalogue.GetRateCardAsync(asAt, ct));
+
+        var resolved = new Dictionary<int, PriceResolution>();
+        foreach (var id in card.ItemIds)
+            resolved[id] = await ResolveAsync(card, id, asAt, depth: 0, ct);
+        return resolved;
+    }
+
+    private static async Task<PriceResolution> ResolveAsync(
+        IRateSource source, int rateItemId, DateOnly asAt, int depth, CancellationToken ct)
     {
         if (depth > MaxDerivationDepth)
             return PriceResolution.Failure(
                 $"Rate item {rateItemId} derives from itself. Correct the rate card before quoting.");
 
-        var item = await _catalogue.GetRateItemAsync(rateItemId, ct);
+        var item = await source.ItemAsync(rateItemId, ct);
         if (item is null)
             return PriceResolution.Failure($"Rate item {rateItemId} is not on the rate card.");
 
         // A rate of its own takes precedence over a derived one.
-        var own = await _catalogue.FindRatePriceAsync(rateItemId, supplierId, asAt, ct);
+        var own = await source.PriceAsync(item, ct);
         if (own is not null)
         {
             var scope = own.SupplierId is null ? "all suppliers" : $"supplier {own.SupplierId}";
@@ -63,15 +82,16 @@ public sealed class RateResolver : IRateResolver
                 "The Managing Director sets this on the rate card screen.");
 
         var multiplier = item.DerivedFromRateItemMultiplier ?? 1m;
-        var parent = await ResolveAsync(item.DerivedFromRateItemId.Value, supplierId, asAt, depth + 1, ct);
+        var parent = await ResolveAsync(source, item.DerivedFromRateItemId.Value, asAt, depth + 1, ct);
+        var parentName = source.ParentName(item);
 
         if (!parent.Resolved)
             return PriceResolution.Failure(
-                $"{item.Name} is derived from {item.DerivedFromRateItem?.Name ?? "another rate"}, " +
+                $"{item.Name} is derived from {parentName ?? "another rate"}, " +
                 $"which could not be resolved: {parent.FailureReason}");
 
         var amount = decimal.Round(parent.UnitPrice * multiplier, 2, MidpointRounding.AwayFromZero);
-        var parentName = item.DerivedFromRateItem?.Name ?? "the base rate";
+        parentName ??= "the base rate";
 
         if (multiplier == 1m)
             return PriceResolution.Success(amount, $"Rate card: {item.Name} mirrors {parentName}. {parent.Origin}");
@@ -86,5 +106,63 @@ public sealed class RateResolver : IRateResolver
         return PriceResolution.Success(
             amount,
             $"Rate card: {item.Name} is {parentName} x {factor}. {parent.Origin}");
+    }
+
+    /// <summary>Where the rules read the rate card from.</summary>
+    private interface IRateSource
+    {
+        Task<RateItem?> ItemAsync(int rateItemId, CancellationToken ct);
+
+        /// <summary>The item's own amount in force, or null when it has none.</summary>
+        Task<RatePrice?> PriceAsync(RateItem item, CancellationToken ct);
+
+        /// <summary>The name of the item a derived rate comes from, or null when it is not on the card.</summary>
+        string? ParentName(RateItem item);
+    }
+
+    /// <summary>One item at a time from the catalogue, optionally for a supplier.</summary>
+    private sealed class CatalogueSource : IRateSource
+    {
+        private readonly ICatalogueReader _catalogue;
+        private readonly int? _supplierId;
+        private readonly DateOnly _asAt;
+
+        public CatalogueSource(ICatalogueReader catalogue, int? supplierId, DateOnly asAt)
+        {
+            _catalogue = catalogue;
+            _supplierId = supplierId;
+            _asAt = asAt;
+        }
+
+        public Task<RateItem?> ItemAsync(int rateItemId, CancellationToken ct) =>
+            _catalogue.GetRateItemAsync(rateItemId, ct);
+
+        public Task<RatePrice?> PriceAsync(RateItem item, CancellationToken ct) =>
+            _catalogue.FindRatePriceAsync(item.Id, _supplierId, _asAt, ct);
+
+        public string? ParentName(RateItem item) => item.DerivedFromRateItem?.Name;
+    }
+
+    /// <summary>
+    /// The whole card, loaded once with each item's general prices in force on the
+    /// date. Resolves as <see cref="CatalogueSource"/> does with no supplier: the
+    /// newest price in force wins.
+    /// </summary>
+    private sealed class LoadedCardSource : IRateSource
+    {
+        private readonly Dictionary<int, RateItem> _items;
+
+        public LoadedCardSource(IEnumerable<RateItem> items) => _items = items.ToDictionary(i => i.Id);
+
+        public IEnumerable<int> ItemIds => _items.Keys;
+
+        public Task<RateItem?> ItemAsync(int rateItemId, CancellationToken ct) =>
+            Task.FromResult(_items.GetValueOrDefault(rateItemId));
+
+        public Task<RatePrice?> PriceAsync(RateItem item, CancellationToken ct) =>
+            Task.FromResult(item.Prices.OrderByDescending(p => p.EffectiveFrom).FirstOrDefault());
+
+        public string? ParentName(RateItem item) =>
+            item.DerivedFromRateItemId is { } id ? _items.GetValueOrDefault(id)?.Name : null;
     }
 }
