@@ -435,53 +435,5 @@ These are the differences between what the Task 1 document describes and what wa
 | Brett James | ST10440287 | The Task 1 prototype; brand colours measured from the logo; design tokens, the shared component set and the app shell; the quote, customer and sign-in screens; responsive and accessibility testing on every screen, Lighthouse and axe |
 | Matteo Nusca | ST10440432 | Azure infrastructure in Bicep with a private SQL endpoint, Key Vault, Application Insights and alerts; the CI and CD workflows with OIDC and the health gate; the integration test harness on SQL Server; the health check; security headers and sign-in rate limiting; Dependabot; the first production account and the deploy script; production releases |
 
-# OWASP ZAP scan of staging, 25 October 2026
-
-| | |
-|---|---|
-| Tool | ZAP 2.17.0 (Checkmarx) |
-| Target | https://tsqa-app-staging.azurewebsites.net (staging only; production was not scanned) |
-| Scan | Automated scan: traditional spider, then active scan |
-| Signed in | No. The scan was run signed out |
-| Run by | Amaan Tesfaye |
-
-Because every page except sign-in, password help, the error page, static files and `/health` requires sign-in, the spider reached 13 endpoints. That is itself a result: the deny-by-default authorisation policy held.
-
-## Summary
-
-| Risk | Alerts |
-|---|---:|
-| High | 0 |
-| Medium | 1 |
-| Low | 3 |
-| Informational | 5 |
-
-## Alerts and decisions
-
-| Alert | Risk | Instances | Cause | Decision |
-|---|---|---:|---|---|
-| CSP: style-src unsafe-inline (CWE-693) | Medium | 5 | The Content-Security-Policy allowed inline styles, needed only by the dashboard's pipeline bars | **Fixed** in #100: the bars are set from `app.js`, `style-src` is `'self'`, and a test fails if a page gains a `style` attribute or `<style>` block |
-| Cookie Without Secure Flag (CWE-614) | Low | 1 | The antiforgery cookie's `SecurePolicy` defaults to `None` | **Fixed** in #100: always Secure, with a test |
-| Cookie with SameSite Attribute None | Low | 3 | `ARRAffinitySameSite`, set by Azure App Service, not the application | Platform cookie, HttpOnly and Secure, no user data. To be turned off with `clientAffinityEnabled: false`, or accepted |
-| Cookie without SameSite Attribute | Low | 3 | `ARRAffinity`, set by Azure App Service | As above |
-| User Controllable HTML Element Attribute (Potential XSS), `ReturnUrl` | Informational | 5 | The return address is written into a hidden field | False positive: Razor encodes the value, and the redirect after sign-in only follows local addresses (`Url.IsLocalUrl`) |
-| Re-examine Cache-control Directives | Informational | 4 | `no-cache, no-store` on the sign-in page | Intended. Accepted |
-| Session Management Response Identified | Informational | 5 | ZAP noting a session cookie | Not a vulnerability |
-| Authentication Request Identified | Informational | 1 | ZAP noting the sign-in form | Not a vulnerability |
-| Information Disclosure: Suspicious Comments | Informational | 2 | The word "user" in a comment in `app.js` | False positive |
-
-## Findings from manual review
-
-| Finding | Risk | Decision |
-|---|---|---|
-| A stale sign-in form failed with HTTP 400, and users had to clear cookies (session cookie `SameSite=Strict`) | Low | **Fixed** in #89 |
-| The lockout message appeared only for real accounts, revealing which email addresses exist (CWE-204) | Low | **Fixed** in the lockout pull request |
-| An unknown email is answered slightly faster than a real one, because no password check runs | Low | Accepted: unreliable to measure over the internet, and sign-in is limited to 10 attempts a minute per address |
-
-## Open
-- ZAP reported 10% of responses as 5xx during the active scan. Under investigation.
-- A signed-in scan as an estimator, and a repeat scan after these fixes reach staging.
-
-The full HTML report is kept outside the repository, because it contains request and cookie details.
 
 Client: Paul Schluter, Managing Director, Techno Surfaces (Pty) Ltd, who gave written permission for the company name and logo to be used for this project and its EXPO.
