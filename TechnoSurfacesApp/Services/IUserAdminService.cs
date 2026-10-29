@@ -8,13 +8,13 @@ public sealed record UserRow(
     bool IsActive, bool IsLockedOut, bool MustChangePassword, DateTime CreatedOn,
     DateTime? LastLogin)
 {
-
     public string RoleLabel => Role == UserRole.ManagingDirector ? "Managing Director" : "Estimator";
 
     public string Initials => string.Concat(
         FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => p[0]))
         .ToUpperInvariant();
 }
+
 /// <summary>The outcome of an account change. A temporary password is shown once.</summary>
 public sealed record UserAdminResult(bool Succeeded, string? Error = null, string? TemporaryPassword = null)
 {

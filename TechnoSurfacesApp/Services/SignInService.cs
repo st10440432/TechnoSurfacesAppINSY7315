@@ -64,17 +64,15 @@ public sealed class SignInService : ISignInService
             _logger.LogWarning("Sign-in refused: account is deactivated.");
             return SignInOutcome.Deactivated;
         }
-
         // Only after the password and the active check have both passed, so a failed
         // or refused attempt never changes it.
         account.LastSignInUtc = DateTime.UtcNow;
+        // A failed update only loses the time; it must not stop the sign-in.
         await _userManager.UpdateAsync(account);
 
         await _signInManager.SignInAsync(account, rememberMe);
         return SignInOutcome.Succeeded;
-
     }
-
     public Task SignOutAsync() => _signInManager.SignOutAsync();
 
     public async Task<IReadOnlyList<string>> ChangePasswordAsync(
