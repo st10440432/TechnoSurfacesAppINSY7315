@@ -435,4 +435,5 @@ These are the differences between what the Task 1 document describes and what wa
 | Brett James | ST10440287 | The Task 1 prototype; brand colours measured from the logo; design tokens, the shared component set and the app shell; the quote, customer and sign-in screens; responsive and accessibility testing on every screen, Lighthouse and axe |
 | Matteo Nusca | ST10440432 | Azure infrastructure in Bicep with a private SQL endpoint, Key Vault, Application Insights and alerts; the CI and CD workflows with OIDC and the health gate; the integration test harness on SQL Server; the health check; security headers and sign-in rate limiting; Dependabot; the first production account and the deploy script; production releases |
 
+
 Client: Paul Schluter, Managing Director, Techno Surfaces (Pty) Ltd, who gave written permission for the company name and logo to be used for this project and its EXPO.
