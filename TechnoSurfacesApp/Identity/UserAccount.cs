@@ -17,4 +17,10 @@ public class UserAccount : IdentityUser
     /// replace it at first sign-in (Task 1 8.2). Also set after a password re-issue.
     /// </summary>
     public bool MustChangePassword { get; set; } = true;
+
+    /// <summary>
+    /// When this person last signed in successfully, in UTC. Null until their first
+    /// sign-in. Shown on the Users screen.
+    /// </summary>
+    public DateTime? LastSignInUtc { get; set; }
 }
