@@ -553,6 +553,19 @@ img, svg { max-width: 100%; }
 }
 .input-group .addon.before + .input { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
+/* The show or hide password button (_ShowPassword). Edge draws its own eye in a
+   password field, which would sit beside this one, so that one is turned off. */
+.input-group .addon-btn {
+    min-width: 2.75rem;
+    font: inherit;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+.input-group .addon-btn:hover { background: var(--line); color: var(--ink); }
+.input-group .addon-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+.input-group .addon-btn[aria-pressed="true"] { color: var(--brand-navy); }
+.input-group input::-ms-reveal { display: none; }
+
 .field-row   { display: grid; gap: var(--space-4); }
 .field-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
