@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Application.Catalogue;
 using TechnoSurfaces.Application.Quoting;
+using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfacesApp.Identity;
 using TechnoSurfacesApp.Services;
 
@@ -13,8 +14,6 @@ namespace TechnoSurfacesApp.Controllers;
 /// </summary>
 public class HomeController : AppController
 {
-    private const int StaleAfterDays = 365;
-
     private readonly IQuoteWorkflowService _workflow;
     private readonly ICatalogueBrowser _catalogue;
     private readonly IAuditTrailService _audit;
@@ -44,7 +43,7 @@ public class HomeController : AppController
             AllQuotes = all,
             MyQuotes = all.Where(q => q.AuthorId == _me.Id).ToList(),
             Queue = isManagingDirector ? await _workflow.ApprovalQueueAsync(ct) : [],
-            StaleSuppliers = suppliers.Where(s => s.PriceListDated.AddDays(StaleAfterDays) < Today).ToList(),
+            StaleSuppliers = suppliers.Where(s => PriceListAge.IsOld(s.PriceListDated, Today)).ToList(),
             SupplierCount = suppliers.Count,
             Activity = await CanAsync(Policies.CanViewAuditTrail)
                 ? (await _audit.SearchAsync(new AuditFilter(), ct)).Rows.Take(8).ToList()

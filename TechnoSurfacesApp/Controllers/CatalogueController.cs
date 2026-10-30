@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Catalogue;
+using PriceListAge = TechnoSurfaces.Domain.Catalogue.PriceListAge;
 using TechnoSurfacesApp.Identity;
 using TechnoSurfacesApp.Models;
 
@@ -14,9 +15,6 @@ namespace TechnoSurfacesApp.Controllers;
 /// </summary>
 public class CatalogueController : AppController
 {
-    /// <summary>A price list older than this is flagged, so nobody quotes from it unknowingly.</summary>
-    public const int StaleAfterDays = 365;
-
     private readonly ICatalogueService _catalogue;
 
     public CatalogueController(ICatalogueService catalogue) => _catalogue = catalogue;
@@ -53,11 +51,12 @@ public class CatalogueController : AppController
             Supplier = supplier,
             Search = string.IsNullOrWhiteSpace(q) ? null : q.Trim(),
             IncludeRetired = retired,
-            StaleSuppliers = all
-                .Where(r => r.PriceFrom is { } from && today.DayNumber - from.DayNumber > StaleAfterDays)
-                .GroupBy(r => r.Supplier)
-                .Select(g => (g.Key, g.Max(r => r.PriceFrom!.Value)))
-                .OrderBy(s => s.Key)
+            // The same rule as the dashboard and the review screen: the date on the
+            // supplier's price list, not the date of any one price.
+            StaleSuppliers = (await _catalogue.GetSuppliersAsync(ct))
+                .Where(s => PriceListAge.IsOld(s.PriceListDated, today))
+                .OrderBy(s => s.Name)
+                .Select(s => (s.Name, s.PriceListDated))
                 .ToList(),
             Today = today
         });
@@ -329,8 +328,11 @@ public sealed class CatalogueVm
     public string? Search { get; init; }
     public bool IncludeRetired { get; init; }
 
-    /// <summary>Suppliers whose newest price is over a year old, with that date.</summary>
-    public IReadOnlyList<(string Supplier, DateOnly NewestPrice)> StaleSuppliers { get; init; } = [];
+    /// <summary>Suppliers whose price list is over a year old, with the date on the list.</summary>
+    public IReadOnlyList<(string Supplier, DateOnly ListDated)> StaleSuppliers { get; init; } = [];
+
+    /// <summary>Whether a row's supplier has a price list over a year old.</summary>
+    public bool HasOldPriceList(string supplier) => StaleSuppliers.Any(s => s.Supplier == supplier);
 
     public DateOnly Today { get; init; }
 
@@ -343,7 +345,7 @@ public sealed class SuppliersVm
     public bool CanEdit { get; init; }
     public DateOnly Today { get; init; }
 
-    public bool IsStale(DateOnly listDated) => Today.DayNumber - listDated.DayNumber > CatalogueController.StaleAfterDays;
+    public bool IsStale(DateOnly listDated) => PriceListAge.IsOld(listDated, Today);
 }
 
 public sealed class SupplierVm
@@ -353,7 +355,7 @@ public sealed class SupplierVm
     public bool CanEdit { get; init; }
     public DateOnly Today { get; init; }
 
-    public bool IsStale => Today.DayNumber - Supplier.PriceListDated.DayNumber > CatalogueController.StaleAfterDays;
+    public bool IsStale => PriceListAge.IsOld(Supplier.PriceListDated, Today);
 }
 
 public sealed class PriceVm

@@ -28,6 +28,27 @@ public sealed class CatalogueBrowser : ICatalogueBrowser
             .ToList();
     }
 
+    public async Task<IReadOnlyList<SupplierOption>> SuppliersForMaterialPricesAsync(
+        IReadOnlyCollection<int> materialPriceIds, CancellationToken ct = default)
+    {
+        if (materialPriceIds.Count == 0)
+            return [];
+
+        // A price hangs off a colour (item-priced suppliers) or a band (band-priced
+        // suppliers); both lead to the supplier.
+        var rows = await _db.Suppliers
+            .AsNoTracking()
+            .Where(s => _db.MaterialPrices.Any(p => materialPriceIds.Contains(p.Id)
+                && (p.ColourId != null ? p.Colour!.ProductLine!.SupplierId : p.PriceBand!.SupplierId) == s.Id))
+            .OrderBy(s => s.Name)
+            .Select(s => new { s.Id, s.Name, s.TradingAs, s.PricingStructure, s.PriceListDated })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(s => new SupplierOption(s.Id, s.Name, s.TradingAs, s.PricingStructure.ToString(), s.PriceListDated))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<ProductLineOption>?> ProductLinesAsync(int supplierId, CancellationToken ct = default)
     {
         if (!await _db.Suppliers.AnyAsync(s => s.Id == supplierId, ct))
