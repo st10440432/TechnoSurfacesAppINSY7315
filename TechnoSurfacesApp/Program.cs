@@ -141,6 +141,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISignInService, SignInService>();
 builder.Services.AddScoped<SignedInUser>();
 builder.Services.AddPlatformHealthChecks();
+builder.Services.AddApiDocument();
 builder.Services.AddSignInRateLimiting();
 
 
@@ -183,6 +184,7 @@ app.UseAuthorization();
 // CSS, scripts and the logo hold no data and must load on the sign-in page.
 app.MapStaticAssets().AllowAnonymous();
 app.MapPlatformHealthChecks();
+app.MapApiDocument();
 
 
 app.MapControllerRoute(
