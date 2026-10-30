@@ -25,6 +25,9 @@
         <p>@q.Reference for @q.CustomerName. Version @q.VersionNo.</p>
     </div>
     <div class="page-head-actions">
+        <a class="btn btn-secondary" asp-action="CostingPrint" asp-route-id="@q.Id">
+            <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print the costing
+        </a>
         <a class="btn btn-secondary" asp-action="Quotation" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Customer quotation
         </a>
