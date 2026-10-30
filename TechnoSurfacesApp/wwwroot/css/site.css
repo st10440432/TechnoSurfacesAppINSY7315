@@ -1257,6 +1257,32 @@ table.doc-warranty { width: min(100%, 30rem); margin-top: var(--space-2); border
 table.doc-warranty th, table.doc-warranty td { padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--line); text-align: left; }
 table.doc-warranty thead th { color: var(--ink-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 
+/* Costing printout: the customer quotation's document layout, with cost figures, so
+   it says on every printed copy that it is internal. */
+.doc-internal {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 0 auto;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--warning-line);
+    border-radius: var(--radius-sm);
+    background: var(--warning-bg);
+    color: var(--warning);
+    font-size: var(--text-sm);
+}
+.doc-internal-foot { margin: var(--space-6) 0 0; }
+.doc-section { margin: var(--space-6) 0 var(--space-2); font-size: var(--text-sm); color: var(--brand-navy); text-transform: uppercase; letter-spacing: 0.06em; }
+.costing-print table.doc-lines { font-size: var(--text-sm); }
+/* The description gets the room; the figures' headings wrap instead of widening their columns. */
+.costing-print table.doc-lines th:first-child { width: 48%; }
+.costing-print table.doc-lines th.r { white-space: normal; }
+/* On a phone a table scrolls inside its box, so the box takes focus for the arrow keys. */
+.costing-print .table-wrap:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.costing-print table.doc-lines tfoot td { padding: var(--space-3); border-top: 2px solid var(--brand-navy); font-weight: var(--weight-bold); }
+.costing-print .doc-totals { width: min(100%, 24rem); }
+.costing-print .doc-totals + .doc-section { margin-top: var(--space-4); }
+
 
 @media (max-width: 767.98px) {
     .tabs { margin-left: calc(var(--space-3) * -1); margin-right: calc(var(--space-3) * -1); padding: 0 var(--space-3); }
@@ -1269,6 +1295,17 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 
 @media print {
     .tabs, .qstrip, .save-state { display: none !important; }
+
+    /* Costing printout: whole rows and totals on a page, headings kept with their
+       table, the table head repeated on every page, nothing cut off by a scroll box. */
+    .costing-print .table-wrap { overflow: visible; }
+    .costing-print table.doc-lines { font-size: 9pt; }
+    .costing-print table.doc-lines td { padding: var(--space-2) var(--space-3); }
+    .costing-print table.doc-lines thead { display: table-header-group; }
+    .costing-print table.doc-lines tfoot { display: table-row-group; }
+    .costing-print .doc-section { break-after: avoid; }
+    .costing-print .doc-totals { break-inside: avoid; }
+    .doc-internal { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 /* ==========================================================================

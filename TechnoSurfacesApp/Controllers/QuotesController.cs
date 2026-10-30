@@ -173,6 +173,29 @@ public class QuotesController : AppController
     }
 
     /// <summary>
+    /// The costing sheet as a printout, for checking the costing on paper before the
+    /// customer quotation is written (client request). Read only, with every line and
+    /// total as plain text. Opened by whoever can open the costing sheet, from the same
+    /// data, so the figures match the sheet to the cent.
+    /// </summary>
+    public async Task<IActionResult> CostingPrint(int id, CancellationToken ct)
+    {
+        if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
+            return QuoteNotFound(id);
+
+        var vm = new CostingPrintVm
+        {
+            Quote = detail,
+            Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
+            PrintedOn = Today
+        };
+
+        SetPage("Costing printout", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })));
+        return View(vm);
+    }
+
+    /// <summary>
     /// The parts of the costing sheet that a change can move, rendered on their own:
     /// both line tables, the quotation check and the next-step buttons. The sheet
     /// swaps them in after every change, because one change can move other lines (a
@@ -568,6 +591,17 @@ public sealed class CostingVm
     public IReadOnlyList<RateGridRow> RateGrid { get; init; } = [];
     public QuotationCheck? Check { get; init; }
 }
+
+/// <summary>The costing sheet printout. Cost prices, discounts and markup: internal only.</summary>
+public sealed class CostingPrintVm
+{
+    public QuoteDetail Quote { get; init; } = null!;
+    public CostingSheetDto Sheet { get; init; } = null!;
+    public DateOnly PrintedOn { get; init; }
+}
+
+/// <summary>One table of rate lines on the printout. Transport is a line of the table added after the markup.</summary>
+public sealed record CostingPrintRatesVm(string Caption, IReadOnlyList<CostingLineDto> Lines, decimal Transport = 0);
 
 public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null);
 

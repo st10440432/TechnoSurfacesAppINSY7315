@@ -1,0 +1,169 @@
+@model TechnoSurfacesApp.Controllers.CostingPrintVm
+@*
+    The costing sheet as a printout (client request): every material and rate line
+    with its quantity, unit rate and line total, then the sub total, the markup, the
+    items added after the markup and the totals. Built from the same costing as the
+    sheet, so it matches the screen to the cent. Plain text only: no input boxes,
+    buttons or menu reach the paper. Internal: it carries cost prices and the markup,
+    so it is never sent to the customer (US-11).
+*@
+@{
+    var q = Model.Quote;
+    var t = Model.Sheet.Totals;
+    var materials = Model.Sheet.Lines.Where(l => l.LineType == "Material").ToList();
+    var rates = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && !l.IsBelowTheLine).ToList();
+    var belowTheLine = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && l.IsBelowTheLine).ToList();
+}
+
+<header class="page-head no-print">
+    <div>
+        <h1>Costing printout</h1>
+        <p>@q.Reference for @q.CustomerName. Version @q.VersionNo.</p>
+    </div>
+    <div class="page-head-actions">
+        <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
+            <svg class="ico" aria-hidden="true"><use href="#i-arrow-left" /></svg> Back to the costing sheet
+        </a>
+        <button type="button" class="btn btn-primary" data-print>
+            <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print or save as PDF
+        </button>
+    </div>
+</header>
+
+<article class="doc costing-print" aria-labelledby="costing-print-title">
+    <div class="doc-top">
+        <img src="~/img/techno-surfaces-logo.jpg" alt="Techno Surfaces" width="2000" height="475" />
+        <p class="doc-internal">
+            <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+            <span><strong>Internal:</strong> shows cost prices and markup. Not for the customer.</span>
+        </p>
+    </div>
+
+    <h2 class="doc-title" id="costing-print-title">Costing</h2>
+
+    <div class="doc-meta">
+        <dl>
+            <dt>Ref</dt>
+            <dd>@q.Reference</dd>
+            <dt>Customer</dt>
+            <dd>@q.CustomerName</dd>
+            <dt>Attention</dt>
+            <dd>@q.ContactName</dd>
+        </dl>
+        <dl>
+            <dt>Version</dt>
+            <dd>@q.VersionNo, @StatusText.Label(q.Status).ToLowerInvariant()</dd>
+            <dt>Quote date</dt>
+            <dd>@Fmt.Date(q.IssueDate)</dd>
+            <dt>Printed</dt>
+            <dd>@Fmt.Date(Model.PrintedOn)</dd>
+            <dt>Written by</dt>
+            <dd>@q.AuthorName</dd>
+        </dl>
+    </div>
+
+    <h3 class="doc-section">Materials</h3>
+    @if (materials.Count == 0)
+    {
+        <p class="muted">No material is on this version.</p>
+    }
+    else
+    {
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Material lines">
+            <table class="doc-lines">
+                <caption class="sr-only">Material lines</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Material and size</th>
+                        <th scope="col" class="r">Sheets</th>
+                        <th scope="col" class="r">Price per sheet</th>
+                        <th scope="col" class="r">Supplier discount</th>
+                        <th scope="col" class="r">Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in materials)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@l.Description</strong>
+                                <span class="sub">@l.PriceOrigin</span>
+                            </td>
+                            <td class="r">@Fmt.Qty(l.Quantity)</td>
+                            <td class="r">@Fmt.Rand(l.UnitPrice)</td>
+                            <td class="r">@(l.SupplierDiscountPercent == 0 ? "None" : Fmt.Pct(l.SupplierDiscountPercent))</td>
+                            <td class="r">@Fmt.Rand(l.LineTotal)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Material in total, @Fmt.Sqm(t.TotalAreaM2)</td>
+                        <td class="r">@Fmt.Qty(t.TotalSheetCount)</td>
+                        <td colspan="2"></td>
+                        <td class="r">@Fmt.Rand(materials.Sum(l => l.LineTotal))</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+
+    <h3 class="doc-section">Labour, consumables and extras</h3>
+    @if (rates.Count == 0)
+    {
+        <p class="muted">No labour, consumables or extras are on this version.</p>
+    }
+    else
+    {
+        <partial name="_CostingPrintRates" model='new TechnoSurfacesApp.Controllers.CostingPrintRatesVm("Labour, consumables and extras", rates)' />
+    }
+
+    <div class="doc-totals">
+        <div class="totals-row">
+            <span class="lbl">Sub total</span>
+            <span class="val">@Fmt.Rand(t.SubTotalExVat)</span>
+        </div>
+        <div class="totals-row">
+            <span class="lbl">Markup @Fmt.Pct(t.MarkupPercent)</span>
+            <span class="val">@Fmt.Rand(t.MarkupAmount)</span>
+        </div>
+    </div>
+
+    <h3 class="doc-section">Added after the markup, at cost</h3>
+    @if (belowTheLine.Count == 0 && t.TransportAmount == 0)
+    {
+        <p class="muted">No cut-outs, grooves or transport are on this version.</p>
+    }
+    else
+    {
+        <partial name="_CostingPrintRates" model='new TechnoSurfacesApp.Controllers.CostingPrintRatesVm("Cut-outs, grooves and transport, added after the markup", belowTheLine, t.TransportAmount)' />
+    }
+
+    <div class="doc-totals">
+        <div class="totals-row">
+            <span class="lbl">Cut-outs, grooves and transport</span>
+            <span class="val">@Fmt.Rand(t.BelowTheLineTotal)</span>
+        </div>
+        <div class="totals-row total-line">
+            <span class="lbl">Total ex VAT</span>
+            <span class="val">@Fmt.Rand(t.TotalExVat)</span>
+        </div>
+        <div class="totals-row">
+            <span class="lbl">VAT at @Fmt.Pct(t.VatRate * 100)</span>
+            <span class="val">@Fmt.Rand(t.VatAmount)</span>
+        </div>
+        <div class="totals-row grand">
+            <span class="lbl">Total inc VAT</span>
+            <span class="val">@Fmt.Rand(t.TotalIncVat)</span>
+        </div>
+        <dl class="facts facts-tight">
+            <dt>Total area</dt><dd>@Fmt.Sqm(t.TotalAreaM2)</dd>
+            <dt>Sheets</dt><dd>@Fmt.Qty(t.TotalSheetCount)</dd>
+            <dt>Rand per m², ex VAT</dt><dd>@(t.TotalAreaM2 > 0 ? Fmt.Rand(t.TotalExVat / t.TotalAreaM2) : "Not yet")</dd>
+        </dl>
+    </div>
+
+    <p class="doc-internal doc-internal-foot">
+        <span><strong>Internal:</strong> shows cost prices and markup. Not for the customer. The customer quotation is printed from its own screen.</span>
+    </p>
+</article>
