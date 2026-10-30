@@ -78,6 +78,24 @@ At every width the same script was run in the page. It checks for exactly one ma
 
 **Faults found and fixed during this pass.** The menu button showed on desktop, where the side menu is always open, because a later button rule overrode the rule hiding it. The activate account page scrolled sideways on a phone, because a long button label would not wrap. On a phone the brand panel on the sign in pages pushed the form below the bottom of the screen, so it is now a short band.
 
+## Task 3 changes
+
+### Show or hide the password (30 October 2026)
+
+The sign in password and the three fields on "Set your password" each have a button beside them that shows or hides what was typed.
+
+| Check | Result |
+|---|---|
+| The button never sends the form | Pass. It is `type="button"`, and an integration test checks it on every password field |
+| Works with the keyboard | Pass. Tab from the field reaches the button, and Space or Enter switches it |
+| Focus stays where it was | Pass. Focus stays on the button after it is pressed |
+| Tells a screen reader its state | Pass in the browser's accessibility tree: a button named "Show password" whose `aria-pressed` turns true when shown |
+| The password manager still works | Pass. The `autocomplete` values are unchanged, and every field goes back to hidden before the form is sent, so the browser still sees a password field |
+| One eye only in Edge | Pass. Edge's own reveal button is turned off, so it does not sit beside this one |
+| 375, 768 and 1440 pixels, 200% zoom | Pass. The button stays beside the field and nothing scrolls sideways |
+
+![The password hidden](../images/show-password-hidden.jpg) ![The password shown](../images/show-password-shown.jpg)
+
 ## Tool scores
 
 Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both were run on 5 October 2026 on the three screens below, signed in as the Managing Director, against a local copy of the app with a test quote. Lighthouse ran in navigation mode for desktop. axe DevTools used axe-core 4.13.0 against WCAG 2.1 AA, and found no automatic, guided or manual issues on any of the three screens.

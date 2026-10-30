@@ -451,6 +451,38 @@
         });
     }
 
+    // The show or hide button beside a password field (_ShowPassword):
+    // <button type="button" data-password-toggle="Password" aria-pressed="false">
+    // The label stays "Show password" and aria-pressed says whether it is on, so a
+    // screen reader reads "Show password, pressed" rather than two states at once.
+    // Focus stays on the button. Every field goes back to hidden before its form is
+    // sent, so the browser's password manager still sees a password field.
+    function wirePasswordToggles() {
+        var toggles = document.querySelectorAll("[data-password-toggle]");
+        if (toggles.length === 0) return;
+
+        function setShown(button, shown) {
+            var input = document.getElementById(button.dataset.passwordToggle);
+            if (!input) return;
+            input.type = shown ? "text" : "password";
+            button.setAttribute("aria-pressed", shown ? "true" : "false");
+            var use = button.querySelector("use");
+            if (use) use.setAttribute("href", shown ? "#i-eye-off" : "#i-eye");
+        }
+
+        toggles.forEach(function (button) {
+            button.addEventListener("click", function () {
+                setShown(button, button.getAttribute("aria-pressed") !== "true");
+            });
+        });
+
+        document.addEventListener("submit", function (e) {
+            e.target.querySelectorAll("[data-password-toggle]").forEach(function (button) {
+                setShown(button, false);
+            });
+        }, true);
+    }
+
     // A form posted the normal way that needs a yes first, such as retiring a colour:
     // <form method="post" data-confirm="Retire Aspen?" data-confirm-detail="..." data-confirm-tone="danger">
     function wireConfirmForms() {
@@ -486,6 +518,7 @@
         wireApiForms();
         wireAutoSubmit();
         wirePrint();
+        wirePasswordToggles();
         wireConfirmForms();
         wireFormBusy();
         showStoredFlash();
