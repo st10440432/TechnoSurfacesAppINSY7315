@@ -32,6 +32,9 @@ public interface ICatalogueBrowser
 {
     Task<IReadOnlyList<SupplierOption>> SuppliersAsync(CancellationToken ct = default);
 
+    /// <summary>The suppliers behind the given material prices, by name, in one query.</summary>
+    Task<IReadOnlyList<SupplierOption>> SuppliersForMaterialPricesAsync(IReadOnlyCollection<int> materialPriceIds, CancellationToken ct = default);
+
     Task<IReadOnlyList<ProductLineOption>?> ProductLinesAsync(int supplierId, CancellationToken ct = default);
 
     Task<IReadOnlyList<ColourOption>?> ColoursAsync(int productLineId, CancellationToken ct = default);

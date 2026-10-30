@@ -419,7 +419,7 @@ These are the differences between what the Task 1 document describes and what wa
 
 - **Transport per sheet (US-05).** Add a transport line to the rate card worked out from the sheet count, added after the markup, for the materials it applies to, and rename the typed amount on screen to "Petrol / delivery". Waiting for the client's rate and the list of materials it applies to.
 - **Rounding of calculated quantities.** Confirm with the client, or go back to the exact figures.
-- **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check is built. The old price list check needs no client input and will be added; the other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
+- **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check and the old price list check are built: the review screen names each supplier on the quote whose price list is more than a year old, by the same rule as the dashboard and the catalogue. The other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
 - **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns are stored but are not foreign keys yet.
 - **Quote list paging.** The quote list loads every quote and totals it on each visit. Fine at today's volume, but it needs paging before two years of quotes build up.
 - **Rate card and bank details** from the client.

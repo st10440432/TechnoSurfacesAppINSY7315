@@ -89,3 +89,16 @@ Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome e
 | Customer quotation | 100 | 100 | 0 |
 
 The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
+
+## Task 3: old price list warning on the review screen (30 October 2026)
+
+"Before approving" on the review screen has a new check row. It names each supplier on the quote's current version whose price list is more than a year old, with the date on the list. With none, it shows as a passed check. The rule lives in one place (`PriceListAge`), read from the date on the supplier's price list, and the dashboard, the material catalogue, the suppliers screen and the review screen all use it. Before this, the catalogue went by the date of each price instead, so it could flag different suppliers from the dashboard.
+
+| Check | Result |
+|---|---|
+| A supplier on the quote with an old list is named with its date | Pass, integration test and by hand |
+| All suppliers recent: shown as passed | Pass, integration test |
+| Exactly a year old is not old, a day over is | Pass, unit test |
+| axe-core 4.14 (WCAG 2.1 AA) at 375 and 1440 pixels: review screen as both roles, catalogue and dashboard | 0 violations |
+
+![The old price list check](../images/review-old-price-list.jpg)
