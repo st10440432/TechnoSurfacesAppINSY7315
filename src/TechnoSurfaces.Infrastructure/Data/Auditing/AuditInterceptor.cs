@@ -68,7 +68,6 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
         (typeof(QuoteVersion), nameof(QuoteVersion.IssuedSite)),
         (typeof(Quote), nameof(Quote.Site)),
         (typeof(Quote), nameof(Quote.DeliveryAddress)),
-        (typeof(AppUser), nameof(AppUser.FullName)),
         (typeof(AppUser), nameof(AppUser.Email)),
         (typeof(AppUser), nameof(AppUser.UserName)),
     };
