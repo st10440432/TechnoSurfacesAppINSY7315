@@ -55,12 +55,15 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
     private readonly IQuoteRepository _quotes;
     private readonly IQuotationTermsReader _terms;
     private readonly IQuoteCalculationService _calculator;
+    private readonly IMaterialNameReader _materialNames;
 
-    public QuotationGenerationService(IQuoteRepository quotes, IQuotationTermsReader terms, IQuoteCalculationService calculator)
+    public QuotationGenerationService(IQuoteRepository quotes, IQuotationTermsReader terms, IQuoteCalculationService calculator,
+        IMaterialNameReader materialNames)
     {
         _quotes = quotes;
         _terms = terms;
         _calculator = calculator;
+        _materialNames = materialNames;
     }
 
     public async Task<CustomerQuotation?> GenerateAsync(int quoteId, CancellationToken ct = default)
@@ -280,9 +283,15 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
         if (!hasOtherCosts)
             amounts[^1] += remainder;
 
+        // The customer reads the material as brand, colour and thickness only: no sheet
+        // size and no sheet count, so each material is one item at its selling price.
+        // One lookup for every line, not one per line (NFR-05).
+        var names = await _materialNames.ForMaterialPricesAsync(
+            materials.Where(l => l.MaterialPriceId is not null).Select(l => l.MaterialPriceId!.Value).Distinct().ToList(), ct);
+
         var sortOrder = version.QuotationLines.Count == 0 ? 0 : version.QuotationLines.Max(l => l.SortOrder);
         for (var i = 0; i < materials.Count; i++)
-            version.AddQuotationLine(new QuotationLine(materials[i].Description, amounts[i], MaterialItem, materials[i].Quantity)
+            version.AddQuotationLine(new QuotationLine(CustomerMaterialName(materials[i], names), amounts[i], MaterialItem, quantity: 1m)
             {
                 SortOrder = ++sortOrder
             });
@@ -292,6 +301,37 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
 
         await _quotes.SaveChangesAsync(ct);
         return new(QuotationOutcome.Ok, Check: Check(version));
+    }
+
+    /// <summary>
+    /// A material as the customer reads it: "[brand] [colour] [thickness] mm". A product
+    /// line with no brand gives its own name instead. A band price covers several
+    /// colours, so the colour is the one the costing line was made for: the costing
+    /// sheet describes every material line as "[product line] [colour] [sheet size]".
+    /// When the colour cannot be told, the line names the product line and thickness,
+    /// never the costing description, which carries the sheet size.
+    /// </summary>
+    private static string CustomerMaterialName(CostingLine line, IReadOnlyDictionary<int, MaterialPriceName> names)
+    {
+        if (line.MaterialPriceId is not int priceId || !names.TryGetValue(priceId, out var name))
+            return MaterialItem;
+
+        var colour = name.Colour ?? name.BandColours
+            .Where(c => line.Description.StartsWith($"{name.ProductLine} {c} ", StringComparison.Ordinal))
+            .OrderByDescending(c => c.Length)
+            .FirstOrDefault();
+
+        if (colour is null)
+            return $"{name.ProductLine} {name.ThicknessMm} mm";
+
+        // Some supplier lists put the thickness in the colour's name, such as
+        // "Glacier White 8016 6mm"; it is not said twice.
+        var thickness = $"{name.ThicknessMm} mm";
+        var saysThickness = colour.EndsWith($"{name.ThicknessMm}mm", StringComparison.OrdinalIgnoreCase)
+                            || colour.EndsWith(thickness, StringComparison.OrdinalIgnoreCase);
+        return saysThickness
+            ? $"{name.Brand ?? name.ProductLine} {colour}"
+            : $"{name.Brand ?? name.ProductLine} {colour} {thickness}";
     }
 
     private async Task<(QuoteVersion? Version, QuotationResult? Refused)> OpenVersionAsync(int quoteId, CancellationToken ct)
