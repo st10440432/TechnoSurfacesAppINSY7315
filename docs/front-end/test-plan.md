@@ -89,3 +89,20 @@ Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome e
 | Customer quotation | 100 | 100 | 0 |
 
 The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
+
+## Task 3: costing printout (30 October 2026)
+
+The costing sheet has a "Print the costing" button that opens a read-only printout of the whole costing. It was checked with a made-up test quote of 12 material lines, 33 rate lines and a transport amount.
+
+| Check | Result |
+|---|---|
+| Every line and total matches the costing sheet to the cent | Pass. All 45 line totals, the sub total, markup, cut-outs, grooves and transport, total ex VAT, VAT and total inc VAT were compared on both pages |
+| Heading with the quote reference, customer, version and date | Pass |
+| Says it is internal | Pass. "Internal: shows cost prices and markup. Not for the customer." at the top and the bottom |
+| No input boxes, buttons or side menu on the printout | Pass. An integration test checks the document has no input, button or select |
+| A4 portrait, no row split across pages, table headings repeat on each page | Pass in Chrome and Edge. The totals stay together on one page |
+| Opened by whoever can open the costing sheet, refused where it is refused | Pass. Integration tests for the estimator, the Managing Director, signed out and a quote that does not exist |
+| 375 and 1440 pixels | Pass. Nothing scrolls the page sideways. On a phone each table scrolls inside its own box, which takes keyboard focus |
+| axe-core 4.14 (WCAG 2.1 AA) at 375 and 1440 pixels, as both roles | 0 violations on the printout and on the costing sheet |
+
+The A4 print preview is saved as [costing-printout-a4.pdf](print/costing-printout-a4.pdf).
