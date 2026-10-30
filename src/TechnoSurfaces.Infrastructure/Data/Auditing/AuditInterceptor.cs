@@ -35,10 +35,45 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
         // US-26: creating, deactivating and reactivating an account.
         typeof(AppUser),
 
-        // US-12/13: the standing wording and bank details printed on every
-        // quotation, and the warranty printed for each brand.
-        typeof(QuotationTerm), typeof(Brand)
+        // US-12/13: the standing wording and bank details on every quotation, and each brand's warranty.
+        typeof(QuotationTerm), typeof(Brand),
+        // US-19 and US-25: what the customer is quoted, and the Pastel invoice.
+        typeof(QuotationLine), typeof(InvoiceRecord),
+        // US-15: the customers and the people quotes are addressed to.
+        typeof(Customer), typeof(Contact)
     };
+
+    /// <summary>
+    /// POPIA: personal details are never copied into the audit table. The change is
+    /// still recorded (which field, who, when), but both values are stored as
+    /// <see cref="NotRecorded"/>.
+    /// </summary>
+    private static readonly HashSet<(Type Type, string Property)> PersonalDetails = new()
+    {
+        (typeof(Contact), nameof(Contact.FullName)),
+        (typeof(Contact), nameof(Contact.Email)),
+        (typeof(Contact), nameof(Contact.Phone)),
+        (typeof(Contact), nameof(Contact.Position)),
+
+        (typeof(Customer), nameof(Customer.Name)),
+        (typeof(Customer), nameof(Customer.AddressLine1)),
+        (typeof(Customer), nameof(Customer.AddressLine2)),
+        (typeof(Customer), nameof(Customer.City)),
+        (typeof(Customer), nameof(Customer.PostalCode)),
+        (typeof(Customer), nameof(Customer.VatNumber)),
+
+        (typeof(QuoteVersion), nameof(QuoteVersion.IssuedAttention)),
+        (typeof(QuoteVersion), nameof(QuoteVersion.IssuedTel)),
+        (typeof(QuoteVersion), nameof(QuoteVersion.IssuedEmail)),
+        (typeof(QuoteVersion), nameof(QuoteVersion.IssuedSite)),
+        (typeof(Quote), nameof(Quote.Site)),
+        (typeof(Quote), nameof(Quote.DeliveryAddress)),
+        (typeof(AppUser), nameof(AppUser.Email)),
+        (typeof(AppUser), nameof(AppUser.UserName)),
+    };
+
+    /// <summary>Stored as the old and new value of a personal detail.</summary>
+    public const string NotRecorded = "(not recorded)";
 
     private readonly ICurrentUser _currentUser;
     private List<PendingChange>? _pending;
@@ -152,7 +187,7 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
             {
                 EntityState.Modified => entry.Properties
                     .Where(p => p.IsModified && !Equals(p.OriginalValue, p.CurrentValue))
-                    .Select(p => new PropertyChange(p.Metadata.Name, Format(p.OriginalValue), Format(p.CurrentValue)))
+                    .Select(p => new PropertyChange(p.Metadata.Name, Recorded(p, p.OriginalValue), Recorded(p, p.CurrentValue)))
                     .ToList(),
 
                 EntityState.Deleted => new List<PropertyChange> { new("(deleted)", null, null) },
@@ -187,7 +222,7 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
     private static List<PropertyChange> ValuesOfNewRow(EntityEntry entry) =>
         entry.Properties
             .Where(p => !p.Metadata.IsPrimaryKey() && p.CurrentValue is not null)
-            .Select(p => new PropertyChange(p.Metadata.Name, null, Format(p.CurrentValue)))
+            .Select(p => new PropertyChange(p.Metadata.Name, null, Recorded(p, p.CurrentValue)))
             .ToList();
 
     private void Reset()
@@ -205,6 +240,15 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
             ? ""
             : string.Join(",", key.Properties.Select(p => Format(entry.Property(p.Name).CurrentValue)));
     }
+
+    /// <summary>
+    /// The value to store for a property: <see cref="NotRecorded"/> for a personal
+    /// detail, otherwise the formatted value.
+    /// </summary>
+    private static string? Recorded(PropertyEntry property, object? value) =>
+        PersonalDetails.Contains((property.EntityEntry.Metadata.ClrType, property.Metadata.Name))
+            ? NotRecorded
+            : Format(value);
 
     private static string? Format(object? value)
     {
