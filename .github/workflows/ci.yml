@@ -77,3 +77,74 @@ jobs:
         with:
           name: app
           path: publish
+
+  # axe accessibility checks (WCAG 2.1 AA) of the main screens, signed in as each
+  # role, at a phone and a desktop width (Task 2 feedback). A job of its own beside
+  # build-and-test, with its own throwaway SQL Server, so it changes nothing in the
+  # build or the tests. The demo accounts get a random password made for this run
+  # only, so no secret is stored. Any violation fails the job; every screen's result
+  # is uploaded as the accessibility-results artifact.
+  accessibility:
+    runs-on: ubuntu-24.04
+    services:
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: CiOnly-Password-2026
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P CiOnly-Password-2026 -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/accessibility/package-lock.json
+      - name: Password for the demo accounts, this run only
+        run: |
+          password="A11y-$(openssl rand -hex 12)"
+          echo "::add-mask::$password"
+          echo "DEMO_PASSWORD=$password" >> "$GITHUB_ENV"
+      - name: Build the app
+        run: dotnet build TechnoSurfacesApp/TechnoSurfacesApp.csproj -c Release
+      - name: Start the app
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: https://localhost:7043
+          ConnectionStrings__DefaultConnection: Server=localhost,1433;Database=TechnoSurfaces_A11y;User ID=sa;Password=CiOnly-Password-2026;TrustServerCertificate=True;MultipleActiveResultSets=true
+        run: |
+          dotnet dev-certs https
+          export Seed__DevelopmentPassword="$DEMO_PASSWORD"
+          nohup dotnet run --project TechnoSurfacesApp/TechnoSurfacesApp.csproj -c Release --no-build --no-launch-profile > app.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -skf https://localhost:7043/health > /dev/null; then echo "The app is up."; exit 0; fi
+            sleep 2
+          done
+          echo "::error::The app did not start within two minutes."
+          cat app.log
+          exit 1
+      - name: Install Playwright and Chromium
+        working-directory: tests/accessibility
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: axe on the main screens
+        working-directory: tests/accessibility
+        run: npm test
+      - name: App log
+        if: failure()
+        run: cat app.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-results
+          path: tests/accessibility/results
