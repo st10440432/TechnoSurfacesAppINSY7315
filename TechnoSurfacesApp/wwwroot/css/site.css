@@ -1269,6 +1269,27 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 
 @media print {
     .tabs, .qstrip, .save-state { display: none !important; }
+
+    /* An A4 page inside its margins is about 690 pixels wide, so the phone rules above
+       apply when printing. The printed document keeps its desktop layout instead: the
+       address beside the logo, the details in two columns, the signatures in a row. */
+    .doc-top { flex-direction: row; }
+    .doc-co { margin-left: auto; text-align: right; }
+    .doc-meta { grid-template-columns: 1fr 1fr; }
+    .doc-sign { grid-template-columns: repeat(3, 1fr); }
+    .doc-col-item  { width: 22%; }
+    .doc-col-qty   { width: 8%; }
+    .doc-col-total { width: 18%; }
+
+    /* A heading stays with what follows it; totals, warranty rows and the validity line stay whole. */
+    .doc-terms h3, .doc-title { break-after: avoid; }
+    .doc-totals, .doc-validity, table.doc-warranty tr { break-inside: avoid; }
+    table.doc-lines thead { display: table-header-group; }
+
+    /* Page numbers at the foot of every printed page. */
+    @page {
+        @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: var(--ink-secondary); }
+    }
 }
 
 /* ==========================================================================
