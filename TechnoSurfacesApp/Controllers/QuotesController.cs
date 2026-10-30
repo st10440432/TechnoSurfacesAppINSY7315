@@ -307,12 +307,21 @@ public class QuotesController : AppController
         if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return QuoteNotFound(id);
 
+        // The suppliers whose prices are on the version being approved (Task 1 2.4).
+        var materialPriceIds = costing.Quote!.CurrentVersion!.CostingLines
+            .Where(l => l.MaterialPriceId is not null)
+            .Select(l => l.MaterialPriceId!.Value)
+            .Distinct()
+            .ToList();
+
         var vm = new ReviewVm
         {
             Quote = detail,
             Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
             Check = await _quotation.CheckAsync(id, ct),
-            Actions = await ActionsForAsync(costing.Quote!)
+            Actions = await ActionsForAsync(costing.Quote!),
+            Suppliers = await _catalogue.SuppliersForMaterialPricesAsync(materialPriceIds, ct),
+            Today = Today
         };
 
         SetPage("Review quote", "approvals",
@@ -606,6 +615,14 @@ public sealed class ReviewVm
     public CostingSheetDto Sheet { get; init; } = null!;
     public QuotationCheck? Check { get; init; }
     public QuoteActions Actions { get; init; } = null!;
+
+    /// <summary>The suppliers of the materials on the current version.</summary>
+    public IReadOnlyList<SupplierOption> Suppliers { get; init; } = [];
+    public DateOnly Today { get; init; }
+
+    /// <summary>The suppliers on this quote whose price list is over a year old (Task 1 2.4).</summary>
+    public IReadOnlyList<SupplierOption> OldPriceLists =>
+        Suppliers.Where(s => TechnoSurfaces.Domain.Catalogue.PriceListAge.IsOld(s.PriceListDated, Today)).ToList();
 }
 
 public sealed class VersionsVm
