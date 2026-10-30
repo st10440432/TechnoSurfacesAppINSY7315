@@ -685,6 +685,8 @@ dialog.dialog .dialog-foot {
    ========================================================================== */
 
 .table-wrap { overflow-x: auto; }
+/* A table box that can scroll sideways takes focus, so the arrow keys can scroll it. */
+.table-wrap[tabindex]:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 table.data caption { caption-side: top; padding: 0 0 var(--space-2); text-align: left; color: var(--ink-secondary); }
