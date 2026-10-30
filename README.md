@@ -180,6 +180,8 @@ When a line is added its price is copied onto it, so a later price change does n
 
 ## API
 
+**OpenAPI document:** [`/api/openapi/v1.json`](https://localhost:7043/api/openapi/v1.json) on the running app (the same path on staging and production). It describes every endpoint below, its request and response bodies and its error responses, so another client can discover the API. It needs sign-in like every other `/api` call: open it in a browser that is signed in, or a signed-out request gets 401. It is built into .NET 10 (`Microsoft.AspNetCore.OpenApi`). There is no viewer page, because the security policy allows no script from a CDN; any OpenAPI tool can read the JSON.
+
 The costing sheet and the quote screens talk to these endpoints. Every error comes back as RFC 9457 problem details with the right status code: 201 with a Location header when something is created, 400 for invalid input, 403 when a role may not do it, 404 when it does not exist, 409 when the quote's status does not allow it, and 422 when a price cannot be resolved. Every write needs the antiforgery token in a `RequestVerificationToken` header.
 
 | Endpoint | Purpose |
