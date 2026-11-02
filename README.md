@@ -231,7 +231,7 @@ These are the controls committed to in Task 1 section 8 and where each one is. P
 
 ### Audit trail
 
-- An EF Core `SaveChangesInterceptor` (`src/TechnoSurfaces.Infrastructure/Data/Auditing/AuditInterceptor.cs`) records every change to prices, rates, quotes, versions, costing lines, the catalogue (suppliers, product lines, sheet sizes, bands, colours), user accounts, quotation terms and brand warranties, with the old value, new value, user and time. No service can skip it.
+   - An EF Core `SaveChangesInterceptor` (`src/TechnoSurfaces.Infrastructure/Data/Auditing/AuditInterceptor.cs`) records every change to prices, rates, quotes, versions, costing lines, the catalogue (suppliers, product lines, sheet sizes, bands, colours), user accounts, quotation terms, brand warranties, customer quotation lines, Pastel invoice records, customers and contacts, with the old value, new value, user and time. Personal details (names, addresses, phone numbers and email addresses) are recorded as changed, but their values are stored as "(not recorded)" (POPIA). No service can skip it.
 - The audit rows are written in the same transaction as the change, so if they fail the change is rolled back.
 - A database trigger refuses any update or delete on the audit table.
 
@@ -331,6 +331,8 @@ Every screen was tested at 375, 768 and 1440 pixels wide, with the keyboard alon
 | Customer quotation | 100 | 100 | 0 |
 
 Lighthouse in desktop navigation mode and axe DevTools (axe-core 4.13.0, WCAG 2.1 AA), on 5 October 2026.
+
+**axe on every pull request.** The `accessibility` job in CI starts the app against its own SQL Server, makes one test quote, and runs axe (WCAG 2.1 AA) on sign in, the dashboard, the quote list, the costing sheet, the customer quotation, the review screen, customers, the catalogue and users. It does this signed in as the estimator and as the Managing Director, at 375 and 1440 pixels wide: 34 checks. Any violation fails the job, and every screen's result is uploaded as the `accessibility-results` artifact. The demo accounts get a random password made for that run only. The tests are in `tests/accessibility` (Playwright with axe-core). To run them locally, start the app, set `DEMO_PASSWORD` to the demo accounts' password, then run `npm ci` and `npm test` in that folder.
 
 ## Running it locally
 
@@ -434,5 +436,6 @@ These are the differences between what the Task 1 document describes and what wa
 | Amaan Tesfaye | ST10287107 | ASP.NET Core Identity sign-in, lockout and session settings; authorisation policies and the quote ownership rules; the audit interceptor, audit trail screen and per-quote change history; user administration; the catalogue service and price editor; quotation terms maintenance; security integration tests |
 | Brett James | ST10440287 | The Task 1 prototype; brand colours measured from the logo; design tokens, the shared component set and the app shell; the quote, customer and sign-in screens; responsive and accessibility testing on every screen, Lighthouse and axe |
 | Matteo Nusca | ST10440432 | Azure infrastructure in Bicep with a private SQL endpoint, Key Vault, Application Insights and alerts; the CI and CD workflows with OIDC and the health gate; the integration test harness on SQL Server; the health check; security headers and sign-in rate limiting; Dependabot; the first production account and the deploy script; production releases |
+
 
 Client: Paul Schluter, Managing Director, Techno Surfaces (Pty) Ltd, who gave written permission for the company name and logo to be used for this project and its EXPO.

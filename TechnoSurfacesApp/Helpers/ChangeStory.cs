@@ -1,5 +1,6 @@
 using System.Globalization;
 using TechnoSurfaces.Application.Auditing;
+using TechnoSurfaces.Infrastructure.Data.Auditing;
 
 namespace TechnoSurfacesApp.Helpers;
 
@@ -125,7 +126,7 @@ public static class ChangeStories
         // A line is named by its description wherever one was recorded, so a later
         // change to "line 12" can say which line it was.
         var names = all
-            .Where(r => r.PropertyName is "Description" or "Name" or "FullName" or "Reference" && r.NewValue is not null)
+            .Where(r => r.PropertyName is "Description" or "Name" or "FullName" or "Reference" && r.NewValue is not null and not AuditInterceptor.NotRecorded)
             .GroupBy(r => (r.EntityName, r.EntityKey))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.ChangedAtUtc).First().NewValue!);
 
@@ -181,9 +182,9 @@ public static class ChangeStories
             "MaterialPrice" => $"Set a material price of {Value("PricePerSqm")} per m² from {Value("EffectiveFrom")}.",
             "RatePrice" => $"Set a rate of {Value("Amount")} from {Value("EffectiveFrom")}.",
             "InvoiceRecord" => $"Recorded Pastel invoice {Value("InvoiceNumber")} for {Value("AmountIncVat")}.",
-            "Customer" => $"Added the customer {name}.",
-            "Contact" => $"Added the contact {name}.",
-            "AppUser" => $"Created a user account for {name}.",
+            "Customer" => name is null ? "Added a customer." : $"Added the customer {name}.",
+            "Contact" => name is null ? "Added a contact." : $"Added the contact {name}.",
+            "AppUser" => name is null ? "Created a user account." : $"Created a user account for {name}.",
             "QuotationTerm" => $"Added a line to the quotation terms: \"{Value("Text")}\".",
             _ => name is null ? $"Added {Noun(entity)}." : $"Added {Noun(entity)} {name}."
         };
@@ -197,7 +198,8 @@ public static class ChangeStories
             return r.NewValue == "True" ? "locked the version" : "unlocked the version";
         if (r.PropertyName == "IsActive")
             return r.NewValue == "True" ? "made active" : "made inactive";
-
+        if (r.OldValue == AuditInterceptor.NotRecorded || r.NewValue == AuditInterceptor.NotRecorded)
+            return $"changed the {label}";
         var to = r.NewValue is null ? "nothing" : Format(r.PropertyName, r.NewValue);
         return r.OldValue is null
             ? $"set the {label} to {to}"
