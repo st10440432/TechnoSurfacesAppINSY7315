@@ -1,0 +1,12 @@
+{
+  "name": "technosurfaces-accessibility",
+  "private": true,
+  "description": "axe (WCAG 2.1 AA) checks of the main screens, signed in as each role. Run by the accessibility job in CI.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1"
+  }
+}
