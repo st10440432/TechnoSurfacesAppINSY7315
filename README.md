@@ -1,12 +1,10 @@
 # Techno Surfaces Quoting System
 
-INSY7315 Work Integrated Learning, Task 2. Team CatalystDev.
+INSY7315 Work Integrated Learning, Task 3. Team CatalystDev.
 
 Techno Surfaces (Pty) Ltd fabricates solid-surface countertops in Cape Town for homeowners, national brands such as Bootleggers and Vida e Caffè, and airports around South Africa. They hold no stock, so every quote is a commitment to buy material. Until now each quote was priced by hand in one Excel costing sheet, with prices looked up in five printed supplier price lists and typed in. A mistyped price (R630 instead of R6 300) or a lookup that quietly returns the wrong figure goes unnoticed until the job loses money.
 
 This web application replaces that sheet. The estimator picks a material by supplier, product line, colour and sheet size, and the price fills in from a single catalogue together with where it came from. A price that cannot be found is refused with a reason, never filled in as zero. The costing calculates itself, the customer quotation is written from it without any cost figures on it, and the Managing Director approves every estimator's quote before it goes out. Quotes keep the prices they were made with, every revision is kept as its own version, and every change to a price or a quote is recorded.
-
-When Loading the app. one might have to clear cache and cookies upon entering the login page to sign in (temporary issue will be fixed)
 
 | | |
 |---|---|
@@ -32,18 +30,14 @@ When Loading the app. one might have to clear cache and cookies upon entering th
 13. [Running it locally](#running-it-locally)
 14. [Running costs](#running-costs)
 15. [What changed from Task 1](#what-changed-from-task-1)
-16. [Known gaps and the plan for Task 3](#known-gaps-and-the-plan-for-task-3)
+16. [Known gaps](#known-gaps)
 17. [Team](#team)
 
 ## Signing in to the live system
 
 There is no public sign-up. Accounts are created by the Managing Director, which is how the client asked for it to work.
 
-
-| Role | Email | Password |
-|---|---|---|
-| Managing Director | demomanager@gmail.com | DemoManager1 |
-| Estimator | demoestimator@gmail.com | DemoEstimator1 |
+The sign-in details for the demo Managing Director and estimator accounts are given in the submitted report rather than here, because this repository is public.
 
 A good path through the system for a first look:
 
@@ -78,8 +72,8 @@ A quote moves through Draft, Pending approval, Approved, Sent and Accepted. A Dr
 
 All twenty screens from the Task 1 journey maps are built, plus a few the build needed:
 
-- Getting in: sign in, forgotten password, activate account, set your password
-- Quoting: dashboard, quote list, new quote, costing sheet, customer quotation, approval queue, review quote, version history, one version in full, invoice record
+- Getting in: sign in (with a button to show the password while typing it), forgotten password, activate account, set your password
+- Quoting: dashboard, quote list, new quote, costing sheet, costing printout, customer quotation, approval queue, review quote, version history, one version in full, invoice record
 - Data: material catalogue, price history and price editor, suppliers, one supplier with its product lines, sizes, bands and colours, customers, customer detail
 - Running the app: rate card, users, quotation terms, audit trail
 
@@ -87,7 +81,7 @@ Six screens are for the Managing Director only and do not appear in an estimator
 
 ### User stories
 
-Every user story from Task 1 section 2.3 has been built except where noted under [Known gaps](#known-gaps-and-the-plan-for-task-3).
+Every user story from Task 1 section 2.3 has been built except where noted under [Known gaps](#known-gaps).
 
 | Story | Delivered by |
 |---|---|
@@ -116,6 +110,8 @@ Every user story from Task 1 section 2.3 has been built except where noted under
 | Approval queue | ![Approval queue](docs/images/approval-queue.png) |
 | Version history | ![Version history](docs/images/version-history.png) |
 | Audit trail | ![Audit trail](docs/images/audit-trail.png) |
+| Old price list warning on the review screen | ![Old price list warning](docs/images/review-old-price-list.jpg) |
+| Show password on sign in | ![Password shown](docs/images/show-password-shown.jpg) |
 
 ## Architecture
 
@@ -130,8 +126,6 @@ ASP.NET Core MVC on .NET 10, Entity Framework Core 10 and Azure SQL. The solutio
 
 ![System architecture](docs/images/architecture.png)
 
-the system architecture diagram (Task 1 Figure 14) as `docs/images/architecture.png`.
-
 Two design patterns from Task 1 section 7.1 are in the code:
 
 - **Strategy, for price resolution.** Three suppliers price by colour band and two price each colour on its own. `IPriceResolutionStrategy` has two implementations, `BandPricedStrategy` and `ItemPricedStrategy`, and `PriceResolver` picks one from the supplier. Adding a supplier with a new pricing scheme means adding a strategy, not editing the resolver.
@@ -139,7 +133,7 @@ Two design patterns from Task 1 section 7.1 are in the code:
 
 ## Data model and database
 
-The database is Azure SQL, reached through EF Core code-first migrations. The main entities are Supplier, ProductLine, SheetSize, PriceBand, Colour, MaterialPrice, RateItem, RatePrice, Brand, Customer, Contact, AppUser, Quote, QuoteVersion, CostingLine, QuotationLine, QuotationTerm, InvoiceRecord and AuditEntry. Credentials are kept separately by ASP.NET Core Identity in their own `auth` schema.
+The database is Azure SQL, reached through EF Core code-first migrations. The main entities are Supplier, ProductLine, SheetSize, PriceBand, Colour, MaterialPrice, RateItem, RatePrice, Brand, Customer, Contact, AppUser, Quote, QuoteVersion, CostingLine, QuotationLine, QuotationTerm, QuoteVersionTerm, QuoteVersionWarranty, InvoiceRecord and AuditEntry. Credentials are kept separately by ASP.NET Core Identity in their own `auth` schema.
 
 The rules that matter to the business are enforced by the database itself, not only by the code:
 
@@ -158,7 +152,9 @@ Money is `decimal(18,2)` and percentages `decimal(5,2)` throughout; nothing uses
 
 The catalogue is seeded from the five suppliers' own price lists, about 135 entries. The rate card is seeded from the client's costing workbook, and the standing terms from their quotation template. The bank details are not seeded, because the repository is public; the Managing Director enters them on the quotation terms screen.
 
-the ERD (Task 1 Figure 11) as `docs/images/erd.png`, updated for the entities added since Task 1.
+![Entity relationship diagram](docs/images/erd.png)
+
+The columns that record which user made a quote, version, price, invoice or audit entry hold the user's id but are not foreign keys. Changes made by the system itself are recorded against the user id "system", which has no user record, and users are deactivated rather than deleted.
 
 ## The pricing calculation
 
@@ -174,7 +170,7 @@ total ex VAT         = sub total + markup + below the line
 VAT                  = total ex VAT x 15%
 ```
 
-Sandpaper and consumables take their quantity from the total square metres of material, and silicon and sealing from the number of sheets, two per sheet. Both are shown as calculated and can be typed over. Overtime is the normal fabrication rate times 1.5 and installation mirrors fabrication; both are held as rules on the rate card, not as separate figures.
+Sandpaper and consumables take their quantity from the total square metres of material, and silicon and sealing from the number of sheets, two per sheet. Both are shown as calculated, charged at the exact quantity rather than rounded up (the client confirmed this on 27 October 2026), and can be typed over. Overtime is the normal fabrication rate times 1.5 and installation mirrors fabrication; both are held as rules on the rate card, not as separate figures.
 
 When a line is added its price is copied onto it, so a later price change does not move a quote that already exists. The price screen for each material lists the quotes that used it and the price each one kept.
 
@@ -219,12 +215,13 @@ These are the controls committed to in Task 1 section 8 and where each one is. P
 - ASP.NET Core Identity, with credentials managed by the application and stored in their own `auth` schema (`TechnoSurfacesApp/Identity/AuthDbContext.cs`). The client asked for this rather than Microsoft 365 sign-in.
 - No self-registration. No registration route exists, and a test checks that. Accounts are created by the Managing Director (`TechnoSurfacesApp/Services/UserAdminService.cs`).
 - Passwords of at least 12 characters with an upper-case letter, a lower-case letter and a digit, hashed by Identity with PBKDF2.
-- Five wrong passwords lock the account for 15 minutes.
+- Five wrong passwords lock the account for 15 minutes. An unknown email, a wrong password and a locked account all get the same message, so the sign-in page does not reveal which accounts exist.
 - A deactivated account is refused, but only after the password is checked, so the form never reveals whether an account exists.
-- The session cookie is HttpOnly, Secure and SameSite=Strict with a one-hour sliding expiry. The security stamp is checked every minute, so a deactivated user is signed out within a minute.
+- The session cookie is HttpOnly, Secure and SameSite=Lax with a one-hour sliding expiry. A sign-in form left open from before goes to a fresh form instead of failing. The security stamp is checked every minute, so a deactivated user is signed out within a minute.
 - New accounts and password resets get a random temporary password, and the holder must choose their own before anything else opens (`Identity/MustChangePasswordFilter.cs`). There is no email service, so the Managing Director hands the temporary password over in person.
 - After sign-in, a return address is followed only if it is on this site.
 - At most ten sign-in attempts a minute from one address, then HTTP 429 (`Platform/SignInRateLimiting.cs`).
+- The Users screen shows when each person last signed in.
 
 ### Who can do what
 
@@ -233,14 +230,14 @@ These are the controls committed to in Task 1 section 8 and where each one is. P
 
 ### Audit trail
 
-   - An EF Core `SaveChangesInterceptor` (`src/TechnoSurfaces.Infrastructure/Data/Auditing/AuditInterceptor.cs`) records every change to prices, rates, quotes, versions, costing lines, the catalogue (suppliers, product lines, sheet sizes, bands, colours), user accounts, quotation terms, brand warranties, customer quotation lines, Pastel invoice records, customers and contacts, with the old value, new value, user and time. Personal details (names, addresses, phone numbers and email addresses) are recorded as changed, but their values are stored as "(not recorded)" (POPIA). No service can skip it.
+- An EF Core `SaveChangesInterceptor` (`src/TechnoSurfaces.Infrastructure/Data/Auditing/AuditInterceptor.cs`) records every change to prices, rates, quotes, versions, costing lines, the catalogue (suppliers, product lines, sheet sizes, bands, colours), user accounts, quotation terms, brand warranties, customer quotation lines, Pastel invoice records, customers and contacts, with the old value, new value, user and time. Personal details (names, addresses, phone numbers and email addresses) are recorded as changed, but their values are stored as "(not recorded)" (POPIA). No service can skip it.
 - The audit rows are written in the same transaction as the change, so if they fail the change is rolled back.
 - A database trigger refuses any update or delete on the audit table.
 
 ### Cross-site scripting, forgery and input
 
 - Razor encodes all output, no view uses `Html.Raw`, and the scripts build every message with `textContent`.
-- The Content-Security-Policy allows scripts from the site itself only (`script-src 'self'`). No page has an inline script or inline event handler, and a test loads the main screens to check.
+- The Content-Security-Policy allows scripts and styles from the site itself only (`script-src 'self'`, `style-src 'self'`). No page has an inline script, inline event handler or inline style, and a test loads the main screens to check.
 - Every POST, PUT and DELETE needs an antiforgery token. Sign-out is a POST.
 - Input is validated on the view models and API requests and again in the services.
 - Other headers on every response: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and a `Permissions-Policy`.
@@ -293,7 +290,7 @@ The app applies its own database migrations when it starts. The database has no 
 
 A repository ruleset protects `main` and `develop`: no direct pushes, a pull request with at least one approving review, the CI check must pass, and the branch must be up to date with its target before it merges. A CI job also refuses any pull request into `main` that does not come from `develop`. Commit messages use conventional prefixes (`feat:`, `fix:`, `test:`, `docs:`, `ci:`, `chore:`).
 
-**CI** (`.github/workflows/ci.yml`) runs on every pull request into `develop` or `main`: restore, build with warnings as errors, unit tests, integration tests against a SQL Server container, a coverage summary, and the published app as an artifact.
+**CI** (`.github/workflows/ci.yml`) runs on every pull request into `develop` or `main`: restore, build with warnings as errors, unit tests, integration tests against a SQL Server container, a coverage summary, and the published app as an artifact. A second job runs the axe accessibility checks (see [Front end](#front-end-accessibility-and-responsive-design)).
 
 **CD** (`.github/workflows/cd.yml`) runs after a merge. It builds, runs the unit tests again, publishes, generates the idempotent migration scripts, signs in to Azure with OIDC, deploys, and calls `/health` for up to five minutes. A deployment that does not report Healthy fails the run. A merge to `develop` deploys to staging; a merge to `main` deploys to production, which waits for a reviewer to approve it in the `production` environment.
 
@@ -309,12 +306,12 @@ Dependabot opens pull requests against `develop` for NuGet packages and GitHub A
 
 ## Tests
 
-391 automated tests, all run in CI on every pull request.
+442 automated tests, all run in CI on every pull request.
 
 | Suite | Tests | Covers |
 |---|---:|---|
-| Unit (`tests/TechnoSurfaces.UnitTests`) | 322 | The calculation, price resolution for both pricing schemes, price history, the rate card rules, the quote lifecycle, versions, the customer quotation and its confidentiality, customers, invoices, the audit interceptor and audit trail, quotation terms, catalogue maintenance, the edit-quote policy |
-| Integration (`tests/TechnoSurfaces.IntegrationTests`) | 69 | The real app over HTTP against SQL Server: the costing API, the quote workflow by the people allowed each step, every version readable after a revision, customers, invoices, the database constraints and triggers, sign-in, lockout, rate limiting, antiforgery, role refusals, security headers, catalogue maintenance |
+| Unit (`tests/TechnoSurfaces.UnitTests`) | 350 | The calculation, price resolution for both pricing schemes, price history, the rate card rules, the quote lifecycle, versions, the customer quotation and its confidentiality, customers, invoices, the audit interceptor and audit trail, quotation terms, catalogue maintenance, the edit-quote policy |
+| Integration (`tests/TechnoSurfaces.IntegrationTests`) | 92 | The real app over HTTP against SQL Server: the costing API, the quote workflow by the people allowed each step, every version readable after a revision, customers, invoices, the database constraints and triggers, sign-in, lockout, rate limiting, antiforgery, role refusals, security headers, catalogue maintenance, the costing printout, the old price list warning, and the number of database commands the costing sheet and the quote list may use |
 
 The one test the whole project rests on is that a price which cannot be resolved is refused and never becomes zero. It is checked at every level: the price resolver, the calculation, the costing service, the API (422) and the database constraints.
 
@@ -384,7 +381,7 @@ Azure Cost Management for the tsqa-rg resource group on 5 October 2026 shows US$
 
 ## What changed from Task 1
 
-These are the differences between what the Task 1 document describes and what was built. The Task 3 report will be updated to match.
+These are the differences between what the Task 1 document describes and what was built. The Task 3 report describes the system as built.
 
 **Design and requirements**
 
@@ -418,22 +415,23 @@ These are the differences between what the Task 1 document describes and what wa
 - **No Blob storage.** Task 1's running costs included storage for quotation PDFs. The quotation is printed or saved as PDF from the browser instead, so nothing is stored.
 - **Extra monitoring.** A Log Analytics workspace, an availability alert and a budget alert, none of which were in Task 1.
 
-## Known gaps and the plan for Task 3
+## Known gaps
 
 - **Transport per sheet (US-05).** Add a transport line to the rate card worked out from the sheet count, added after the markup, for the materials it applies to, and rename the typed amount on screen to "Petrol / delivery". Waiting for the client's rate and the list of materials it applies to.
 - **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check and the old price list check are built: the review screen names each supplier on the quote whose price list is more than a year old, by the same rule as the dashboard and the catalogue. The other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
-- **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns are stored but are not foreign keys yet.
+- **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns hold the user's id but are not foreign keys, because changes made by the system itself are recorded against the user id "system", which has no user record.
+- **Deployment slots.** Not added. They need the Standard tier of App Service, at about R1 500 a month, and the client's budget for hosting is up to R1 000 a month.
+- **Customer import and large tenders.** Waiting for the client: the column headings of the customer sheet, and the scope of pricing a large tender by item.
 - **Rate card and bank details** from the client.
-- **The Task 3 report** updated with everything under [What changed from Task 1](#what-changed-from-task-1).
 
 ## Team
 
 | Member | Student number | Built |
 |---|---|---|
-| Kallan Jones (project manager) | ST10445389 | Domain model, database schema, constraints, triggers and migrations; catalogue and rate card seed data from the supplier price lists and the client's workbook; price resolution and the calculation engine; price history; connecting the screens to the services; the rate card grid on the costing sheet; the version view; catalogue maintenance and the quotes using each price; the stricter CSP, the SQL managed identity and the release check in CI; releases |
+| Kallan Jones (project manager) | ST10445389 | Domain model, database schema, constraints, triggers and migrations; catalogue and rate card seed data from the supplier price lists and the client's workbook; price resolution and the calculation engine; price history; connecting the screens to the services; the rate card grid on the costing sheet; the version view; catalogue maintenance and the quotes using each price; the stricter CSP, the SQL managed identity and the release check in CI; releases; in Task 3, fewer database commands for the costing sheet, quote list and quote editing, with tests that hold them there, and sandpaper and silicon charged at the exact quantity |
 | Morgan Gibbon | ST10439398 | Quote lifecycle with no rejection path; quote workflow and approval queue; costing sheet API with problem details and 422 for an unresolved price; reopening as a new version; customers and contacts; the customer quotation with no cost data and its terms and warranties; the Pastel invoice record; validity periods |
-| Amaan Tesfaye | ST10287107 | ASP.NET Core Identity sign-in, lockout and session settings; authorisation policies and the quote ownership rules; the audit interceptor, audit trail screen and per-quote change history; user administration; the catalogue service and price editor; quotation terms maintenance; security integration tests |
-| Brett James | ST10440287 | The Task 1 prototype; brand colours measured from the logo; design tokens, the shared component set and the app shell; the quote, customer and sign-in screens; responsive and accessibility testing on every screen, Lighthouse and axe |
+| Amaan Tesfaye | ST10287107 | ASP.NET Core Identity sign-in, lockout and session settings; authorisation policies and the quote ownership rules; the audit interceptor, audit trail screen and per-quote change history; user administration; the catalogue service and price editor; quotation terms maintenance; security integration tests; in Task 3, the OWASP ZAP scan and its fixes, SameSite Lax sign-in cookies, one sign-in message for every failure, the last sign-in time, and the audit trail for customers, contacts, quotation lines and invoices with personal details masked |
+| Brett James | ST10440287 | The Task 1 prototype; brand colours measured from the logo; design tokens, the shared component set and the app shell; the quote, customer and sign-in screens; responsive and accessibility testing on every screen, Lighthouse and axe; in Task 3, show password, the costing printout, the material on the customer quotation, the A4 quotation layout, the old price list warning, the OpenAPI document and the axe checks in CI |
 | Matteo Nusca | ST10440432 | Azure infrastructure in Bicep with a private SQL endpoint, Key Vault, Application Insights and alerts; the CI and CD workflows with OIDC and the health gate; the integration test harness on SQL Server; the health check; security headers and sign-in rate limiting; Dependabot; the first production account and the deploy script; production releases |
 
 
