@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Catalogue;
@@ -66,7 +66,7 @@ public class QuotesController : AppController
     //  Quote list
     // ======================================================================
 
-    public async Task<IActionResult> Index(string? status, int? customerId, bool mine, string? q, CancellationToken ct)
+    public async Task<IActionResult> Index(string? status, int? customerId, bool mine, string? q, int? page, CancellationToken ct)
     {
         var filter = new QuoteListFilter(
             StatusText.All.Contains(status) ? status : null,
@@ -76,7 +76,7 @@ public class QuotesController : AppController
 
         var vm = new QuoteListVm
         {
-            Quotes = await _workflow.ListAsync(filter, ct),
+            Page = await _workflow.ListPageAsync(filter, page ?? 1, ct),
             Customers = await _customers.ListAsync(includeInactive: true, ct: ct),
             Status = filter.Status,
             CustomerId = filter.CustomerId,
@@ -493,7 +493,10 @@ public sealed record PricePreviewResult(bool Resolved, decimal? UnitPrice, strin
 
 public sealed class QuoteListVm
 {
-    public IReadOnlyList<QuoteSummary> Quotes { get; init; } = [];
+    /// <summary>The quotes on this page, and where the page sits in the whole list.</summary>
+    public QuotePage Page { get; init; } = new([], 0, 1, QuoteWorkflowService.ListPageSize);
+
+    public IReadOnlyList<QuoteSummary> Quotes => Page.Quotes;
     public IReadOnlyList<CustomerSummary> Customers { get; init; } = [];
     public string? Status { get; init; }
     public int? CustomerId { get; init; }
