@@ -553,6 +553,19 @@ img, svg { max-width: 100%; }
 }
 .input-group .addon.before + .input { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
+/* The show or hide password button (_ShowPassword). Edge draws its own eye in a
+   password field, which would sit beside this one, so that one is turned off. */
+.input-group .addon-btn {
+    min-width: 2.75rem;
+    font: inherit;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+.input-group .addon-btn:hover { background: var(--line); color: var(--ink); }
+.input-group .addon-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+.input-group .addon-btn[aria-pressed="true"] { color: var(--brand-navy); }
+.input-group input::-ms-reveal { display: none; }
+
 .field-row   { display: grid; gap: var(--space-4); }
 .field-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -685,6 +698,8 @@ dialog.dialog .dialog-foot {
    ========================================================================== */
 
 .table-wrap { overflow-x: auto; }
+/* A table box that can scroll sideways takes focus, so the arrow keys can scroll it. */
+.table-wrap[tabindex]:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 table.data caption { caption-side: top; padding: 0 0 var(--space-2); text-align: left; color: var(--ink-secondary); }
@@ -1234,6 +1249,10 @@ table.data tr.group-row th {
 /* Quote list */
 .list-count { margin: 0; padding: var(--space-3) var(--space-5); font-size: var(--text-sm); color: var(--ink-secondary); border-bottom: 1px solid var(--line); }
 .filter-check { align-self: flex-end; min-height: 2.5rem; align-items: center; }
+
+/* Previous and next under the quote list */
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--line); }
+.pager-status { margin: 0; font-size: var(--text-sm); color: var(--ink-secondary); }
 
 /* The error summary at the top of a form */
 .error-summary:focus { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
