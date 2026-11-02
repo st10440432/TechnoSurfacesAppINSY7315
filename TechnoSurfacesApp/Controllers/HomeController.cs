@@ -3,6 +3,7 @@ using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Application.Catalogue;
 using TechnoSurfaces.Application.Quoting;
 using TechnoSurfaces.Domain;
+using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfacesApp.Identity;
 using TechnoSurfacesApp.Services;
 
@@ -14,8 +15,6 @@ namespace TechnoSurfacesApp.Controllers;
 /// </summary>
 public class HomeController : AppController
 {
-    private const int StaleAfterDays = 365;
-
     /// <summary>Changes shown under recent activity on the Managing Director's dashboard.</summary>
     private const int RecentActivityCount = 8;
 
@@ -54,7 +53,7 @@ public class HomeController : AppController
                      .OrderBy(q => q.IssueDate).ThenBy(q => q.Id)
                      .ToList()
                 : [],
-            StaleSuppliers = suppliers.Where(s => s.PriceListDated.AddDays(StaleAfterDays) < Today).ToList(),
+            StaleSuppliers = suppliers.Where(s => PriceListAge.IsOld(s.PriceListDated, Today)).ToList(),
             SupplierCount = suppliers.Count,
             Activity = await CanAsync(Policies.CanViewAuditTrail)
                 ? await _audit.RecentAsync(RecentActivityCount, ct)
