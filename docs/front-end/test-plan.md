@@ -139,6 +139,18 @@ The A4 print preview is saved as [costing-printout-a4.pdf](print/costing-printou
 
 ![The old price list check](../images/review-old-price-list.jpg)
 
+### axe on every pull request (2 November 2026)
+
+The `accessibility` job in CI runs axe-core 4.14 against WCAG 2.1 A and AA on every pull request. It starts the app with its own empty database, signs in as the estimator and as the Managing Director, makes one test quote, and checks sign in and eight screens for each role (dashboard, quote list, costing sheet, customer quotation, review, customers, catalogue and users) at 375 and 1440 pixels: 34 checks. The tests are in `tests/accessibility`, and how to run them locally is in the README.
+
+| Check | Result |
+|---|---|
+| On the pull request that added the job | Failed on the review screen at 1440 pixels: on the build server its table was wider than its box and scrolled sideways, but could not be reached with the keyboard (`scrollable-region-focusable`) |
+| Fix | Any table wider than its box is given keyboard focus and a name from its caption, on load and whenever the page changes size |
+| Every pull request since, to the evening of 2 November 2026 | Passed, 40 runs |
+
+A failing accessibility job shows as a failed check on the pull request, but only `build-and-test` is required by the branch rules, so it does not yet block the merge on its own.
+
 ## Tool scores
 
 Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both were run on 5 October 2026 on the three screens below, signed in as the Managing Director, against a local copy of the app with a test quote. Lighthouse ran in navigation mode for desktop. axe DevTools used axe-core 4.13.0 against WCAG 2.1 AA, and found no automatic, guided or manual issues on any of the three screens.
