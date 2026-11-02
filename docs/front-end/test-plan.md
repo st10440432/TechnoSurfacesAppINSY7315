@@ -96,19 +96,7 @@ The sign in password and the three fields on "Set your password" each have a but
 
 ![The password hidden](../images/show-password-hidden.jpg) ![The password shown](../images/show-password-shown.jpg)
 
-## Tool scores
-
-Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both were run on 5 October 2026 on the three screens below, signed in as the Managing Director, against a local copy of the app with a test quote. Lighthouse ran in navigation mode for desktop. axe DevTools used axe-core 4.13.0 against WCAG 2.1 AA, and found no automatic, guided or manual issues on any of the three screens.
-
-| Screen | Lighthouse accessibility | Lighthouse performance | axe issues |
-|---|---|---|---|
-| Costing sheet | 100 | 100 | 0 |
-| Quote list | 100 | 100 | 0 |
-| Customer quotation | 100 | 100 | 0 |
-
-The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
-
-## Task 3: costing printout (30 October 2026)
+### Costing printout (30 October 2026)
 
 The costing sheet has a "Print the costing" button that opens a read-only printout of the whole costing. It was checked with a made-up test quote of 12 material lines, 33 rate lines and a transport amount.
 
@@ -124,3 +112,15 @@ The costing sheet has a "Print the costing" button that opens a read-only printo
 | axe-core 4.14 (WCAG 2.1 AA) at 375 and 1440 pixels, as both roles | 0 violations on the printout and on the costing sheet |
 
 The A4 print preview is saved as [costing-printout-a4.pdf](print/costing-printout-a4.pdf).
+
+## Tool scores
+
+Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both were run on 5 October 2026 on the three screens below, signed in as the Managing Director, against a local copy of the app with a test quote. Lighthouse ran in navigation mode for desktop. axe DevTools used axe-core 4.13.0 against WCAG 2.1 AA, and found no automatic, guided or manual issues on any of the three screens.
+
+| Screen | Lighthouse accessibility | Lighthouse performance | axe issues |
+|---|---|---|---|
+| Costing sheet | 100 | 100 | 0 |
+| Quote list | 100 | 100 | 0 |
+| Customer quotation | 100 | 100 | 0 |
+
+The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
