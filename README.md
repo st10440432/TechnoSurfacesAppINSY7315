@@ -39,11 +39,7 @@ When Loading the app. one might have to clear cache and cookies upon entering th
 
 There is no public sign-up. Accounts are created by the Managing Director, which is how the client asked for it to work.
 
-
-| Role | Email | Password |
-|---|---|---|
-| Managing Director | demomanager@gmail.com | DemoManager1 |
-| Estimator | demoestimator@gmail.com | DemoEstimator1 |
+The sign-in details for the demo Managing Director and estimator accounts are given in the submitted report rather than here, because this repository is public.
 
 A good path through the system for a first look:
 
