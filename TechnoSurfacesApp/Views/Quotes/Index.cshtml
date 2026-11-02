@@ -2,10 +2,25 @@
 @*
     Every quote, filtered by status, customer, author or a search. The filters are
     an ordinary GET form, so a filtered list has its own address that can be
-    bookmarked or shared, and it works without JavaScript.
+    bookmarked or shared, and it works without JavaScript. The list comes a page
+    at a time; the page links keep the filters.
 *@
 @{
-    var count = Model.Quotes.Count;
+    var pages = Model.Page;
+    var count = pages.TotalCount;
+    var paged = pages.PageCount > 1;
+    var range = paged ? $" Showing {pages.First} to {pages.Last}." : "";
+
+    // The filters as they stand, for the page links.
+    Dictionary<string, string> PageLink(int number)
+    {
+        var values = new Dictionary<string, string> { ["page"] = number.ToString() };
+        if (Model.Search is { } search) values["q"] = search;
+        if (Model.Status is { } status) values["status"] = status;
+        if (Model.CustomerId is { } customerId) values["customerId"] = customerId.ToString();
+        if (Model.Mine) values["mine"] = "true";
+        return values;
+    }
 }
 
 <header class="page-head">
@@ -66,11 +81,11 @@
     <p class="list-count" role="status">
         @if (Model.AnyFilter)
         {
-            @:@count quote@(count == 1 ? "" : "s") match the filters.
+            @:@count quote@(count == 1 ? "" : "s") match the filters.@range
         }
         else
         {
-            @:@count quote@(count == 1 ? "" : "s").
+            @:@count quote@(count == 1 ? "" : "s").@range
         }
     </p>
 
@@ -95,5 +110,28 @@
     else
     {
         <partial name="_QuoteTable" model='new QuoteTable(Model.Quotes, "Quotes", ShowCustomer: Model.CustomerId is null)' />
+
+        @if (paged)
+        {
+            <nav class="pager" aria-label="Pages of quotes">
+                @if (pages.HasPrevious)
+                {
+                    <a class="btn btn-secondary" asp-action="Index" asp-all-route-data="PageLink(pages.Page - 1)">Previous page</a>
+                }
+                else
+                {
+                    <span></span>
+                }
+                <p class="pager-status">Page @pages.Page of @pages.PageCount</p>
+                @if (pages.HasNext)
+                {
+                    <a class="btn btn-secondary" asp-action="Index" asp-all-route-data="PageLink(pages.Page + 1)">Next page</a>
+                }
+                else
+                {
+                    <span></span>
+                }
+            </nav>
+        }
     }
 </section>
