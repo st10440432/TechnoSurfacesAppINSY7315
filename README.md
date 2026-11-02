@@ -332,6 +332,8 @@ Every screen was tested at 375, 768 and 1440 pixels wide, with the keyboard alon
 
 Lighthouse in desktop navigation mode and axe DevTools (axe-core 4.13.0, WCAG 2.1 AA), on 5 October 2026.
 
+**axe on every pull request.** The `accessibility` job in CI starts the app against its own SQL Server, makes one test quote, and runs axe (WCAG 2.1 AA) on sign in, the dashboard, the quote list, the costing sheet, the customer quotation, the review screen, customers, the catalogue and users. It does this signed in as the estimator and as the Managing Director, at 375 and 1440 pixels wide: 34 checks. Any violation fails the job, and every screen's result is uploaded as the `accessibility-results` artifact. The demo accounts get a random password made for that run only. The tests are in `tests/accessibility` (Playwright with axe-core). To run them locally, start the app, set `DEMO_PASSWORD` to the demo accounts' password, then run `npm ci` and `npm test` in that folder.
+
 ## Running it locally
 
 You need the .NET 10 SDK and SQL Server LocalDB, which comes with Visual Studio's ASP.NET and web development workload.

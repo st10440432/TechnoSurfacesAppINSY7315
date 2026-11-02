@@ -451,6 +451,44 @@
         });
     }
 
+    // A table too wide for its box scrolls sideways inside it. Only while it does, the
+    // box takes focus so the arrow keys can scroll it, and is named after its table's
+    // caption for a screen reader. Whether a table overflows depends on the screen
+    // width and the fonts, so it is checked on load, on resize, and when part of the
+    // page is swapped in, such as the costing sheet's line tables after a change.
+    function wireScrollableTables() {
+        function mark() {
+            document.querySelectorAll(".table-wrap").forEach(function (wrap) {
+                if (wrap.dataset.scrollFixed === "true") return;
+                var scrolls = wrap.scrollWidth > wrap.clientWidth + 1;
+                if (scrolls && !wrap.hasAttribute("tabindex")) {
+                    var caption = wrap.querySelector("caption");
+                    wrap.setAttribute("tabindex", "0");
+                    wrap.setAttribute("role", "region");
+                    wrap.setAttribute("aria-label", caption ? caption.textContent.trim() : "Table");
+                    wrap.dataset.scrollMarked = "true";
+                } else if (!scrolls && wrap.dataset.scrollMarked === "true") {
+                    wrap.removeAttribute("tabindex");
+                    wrap.removeAttribute("role");
+                    wrap.removeAttribute("aria-label");
+                    delete wrap.dataset.scrollMarked;
+                }
+            });
+        }
+
+        // A box written with its own tabindex in the view keeps it.
+        document.querySelectorAll(".table-wrap[tabindex]").forEach(function (wrap) { wrap.dataset.scrollFixed = "true"; });
+        mark();
+
+        var pending = null;
+        function later() {
+            if (pending) return;
+            pending = window.requestAnimationFrame(function () { pending = null; mark(); });
+        }
+        window.addEventListener("resize", later);
+        new MutationObserver(later).observe(document.body, { childList: true, subtree: true });
+    }
+
     // A form posted the normal way that needs a yes first, such as retiring a colour:
     // <form method="post" data-confirm="Retire Aspen?" data-confirm-detail="..." data-confirm-tone="danger">
     function wireConfirmForms() {
@@ -486,6 +524,7 @@
         wireApiForms();
         wireAutoSubmit();
         wirePrint();
+        wireScrollableTables();
         wireConfirmForms();
         wireFormBusy();
         showStoredFlash();
