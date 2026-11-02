@@ -1,0 +1,42 @@
+@model TechnoSurfacesApp.Controllers.CostingPrintRatesVm
+@*
+    Rate lines on the costing printout, as plain text. Used twice: for the labour,
+    consumables and extras that are marked up, and for the cut-outs and grooves added
+    after the markup, where the transport amount is a line too.
+*@
+<div class="table-wrap" tabindex="0" role="region" aria-label="@Model.Caption">
+    <table class="doc-lines">
+        <caption class="sr-only">@Model.Caption</caption>
+        <thead>
+            <tr>
+                <th scope="col">Item</th>
+                <th scope="col" class="r">Quantity</th>
+                <th scope="col" class="r">Rate</th>
+                <th scope="col" class="r">Line total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var l in Model.Lines)
+            {
+                <tr>
+                    <td>
+                        <strong>@l.Description</strong>
+                        <span class="sub">@l.PriceOrigin@(l.IsDerived ? (l.IsQuantityOverridden ? ". Typed over the calculated quantity" : ". Quantity calculated from the materials") : "")@(l.HasPriceOverride ? $". Changed on this quote only; the rate card price is {Fmt.Rand(l.ResolvedUnitPrice)}" : "")</span>
+                    </td>
+                    <td class="r">@Fmt.Qty(l.Quantity)</td>
+                    <td class="r">@Fmt.Rand(l.UnitPrice)</td>
+                    <td class="r">@Fmt.Rand(l.LineTotal)</td>
+                </tr>
+            }
+            @if (Model.Transport > 0)
+            {
+                <tr>
+                    <td><strong>Transport</strong><span class="sub">Typed for this job</span></td>
+                    <td class="r"></td>
+                    <td class="r"></td>
+                    <td class="r">@Fmt.Rand(Model.Transport)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

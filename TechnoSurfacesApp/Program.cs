@@ -96,6 +96,15 @@ builder.Services.ConfigureApplicationCookie(options =>
     }
 });
 
+// ZAP: the antiforgery cookie was sent without the Secure flag, because its
+// SecurePolicy defaults to None. Always Secure, like the session cookie, except on
+// a developer machine: there the README runs the app over plain HTTP, and Always
+// would make every form fail because the request is not HTTPS.
+builder.Services.AddAntiforgery(options =>
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always);
+        
 // RFC 9457 problem details for every API error.
 builder.Services.AddProblemDetails();
 
@@ -141,6 +150,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISignInService, SignInService>();
 builder.Services.AddScoped<SignedInUser>();
 builder.Services.AddPlatformHealthChecks();
+builder.Services.AddApiDocument();
 builder.Services.AddSignInRateLimiting();
 
 
@@ -183,6 +193,7 @@ app.UseAuthorization();
 // CSS, scripts and the logo hold no data and must load on the sign-in page.
 app.MapStaticAssets().AllowAnonymous();
 app.MapPlatformHealthChecks();
+app.MapApiDocument();
 
 
 app.MapControllerRoute(
