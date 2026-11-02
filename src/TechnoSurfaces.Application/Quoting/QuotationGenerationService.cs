@@ -74,7 +74,7 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
 
     public async Task<CustomerQuotation?> GenerateVersionAsync(int quoteId, int versionNo, CancellationToken ct = default)
     {
-        var quote = await _quotes.GetAsync(quoteId, ct);
+        var quote = await _quotes.GetWithAllVersionsAsync(quoteId, ct);
         return quote?.Version(versionNo) is { } version ? await ComposeAsync(quote, version, ct) : null;
     }
 
