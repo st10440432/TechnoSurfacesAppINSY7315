@@ -1323,7 +1323,6 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 
 @media print {
     .tabs, .qstrip, .save-state { display: none !important; }
-
 }
 
 /* ==========================================================================
