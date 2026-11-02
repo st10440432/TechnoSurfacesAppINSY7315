@@ -518,6 +518,14 @@
         });
     }
 
+    // Sets the dashboard bars from data-fill. Setting a style from a script is
+    // allowed by the CSP; a style="" attribute in the markup would need 'unsafe-inline'.
+    function wireFillBars() {
+        document.querySelectorAll("[data-fill]").forEach(function (el) {
+            el.style.setProperty("--fill", el.dataset.fill + "%");
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         wireNavigation();
         wireActionButtons();
@@ -529,6 +537,7 @@
         wireFormBusy();
         showStoredFlash();
         focusOnLoad();
+        wireFillBars();
     });
 
     window.TS = {
