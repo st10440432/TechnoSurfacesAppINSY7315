@@ -7,6 +7,8 @@ using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfaces.Infrastructure.Data;
 using TechnoSurfaces.IntegrationTests.Infrastructure;
 using TechnoSurfacesApp.Identity;
+using TechnoSurfaces.Application.Auditing;
+using TechnoSurfacesApp.Helpers;
 
 namespace TechnoSurfaces.IntegrationTests.Security;
 
@@ -156,6 +158,40 @@ public sealed class SecurityTests
         Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
     }
 
+    [Fact]
+    public async Task Signing_in_records_the_time_on_the_account()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var before = DateTime.UtcNow.AddSeconds(-1);
+
+        await SignIn.AsAsync(Browser(server), AppFactory.EstimatorEmail);
+
+        using var scope = server.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+        var account = await users.FindByEmailAsync(AppFactory.EstimatorEmail);
+
+        Assert.NotNull(account!.LastSignInUtc);
+        Assert.True(account.LastSignInUtc >= before);
+    }
+
+    [Fact]
+    public async Task The_users_screen_shows_the_last_sign_in()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var md = Browser(server);
+        await SignIn.AsAsync(md, AppFactory.ManagingDirectorEmail);
+
+        var html = await md.GetStringAsync("/Admin/Users");
+
+        Assert.Contains("Last sign-in", html);
+
+        // The page must show the time actually recorded, not "Never".
+        using var scope = server.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+        var account = await users.FindByEmailAsync(AppFactory.ManagingDirectorEmail);
+        Assert.Contains(Fmt.DateTimeShort(AuditTime.ToLocal(account!.LastSignInUtc!.Value)), html);
+    }
+
     /// <summary>Posts the sign-in form with a given antiforgery token, as a browser would.</summary>
     private static Task<HttpResponseMessage> PostSignInFormAsync(HttpClient client, string token) =>
         client.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string>
@@ -227,6 +263,36 @@ public sealed class SecurityTests
             var account = await users.FindByEmailAsync(email);
             Assert.True(await users.IsLockedOutAsync(account!));
         }
+    }
+
+    [Fact]
+    public async Task A_locked_account_gets_the_same_message_as_an_unknown_email()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+
+        // A throwaway account, so no other suite's account is locked.
+        const string email = "enumeration-test@technosurfaces.co.za";
+        using (var scope = server.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+            var created = await users.CreateAsync(
+                new UserAccount { UserName = email, Email = email, MustChangePassword = false },
+                AppFactory.DemoPassword);
+            Assert.True(created.Succeeded);
+        }
+
+        var client = Browser(server);
+        for (var attempt = 0; attempt < 5; attempt++)
+            await SignIn.PostAsync(client, email, "Wrong-Password-2026");
+
+        var locked = await (await SignIn.PostAsync(client, email, "Wrong-Password-2026"))
+            .Content.ReadAsStringAsync();
+        var unknown = await (await SignIn.PostAsync(client, "nobody-here@technosurfaces.co.za", "Wrong-Password-2026"))
+            .Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("Too many failed attempts", locked);
+        Assert.Contains("The email address or password is incorrect.", locked);
+        Assert.Contains("The email address or password is incorrect.", unknown);
     }
 
     [Fact]
