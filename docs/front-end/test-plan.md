@@ -64,6 +64,19 @@ Not yet means the screen has not been tested in its final form.
 | Quotation terms | Pass | Pass | Pass | Pass | Pass |
 | Audit trail | Pass | Pass | Pass | Pass | Pass |
 
+### Customer quotation on A4 (30 October 2026)
+
+Print-previewed in Chrome and Edge on A4 portrait with a made-up quote of 23 lines, the standing terms and the Staron warranty: four pages.
+
+| Found | Fixed |
+|---|---|
+| An A4 page inside its margins is about 690 pixels wide, so the phone layout applied when printing: the company address dropped under the logo, the quote details ran in one column and the three signature lines were stacked | The printed document keeps the desktop layout: address beside the logo, details in two columns, signatures in one row |
+| A terms heading could be left at the foot of a page with its list on the next | Headings stay with what follows them, and the totals, validity line and warranty rows are never split |
+| Nothing told the reader how many pages there were | "Page 1 of 4" at the foot of every page |
+| Checked and already right | The table headings repeat on every page, no row is split, the navy table heading prints in colour, no column is cut off, and the side menu, buttons and editor never print |
+
+Before and after: [quotation-a4-before.pdf](print/quotation-a4-before.pdf), [quotation-a4-after.pdf](print/quotation-a4-after.pdf) and, from Edge, [quotation-a4-after-edge.pdf](print/quotation-a4-after-edge.pdf).
+
 ### How the results above were checked (5 October 2026)
 
 Each screen was opened in Chrome at 375, 768 and 1440 pixels wide against a local copy of the app with the seeded catalogue, rate card and terms and two test quotes, one written by the Managing Director and one by an estimator. The screens behind sign in were checked as the Managing Director and again as an estimator. A screen passes a width when nothing scrolls sideways and nothing runs past the edge of the screen. Tables turn into labelled cards below 768 pixels, and the material catalogue does so below 1100 pixels as well, because it has the most columns.
