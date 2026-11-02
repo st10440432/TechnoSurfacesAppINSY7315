@@ -47,7 +47,8 @@ public sealed class UserAdminService : IUserAdminService
                     p.IsActive,
                     account?.LockoutEnd > DateTimeOffset.UtcNow,
                     account?.MustChangePassword ?? false,
-                    p.CreatedAtUtc);
+                    p.CreatedAtUtc,
+                    account?.LastSignInUtc);
             })
             .OrderByDescending(u => u.IsActive).ThenBy(u => u.FullName)
             .ToList();

@@ -7,6 +7,13 @@ public interface IAuditTrailService
     Task<AuditPage> SearchAsync(AuditFilter filter, CancellationToken ct = default);
 
     /// <summary>
+    /// The newest changes, newest first, for the dashboard's recent activity. Reads only
+    /// those rows, where <see cref="SearchAsync"/> counts the whole trail and reads a
+    /// screen's worth.
+    /// </summary>
+    Task<IReadOnlyList<AuditRow>> RecentAsync(int count, CancellationToken ct = default);
+
+    /// <summary>
     /// Every recorded change to one quote, its versions and its costing lines, including
     /// lines since removed. This is how an estimator sees the MD's corrections (US-19).
     /// </summary>
