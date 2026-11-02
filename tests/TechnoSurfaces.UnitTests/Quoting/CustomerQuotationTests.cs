@@ -22,6 +22,12 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
     private DbContextOptions<TechnoSurfacesDbContext> _options = null!;
     private int _quoteId;
 
+    /// <summary>
+    /// The quotation name of the fixture's material line. Its costing description names
+    /// no colour in its band, so the quotation gives the product line and thickness.
+    /// </summary>
+    private string _infinitoName = "";
+
     public async Task InitializeAsync()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
@@ -39,6 +45,7 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         var infinitoPrice = await db.MaterialPrices
             .Include(p => p.PriceBand).ThenInclude(b => b!.ProductLine)
             .FirstAsync(p => p.PriceBand != null && p.PriceBand.ProductLine!.Name.StartsWith("Infinito"));
+        _infinitoName = $"{infinitoPrice.PriceBand!.ProductLine!.Name} {infinitoPrice.PriceBand.ProductLine.ThicknessMm} mm";
 
         var quote = new Quote("TS-QTN-1", customer.Id, customer.Contacts.Single().Id, "estimator", new DateOnly(2026, 10, 4));
         quote.UpdateDetails("Tokai", "Kitchen", "SWEET VALLEY FARM", null);
@@ -56,7 +63,8 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
     private async Task<T> WithServiceAsync<T>(Func<QuotationGenerationService, Task<T>> act)
     {
         await using var db = new TechnoSurfacesDbContext(_options);
-        return await act(new QuotationGenerationService(new QuoteRepository(db), new QuotationTermsReader(db), new QuoteCalculationService()));
+        return await act(new QuotationGenerationService(new QuoteRepository(db), new QuotationTermsReader(db), new QuoteCalculationService(),
+            new MaterialNameReader(db)));
     }
 
     /// <summary>Every type the customer document is made of, nested types included.</summary>
@@ -288,7 +296,7 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
             material =>
             {
                 Assert.Equal("Material", material.Room);
-                Assert.Equal("Infinito material line", material.Description);
+                Assert.Equal(_infinitoName, material.Description);
                 Assert.Equal(1m, material.Quantity);
                 Assert.Equal(1500m, material.AmountExVat);
             },
@@ -310,6 +318,94 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
 
         Assert.Equal(2, document!.Lines.Count);
         Assert.All(document.Lines, line => Assert.Equal(QuotationGenerationService.MaterialItem, line.Room));
+    }
+
+    /// <summary>
+    /// A quote with one material line written as the costing sheet writes it,
+    /// "[product line] [colour] [sheet size]", for the first colour of the product line.
+    /// </summary>
+    private async Task<(int QuoteId, string Colour, string SheetSize)> AddCostedMaterialAsync(string reference, string productLine, decimal sheets,
+        int thicknessMm = 12, string colourEndsWith = "")
+    {
+        await using var db = new TechnoSurfacesDbContext(_options);
+        var customer = await db.Customers.Include(c => c.Contacts).SingleAsync();
+        var colour = await db.Colours.Include(c => c.ProductLine)
+            .Where(c => c.ProductLine!.Name == productLine && c.ProductLine.ThicknessMm == thicknessMm && c.Name.EndsWith(colourEndsWith))
+            .OrderBy(c => c.Id).FirstAsync();
+        var price = await db.MaterialPrices.Include(p => p.SheetSize)
+            .Where(p => p.ColourId == colour.Id || (colour.PriceBandId != null && p.PriceBandId == colour.PriceBandId))
+            .OrderBy(p => p.Id).FirstAsync();
+
+        var quote = new Quote(reference, customer.Id, customer.Contacts.Single().Id, "estimator", new DateOnly(2026, 10, 4));
+        var version = quote.StartNewVersion("estimator", markupPercent: 35m);
+        version.AddCostingLine(CostingLine.ForMaterial(price.Id, $"{colour.ProductLine!.Name} {colour.Name} {price.SheetSize}", 1000m,
+            "Price list", sheets, price.SheetSize!.AreaM2));
+        db.Quotes.Add(quote);
+        await db.SaveChangesAsync();
+        return (quote.Id, colour.Name, price.SheetSize.ToString()!);
+    }
+
+    [Fact]
+    public async Task A_copied_material_reads_as_its_brand_colour_and_thickness()
+    {
+        // Staron is priced by band, so the colour comes from the line, not the price.
+        var (quoteId, colour, _) = await AddCostedMaterialAsync("TS-QTN-BRAND", "Staron", sheets: 1m);
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(quoteId));
+
+        Assert.Equal($"Staron {colour} 12 mm", Assert.Single(document!.Lines).Description);
+    }
+
+    [Fact]
+    public async Task A_copied_material_without_a_brand_reads_as_its_product_line_colour_and_thickness()
+    {
+        var (quoteId, colour, _) = await AddCostedMaterialAsync("TS-QTN-NOBRAND", "Max Modified Acrylic", sheets: 1m);
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(quoteId));
+
+        Assert.Equal($"Max Modified Acrylic {colour} 12 mm", Assert.Single(document!.Lines).Description);
+    }
+
+    [Fact]
+    public async Task A_colour_whose_name_gives_the_thickness_does_not_say_it_twice()
+    {
+        var (quoteId, colour, _) = await AddCostedMaterialAsync("TS-QTN-6MM", "Max Pure Solid Surface", sheets: 1m,
+            thicknessMm: 6, colourEndsWith: "6mm");
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var document = await WithServiceAsync(s => s.GenerateAsync(quoteId));
+
+        Assert.Equal($"Max Pure Solid Surface {colour}", Assert.Single(document!.Lines).Description);
+    }
+
+    [Fact]
+    public async Task A_copied_material_shows_no_sheet_size_and_no_sheet_count()
+    {
+        var (quoteId, _, sheetSize) = await AddCostedMaterialAsync("TS-QTN-SHEETS", "Staron", sheets: 3m);
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+        var line = Assert.Single((await WithServiceAsync(s => s.GenerateAsync(quoteId)))!.Lines);
+
+        // Three sheets on the costing; one item, at the price of all three, for the customer.
+        Assert.DoesNotContain(sheetSize, line.Description);
+        Assert.DoesNotMatch(@"\d+\s*x\s*\d+", line.Description);
+        Assert.Equal(1m, line.Quantity);
+        Assert.Equal(4050m, line.AmountExVat);
+    }
+
+    [Fact]
+    public async Task Copying_the_costing_keeps_the_sheet_size_on_the_costing_line()
+    {
+        var (quoteId, colour, sheetSize) = await AddCostedMaterialAsync("TS-QTN-KEEP", "Staron", sheets: 2m);
+
+        await WithServiceAsync(s => s.AddLinesFromCostingAsync(quoteId));
+
+        await using var db = new TechnoSurfacesDbContext(_options);
+        var costing = await db.CostingLines.SingleAsync(l => db.QuoteVersions.Any(v => v.Id == l.QuoteVersionId && v.QuoteId == quoteId));
+        Assert.Equal($"Staron {colour} {sheetSize}", costing.Description);
+        Assert.Equal(2m, costing.Quantity);
     }
 
     [Fact]
@@ -334,7 +430,7 @@ public sealed class CustomerQuotationTests : IAsyncLifetime
         var result = await WithServiceAsync(s => s.AddLinesFromCostingAsync(_quoteId));
         var document = await WithServiceAsync(s => s.GenerateAsync(_quoteId));
 
-        Assert.Equal(new[] { "Written by hand", "Infinito material line", QuotationGenerationService.OtherCostsDescription },
+        Assert.Equal(new[] { "Written by hand", _infinitoName, QuotationGenerationService.OtherCostsDescription },
             document!.Lines.Select(l => l.Description));
         Assert.False(result.Check!.Matches);
         Assert.Equal(100m, result.Check.Difference);

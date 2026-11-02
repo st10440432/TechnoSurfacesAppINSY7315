@@ -25,6 +25,7 @@ public static class DependencyInjection
 
         services.AddScoped<ICatalogueReader, CatalogueReader>();
         services.AddScoped<IQuotationTermsReader, QuotationTermsReader>();
+        services.AddScoped<IMaterialNameReader, MaterialNameReader>();
         services.AddScoped<IQuoteTermsRecorder, QuoteTermsRecorder>();
 
         // Both strategies are registered, and PriceResolver picks the one matching
