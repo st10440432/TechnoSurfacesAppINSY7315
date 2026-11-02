@@ -7,6 +7,8 @@ using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfaces.Infrastructure.Data;
 using TechnoSurfaces.IntegrationTests.Infrastructure;
 using TechnoSurfacesApp.Identity;
+using TechnoSurfaces.Application.Auditing;
+using TechnoSurfacesApp.Helpers;
 
 namespace TechnoSurfaces.IntegrationTests.Security;
 
@@ -154,6 +156,40 @@ public sealed class SecurityTests
         Assert.NotEqual(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, after.StatusCode);
         Assert.StartsWith("/Account/Login", after.Headers.Location!.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task Signing_in_records_the_time_on_the_account()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var before = DateTime.UtcNow.AddSeconds(-1);
+
+        await SignIn.AsAsync(Browser(server), AppFactory.EstimatorEmail);
+
+        using var scope = server.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+        var account = await users.FindByEmailAsync(AppFactory.EstimatorEmail);
+
+        Assert.NotNull(account!.LastSignInUtc);
+        Assert.True(account.LastSignInUtc >= before);
+    }
+
+    [Fact]
+    public async Task The_users_screen_shows_the_last_sign_in()
+    {
+        await using var server = _app.WithWebHostBuilder(_ => { });
+        var md = Browser(server);
+        await SignIn.AsAsync(md, AppFactory.ManagingDirectorEmail);
+
+        var html = await md.GetStringAsync("/Admin/Users");
+
+        Assert.Contains("Last sign-in", html);
+
+        // The page must show the time actually recorded, not "Never".
+        using var scope = server.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
+        var account = await users.FindByEmailAsync(AppFactory.ManagingDirectorEmail);
+        Assert.Contains(Fmt.DateTimeShort(AuditTime.ToLocal(account!.LastSignInUtc!.Value)), html);
     }
 
     /// <summary>Posts the sign-in form with a given antiforgery token, as a browser would.</summary>
