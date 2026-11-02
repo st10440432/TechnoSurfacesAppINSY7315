@@ -89,16 +89,17 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
     /// estimator enters. Sandpaper and consumables follow the total area; silicon
     /// and sealing follow the sheet count, two per sheet.
     ///
-    /// Rounded up to a whole unit (team decision, 5 October 2026): consumables are
-    /// bought whole, so 19,58 m² of sandpaper is charged as 20 and 5,5 tubes of
-    /// silicon as 6. Rounding up rather than to the nearest unit means the job never
-    /// carries less than it uses. The costing sheet shows the same figure before the
-    /// line is added, so there is one rule in one place.
+    /// The exact figure, not rounded to a whole unit, as the client's own costing
+    /// sheets work it out (confirmed by the client, 27 October 2026): 4,4481 m² of
+    /// sandpaper is charged as 4,4481, and 1,6 sheets of silicon at two per sheet as
+    /// 3,2. Held to four decimal places, the precision a costing line's quantity is
+    /// stored at. The costing sheet shows the same figure before the line is added,
+    /// so there is one rule in one place.
     /// </summary>
     public static decimal? DerivedQuantity(DerivationRule rule, decimal factor, decimal totalAreaM2, decimal totalSheets) => rule switch
     {
-        DerivationRule.FromTotalAreaM2 => decimal.Ceiling(totalAreaM2 * factor),
-        DerivationRule.FromSheetCount => decimal.Ceiling(totalSheets * factor),
+        DerivationRule.FromTotalAreaM2 => decimal.Round(totalAreaM2 * factor, 4),
+        DerivationRule.FromSheetCount => decimal.Round(totalSheets * factor, 4),
         _ => null
     };
 }

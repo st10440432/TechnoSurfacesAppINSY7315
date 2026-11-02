@@ -698,6 +698,8 @@ dialog.dialog .dialog-foot {
    ========================================================================== */
 
 .table-wrap { overflow-x: auto; }
+/* A table box that can scroll sideways takes focus, so the arrow keys can scroll it. */
+.table-wrap[tabindex]:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 table.data caption { caption-side: top; padding: 0 0 var(--space-2); text-align: left; color: var(--ink-secondary); }
@@ -1247,6 +1249,10 @@ table.data tr.group-row th {
 /* Quote list */
 .list-count { margin: 0; padding: var(--space-3) var(--space-5); font-size: var(--text-sm); color: var(--ink-secondary); border-bottom: 1px solid var(--line); }
 .filter-check { align-self: flex-end; min-height: 2.5rem; align-items: center; }
+
+/* Previous and next under the quote list */
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--line); }
+.pager-status { margin: 0; font-size: var(--text-sm); color: var(--ink-secondary); }
 
 /* The error summary at the top of a form */
 .error-summary:focus { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
