@@ -70,21 +70,36 @@ public sealed class AuditTrailService : IAuditTrailService
             .Select(Key)
             .ToList();
 
-        // A costing line can be removed, but the audit row written when it was added
-        // still records which version it belonged to, so its history stays visible.
-        var lineKeys = await _db.AuditEntries.AsNoTracking()
-            .Where(a => a.EntityName == nameof(CostingLine)
-                     && a.PropertyName == nameof(CostingLine.QuoteVersionId)
-                     && a.NewValue != null
-                     && versionKeys.Contains(a.NewValue!))
-            .Select(a => a.EntityKey)
+        // A costing or quotation line can be removed, but the audit row written when
+        // it was added still records which version it belonged to, so its history
+        // stays visible. An invoice record is found the same way, through its quote.
+        // One query for all three: this runs on every costing sheet page, which has a
+        // budget of SQL round trips (CostingQueryBudgetTests).
+        var children = await _db.AuditEntries.AsNoTracking()
+            .Where(a => a.NewValue != null
+                     && (((a.EntityName == nameof(CostingLine) || a.EntityName == nameof(QuotationLine))
+                          && a.PropertyName == nameof(CostingLine.QuoteVersionId)
+                          && versionKeys.Contains(a.NewValue!))
+                      || (a.EntityName == nameof(InvoiceRecord)
+                          && a.PropertyName == nameof(InvoiceRecord.QuoteId)
+                          && a.NewValue == quoteKey)))
+            .Select(a => new { a.EntityName, a.EntityKey })
             .Distinct()
             .ToListAsync(ct);
+
+        List<string> KeysOf(string entityName) =>
+            children.Where(c => c.EntityName == entityName).Select(c => c.EntityKey).ToList();
+
+        var lineKeys = KeysOf(nameof(CostingLine));
+        var quotationLineKeys = KeysOf(nameof(QuotationLine));
+        var invoiceKeys = KeysOf(nameof(InvoiceRecord));
 
         var entries = await _db.AuditEntries.AsNoTracking()
             .Where(a => (a.EntityName == nameof(Quote) && a.EntityKey == quoteKey)
                      || (a.EntityName == nameof(QuoteVersion) && versionKeys.Contains(a.EntityKey))
-                     || (a.EntityName == nameof(CostingLine) && lineKeys.Contains(a.EntityKey)))
+                     || (a.EntityName == nameof(CostingLine) && lineKeys.Contains(a.EntityKey))
+                     || (a.EntityName == nameof(QuotationLine) && quotationLineKeys.Contains(a.EntityKey))
+                     || (a.EntityName == nameof(InvoiceRecord) && invoiceKeys.Contains(a.EntityKey)))
             .OrderByDescending(a => a.ChangedAtUtc).ThenByDescending(a => a.Id)
             .ToListAsync(ct);
 
