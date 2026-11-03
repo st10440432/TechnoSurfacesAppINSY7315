@@ -1140,7 +1140,8 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
     table.doc-lines th { background: var(--brand-navy) !important; color: var(--on-dark) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     table.doc-lines tr.doc-bill-section th { background: var(--brand-navy-tint) !important; color: var(--brand-navy) !important; }
     .doc .doc-scroll { overflow: visible; }
-    .doc .doc-scroll table.doc-bill { min-width: 0; }
+    .doc .doc-scroll table.doc-bill, .doc .doc-scroll table.doc-summary { min-width: 0; }
+    table.doc-lines tbody th.doc-row-head { background: none !important; color: var(--ink) !important; }
     table.doc-lines tr, .doc-terms li, .doc-sign { break-inside: avoid; }
     a { color: var(--ink); text-decoration: none; }
 }
@@ -1282,6 +1283,14 @@ address.doc-co { font-style: normal; }
 /* A bill of quantities: narrow number and unit columns, a section heading over its items. */
 .doc-scroll { overflow-x: auto; margin-bottom: var(--space-5); }
 .doc-scroll table.doc-bill { min-width: 34rem; margin-bottom: 0; }
+
+/* The summary of sheets and adhesive: a column per material, row headings in the body. */
+.doc-scroll table.doc-summary { min-width: 40rem; margin-bottom: 0; }
+table.doc-summary th.c { text-align: center; }
+table.doc-summary th.r { text-align: right; }
+table.doc-summary th.doc-col-material { min-width: 7rem; text-transform: none; letter-spacing: 0; vertical-align: bottom; }
+table.doc-lines tbody th.doc-row-head { padding: var(--space-3); background: none; color: var(--ink); font-size: inherit; font-weight: var(--weight-regular, 400); text-align: left; text-transform: none; letter-spacing: 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.doc-summary tbody.doc-summary-totals tr:first-child > * { border-top: 2px solid var(--brand-navy); }
 table.doc-bill .doc-col-item  { width: 8%; }
 table.doc-bill .doc-col-unit  { width: 7%; }
 table.doc-bill .doc-col-total { width: 14%; }

@@ -18,7 +18,7 @@ else
         <div class="card-body item-costing">
             <h3 class="section-label">@(item.Number is null ? item.Name : $"{item.Number}. {item.Name}")</h3>
             <p class="hint">
-                Markup @Fmt.Pct(item.MarkupPercent). One costs @Fmt.Rand(item.TotalExVat) ex VAT;
+                @(item.PricePerM2 is { } p ? $"Priced at {Fmt.Rand(p)} per m²" : $"Markup {Fmt.Pct(item.MarkupPercent)}"). One costs @Fmt.Rand(item.TotalExVat) ex VAT;
                 @Fmt.Qty(item.Quantity) needed, @Fmt.Rand(item.AmountExVat).
             </p>
         </div>

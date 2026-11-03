@@ -182,8 +182,11 @@ public sealed class ItemRequest : IValidatableObject
     [StringLength(QuoteItem.SectionMaxLength)]
     public string? Section { get; set; }
 
+    /// <summary>Prices the item per square metre of its material instead of by its markup. None prices it by its markup.</summary>
+    public decimal? PricePerM2 { get; set; }
+
     public ItemInput ToInput() => new(Name.Trim(), string.IsNullOrWhiteSpace(Number) ? null : Number.Trim(), Quantity, MarkupPercent,
-        Unit, Section);
+        Unit, Section, PricePerM2);
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -198,14 +201,41 @@ public sealed class ItemRequest : IValidatableObject
 
         if (MarkupPercent is < 0 or > 999.99m)
             yield return new("A markup must be between 0 and 999.99 per cent.", new[] { nameof(MarkupPercent) });
+
+        if (PricePerM2 < 0)
+            yield return new("A price per square metre cannot be negative.", new[] { nameof(PricePerM2) });
+
+        if (PricePerM2 > ColumnLimits.Money)
+            yield return new("This price per square metre is too large.", new[] { nameof(PricePerM2) });
+    }
+}
+
+/// <summary>The body of PUT /api/quotes/{quoteId}/buffer-stock: sheets of one material beyond what the items need.</summary>
+public sealed class BufferStockRequest : IValidatableObject
+{
+    /// <summary>The material as the summary of sheets lists it.</summary>
+    [Required, StringLength(QuoteBufferStock.MaterialMaxLength)]
+    public string Material { get; set; } = "";
+
+    /// <summary>No sheets takes the buffer off.</summary>
+    public decimal Sheets { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Sheets < 0)
+            yield return new("Buffer stock cannot be negative.", new[] { nameof(Sheets) });
+
+        if (Sheets > ColumnLimits.Quantity)
+            yield return new("This number of sheets is too large.", new[] { nameof(Sheets) });
     }
 }
 
 /// <summary>An item on the quote as the costing sheet shows it.</summary>
-public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent, string Unit, string? Section)
+public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent, string Unit, string? Section,
+    decimal? PricePerM2 = null)
 {
     public static ItemDto From(QuoteItem item) =>
-        new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent, item.Unit, item.Section);
+        new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent, item.Unit, item.Section, item.PricePerM2);
 }
 
 public sealed record ItemResponse(ItemDto Item, QuoteTotals Totals)

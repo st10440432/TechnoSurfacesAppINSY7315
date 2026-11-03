@@ -41,10 +41,12 @@ public sealed record ChangeCosting(decimal? MarkupPercent = null, decimal? Trans
 
 /// <summary>
 /// An item on the quote: its name, its number on a bill of quantities, how many are
-/// needed, and the unit and section it is listed under on the bill.
+/// needed, and the unit and section it is listed under on the bill. A price per
+/// square metre prices the item by the area of its material instead of by its
+/// markup; none prices it by its markup.
 /// </summary>
 public sealed record ItemInput(string Name, string? Number, decimal Quantity, decimal? MarkupPercent = null,
-    string? Unit = null, string? Section = null);
+    string? Unit = null, string? Section = null, decimal? PricePerM2 = null);
 
 public enum CostingOutcome
 {
@@ -112,6 +114,15 @@ public interface ICostingSheetService
 
     /// <summary>Takes an item and its costing off the quote. The last item stays.</summary>
     Task<CostingResult> RemoveItemAsync(int quoteId, int itemId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The summary of sheets and adhesive for the current version, or for the version
+    /// named. Internal: it carries cost prices.
+    /// </summary>
+    Task<SheetSummary?> GetSheetSummaryAsync(int quoteId, int? versionNo = null, CancellationToken ct = default);
+
+    /// <summary>The buffer stock of one material on the current version; no sheets takes it off.</summary>
+    Task<CostingResult> SetBufferStockAsync(int quoteId, string material, decimal sheets, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -371,6 +382,7 @@ public sealed class CostingSheetService : ICostingSheetService
             return Sealed(version);
 
         var item = version.AddItem(request.Name, request.Number, request.Quantity, request.MarkupPercent, request.Unit, request.Section);
+        version.SetItemPricePerM2(item, request.PricePerM2);
         await _quotes.SaveChangesAsync(ct);
         return new(CostingOutcome.Ok, quote, Totals: _calculator.Calculate(version), Version: version, Item: item);
     }
@@ -386,6 +398,7 @@ public sealed class CostingSheetService : ICostingSheetService
             return ItemNotFound(itemId);
 
         version.ChangeItem(item, request.Name, request.Number, request.Quantity, request.Unit, request.Section);
+        version.SetItemPricePerM2(item, request.PricePerM2);
         if (request.MarkupPercent is { } markup)
             version.SetItemMarkupPercent(item, markup);
 
@@ -452,6 +465,36 @@ public sealed class CostingSheetService : ICostingSheetService
         foreach (var removed in CostingOnQuotation.Follow(version, totals))
             _quotes.RemoveQuotationLine(removed);
         return totals;
+    }
+
+    public async Task<SheetSummary?> GetSheetSummaryAsync(int quoteId, int? versionNo = null, CancellationToken ct = default)
+    {
+        var quote = versionNo is null ? await _quotes.GetAsync(quoteId, ct) : await _quotes.GetWithAllVersionsAsync(quoteId, ct);
+        var version = versionNo is int no ? quote?.Version(no) : quote?.CurrentVersion;
+        if (version is null)
+            return null;
+        await _quotes.LoadBufferStockAsync(version, ct);
+        return SheetsAndAdhesive.Summarise(version);
+    }
+
+    public async Task<CostingResult> SetBufferStockAsync(int quoteId, string material, decimal sheets, CancellationToken ct = default)
+    {
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        if (quote?.CurrentVersion is not { } version)
+            return new(CostingOutcome.QuoteNotFound);
+        if (version.IsSealed)
+            return Sealed(version);
+
+        // Buffer stock is for a material the job uses, as the summary lists it.
+        if (!version.CostingLines.Any(l => l.LineType == CostingLineType.Material && l.Description == material.Trim()))
+            return new(CostingOutcome.NotApplicable, Problem: "This quote has no such material. Add it to an item first.");
+
+        await _quotes.LoadBufferStockAsync(version, ct);
+        if (version.SetBufferStock(material, sheets) is { } removed)
+            _quotes.RemoveBufferStock(removed);
+
+        await _quotes.SaveChangesAsync(ct);
+        return new(CostingOutcome.Ok, quote, Version: version);
     }
 
     private static CostingResult Sealed(QuoteVersion version) =>

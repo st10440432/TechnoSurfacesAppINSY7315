@@ -102,6 +102,12 @@ public sealed class QuoteVersionConfiguration : IEntityTypeConfiguration<QuoteVe
             .OnDelete(DeleteBehavior.NoAction);
         e.Navigation(x => x.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        e.HasMany(x => x.BufferStock)
+            .WithOne()
+            .HasForeignKey(b => b.QuoteVersionId)
+            .OnDelete(DeleteBehavior.NoAction);
+        e.Navigation(x => x.BufferStock).UsePropertyAccessMode(PropertyAccessMode.Field);
+
         e.HasMany(x => x.CostingLines)
             .WithOne()
             .HasForeignKey(l => l.QuoteVersionId)
@@ -222,8 +228,21 @@ public sealed class QuoteItemConfiguration : IEntityTypeConfiguration<QuoteItem>
         // on the client's tenders is.
         e.Property(x => x.Unit).HasMaxLength(QuoteItem.UnitMaxLength).IsRequired().HasDefaultValue(QuoteItem.DefaultUnit);
         e.Property(x => x.Section).HasMaxLength(QuoteItem.SectionMaxLength);
+        e.Property(x => x.PricePerM2).HasPrecision(18, 2);
 
         e.HasIndex(x => x.QuoteVersionId);
+    }
+}
+
+public sealed class QuoteBufferStockConfiguration : IEntityTypeConfiguration<QuoteBufferStock>
+{
+    public void Configure(EntityTypeBuilder<QuoteBufferStock> e)
+    {
+        e.Property(x => x.Material).HasMaxLength(QuoteBufferStock.MaterialMaxLength).IsRequired();
+        e.Property(x => x.Sheets).HasPrecision(18, 4);
+
+        // One buffer per material on a version.
+        e.HasIndex(x => new { x.QuoteVersionId, x.Material }).IsUnique();
     }
 }
 

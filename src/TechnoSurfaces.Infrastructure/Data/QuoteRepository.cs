@@ -106,5 +106,14 @@ public sealed class QuoteRepository : IQuoteRepository
 
     public void RemoveItem(QuoteItem item) => _db.QuoteItems.Remove(item);
 
+    public async Task LoadBufferStockAsync(QuoteVersion version, CancellationToken ct = default)
+    {
+        // A version not saved yet has nothing to read.
+        if (version.Id != 0)
+            await _db.Entry(version).Collection(v => v.BufferStock).LoadAsync(ct);
+    }
+
+    public void RemoveBufferStock(QuoteBufferStock buffer) => _db.Remove(buffer);
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

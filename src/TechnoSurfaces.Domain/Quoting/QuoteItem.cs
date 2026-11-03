@@ -44,6 +44,15 @@ public class QuoteItem
     /// <summary>The heading the item is listed under on a bill of quantities, such as Worktops.</summary>
     public string? Section { get; private set; }
 
+    /// <summary>
+    /// A price per square metre of the item's material, when the estimator prices the
+    /// item that way instead of by its markup, as the client sometimes prices a job.
+    /// Null for an item priced by its markup.
+    /// </summary>
+    public decimal? PricePerM2 { get; private set; }
+
+    public bool IsPricedByArea => PricePerM2 is not null;
+
     public int SortOrder { get; set; }
 
     /// <summary>The name a new quote's first item is given until it is renamed.</summary>
@@ -76,6 +85,13 @@ public class QuoteItem
         Section = string.IsNullOrWhiteSpace(section) ? null : section.Trim();
     }
 
+    internal void PriceByArea(decimal? pricePerM2)
+    {
+        if (pricePerM2 < 0)
+            throw new ArgumentOutOfRangeException(nameof(pricePerM2), "A price per square metre cannot be negative.");
+        PricePerM2 = pricePerM2;
+    }
+
     internal void SetQuantity(decimal quantity)
     {
         if (quantity <= 0)
@@ -98,6 +114,7 @@ public class QuoteItem
         MarkupPercent = MarkupPercent,
         Unit = Unit,
         Section = Section,
+        PricePerM2 = PricePerM2,
         SortOrder = SortOrder
     };
 }

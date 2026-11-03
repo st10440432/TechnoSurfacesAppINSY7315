@@ -20,6 +20,7 @@ public class QuoteVersion
     private readonly List<QuotationLine> _quotationLines = new();
     private readonly List<QuoteVersionTerm> _terms = new();
     private readonly List<QuoteVersionWarranty> _warranties = new();
+    private readonly List<QuoteBufferStock> _bufferStock = new();
 
     private QuoteVersion() { }
 
@@ -123,6 +124,9 @@ public class QuoteVersion
 
     public IReadOnlyCollection<CostingLine> CostingLines => _costingLines.AsReadOnly();
     public IReadOnlyCollection<QuotationLine> QuotationLines => _quotationLines.AsReadOnly();
+
+    /// <summary>Sheets ordered beyond what the items need, per material.</summary>
+    public IReadOnlyCollection<QuoteBufferStock> BufferStock => _bufferStock.AsReadOnly();
 
     /// <summary>
     /// The standing wording this version was approved with. Empty until the
@@ -260,6 +264,38 @@ public class QuoteVersion
         if (_items.Count == 1)
             MarkupPercent = _items[0].MarkupPercent;
         return lines;
+    }
+
+    /// <summary>
+    /// Prices an item at a rate per square metre of its material instead of by its
+    /// markup, or by its markup again when no price is given.
+    /// </summary>
+    public void SetItemPricePerM2(QuoteItem item, decimal? pricePerM2)
+    {
+        EnsureUnsealed();
+        OwnItem(item).PriceByArea(pricePerM2);
+    }
+
+    /// <summary>
+    /// Sets the buffer stock of one material. No sheets takes the material's buffer
+    /// off. Returns the record taken off, for the caller to delete.
+    /// </summary>
+    public QuoteBufferStock? SetBufferStock(string material, decimal sheets)
+    {
+        EnsureUnsealed();
+        var existing = _bufferStock.FirstOrDefault(b => b.Material == material.Trim());
+        if (sheets == 0)
+        {
+            if (existing is not null)
+                _bufferStock.Remove(existing);
+            return existing;
+        }
+
+        if (existing is null)
+            _bufferStock.Add(new QuoteBufferStock(material, sheets));
+        else
+            existing.SetSheets(sheets);
+        return null;
     }
 
     private QuoteItem OwnItem(QuoteItem item) =>
@@ -462,6 +498,9 @@ public class QuoteVersion
             revision._costingLines.Add(copy);
         }
 
+        foreach (var buffer in _bufferStock)
+            revision._bufferStock.Add(buffer.CopyForRevision());
+
         foreach (var line in _quotationLines)
             revision._quotationLines.Add(line.CopyForRevision(
                 line.CostingLine is { } source && copies.TryGetValue(source, out var copied) ? copied : null));
@@ -508,9 +547,15 @@ public class QuoteVersion
     public decimal SubTotalExVat(QuoteItem item) =>
         Round(LinesOf(item).Where(l => !l.IsBelowTheLine).Sum(l => l.LineTotal()));
 
-    /// <summary>Markup applies to the item's sub-total only, never to below-the-line items.</summary>
+    /// <summary>
+    /// Markup applies to the item's sub-total only, never to below-the-line items. An
+    /// item priced per square metre is charged its area at that price instead, and its
+    /// markup is what that price gives over its costing, which can be less than nothing.
+    /// </summary>
     public decimal MarkupAmount(QuoteItem item) =>
-        Round(SubTotalExVat(item) * item.MarkupPercent / 100m);
+        item.PricePerM2 is { } pricePerM2
+            ? Round(Round(AreaM2(item) * pricePerM2) - SubTotalExVat(item))
+            : Round(SubTotalExVat(item) * item.MarkupPercent / 100m);
 
     /// <summary>One item's cut-out and groove charges: cost recovery, not marked up.</summary>
     public decimal BelowTheLineTotal(QuoteItem item) =>

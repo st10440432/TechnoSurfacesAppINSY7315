@@ -261,10 +261,13 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
         }, ct);
 
     public Task<WorkflowResult> ReopenAsync(int quoteId, CancellationToken ct = default) =>
-        StepAsync(quoteId, QuoteTransition.Reopen, quote =>
+        StepAsync(quoteId, QuoteTransition.Reopen, async quote =>
         {
+            // The revision starts with the buffer stock too, which is read only when needed.
+            if (quote.CurrentVersion is { } current)
+                await _quotes.LoadBufferStockAsync(current, ct);
             quote.Reopen(_user.UserId, Today);
-            return Task.FromResult<string?>(null);
+            return (string?)null;
         }, ct);
 
     public async Task<int> ExpireLapsedAsync(CancellationToken ct = default)

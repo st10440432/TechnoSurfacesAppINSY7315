@@ -18,6 +18,10 @@
     var itemDto = Model.Sheet.Items.First(i => i.Id == item.ItemId);
     var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, a.CanEdit, Model.RateGrid);
     var randPerM2 = item.AreaM2 > 0 ? Fmt.Rand(item.TotalExVat / item.AreaM2) : "Not yet";
+    // What the item's costing comes to per m² at its markup, the figure to price it by area from.
+    var costedPerM2 = item.AreaM2 > 0
+        ? Fmt.Rand((item.SubTotalExVat * (1m + item.MarkupPercent / 100m) + item.BelowTheLineTotal) / item.AreaM2)
+        : "nothing yet, as it has no material";
     var several = Model.Sheet.Items.Count > 1;
     string ItemLabel(TechnoSurfaces.Application.Costing.ItemTotals i) => i.Number is null ? i.Name : $"{i.Number}. {i.Name}";
 
@@ -35,6 +39,9 @@
     <div class="page-head-actions">
         <a class="btn btn-secondary" asp-action="CostingPrint" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print the costing
+        </a>
+        <a class="btn btn-secondary" asp-action="SheetSummary" asp-route-id="@q.Id">
+            <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg> Sheets and adhesive
         </a>
         <a class="btn btn-secondary" asp-action="Quotation" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Customer quotation
@@ -93,6 +100,7 @@
                             <th scope="col">Item</th>
                             <th scope="col" class="right">Markup</th>
                             <th scope="col" class="right">One</th>
+                            <th scope="col" class="right">Per m²</th>
                             <th scope="col" class="right">Needed</th>
                             <th scope="col" class="right">Amount ex VAT</th>
                         </tr>
@@ -110,8 +118,9 @@
                                         <span class="sub">On screen</span>
                                     }
                                 </td>
-                                <td data-label="Markup" class="right">@Fmt.Pct(i.MarkupPercent)</td>
+                                <td data-label="Markup" class="right">@(i.PricePerM2 is { } p ? $"{Fmt.Rand(p)} per m²" : Fmt.Pct(i.MarkupPercent))</td>
                                 <td data-label="One" class="right">@Fmt.Rand(i.TotalExVat)</td>
+                                <td data-label="Per m²" class="right">@(i.RandPerM2 is { } r ? Fmt.Rand(r) : "No material")</td>
                                 <td data-label="Needed" class="right">@Fmt.Qty(i.Quantity)</td>
                                 <td data-label="Amount ex VAT" class="right strong">@Fmt.Rand(i.AmountExVat)</td>
                             </tr>
@@ -157,6 +166,18 @@
                                        value="@itemDto.Unit" aria-describedby="item-unit-hint" />
                                 <span class="hint" id="item-unit-hint">Left empty, it is counted in numbers, No.</span>
                             </div>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="item-price-m2">Price per m² <span class="optional">optional</span></label>
+                            <span class="input-group">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-num" id="item-price-m2" name="pricePerM2" type="number" inputmode="decimal" min="0" step="any"
+                                       value="@(itemDto.PricePerM2 is { } price ? Fmt.Input(price) : null)" aria-describedby="item-price-m2-hint" />
+                            </span>
+                            <span class="hint" id="item-price-m2-hint">
+                                Prices the item by the square metres of its material instead of by its markup. Left empty, the markup prices it.
+                                At its markup of @Fmt.Pct(item.MarkupPercent), its costing comes to @costedPerM2 per m².
+                            </span>
                         </div>
                         <div class="btn-row">
                             <button type="submit" class="btn btn-secondary">Save the item</button>
@@ -329,7 +350,11 @@
                 </div>
                 <div class="totals-row">
                     <span class="lbl">
-                        @if (a.CanEdit)
+                        @if (item.PricePerM2 is { } perM2)
+                        {
+                            @:Priced at @Fmt.Rand(perM2) per m², over its costing
+                        }
+                        else if (a.CanEdit)
                         {
                             <label for="markup">Markup</label>
                             <span class="input-group input-group-sm input-inline">

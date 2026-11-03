@@ -201,6 +201,32 @@ public class QuotesController : AppController
     }
 
     /// <summary>
+    /// The summary of sheets and adhesive, as the client draws one up for a tender:
+    /// what to order per material and what it costs to buy. Internal, like the
+    /// costing; the buffer stock is typed here.
+    /// </summary>
+    public async Task<IActionResult> SheetSummary(int id, CancellationToken ct)
+    {
+        var detail = await DetailAsync(id, ct);
+        var quote = await _quotes.GetAsync(id, ct);
+        var summary = await _costing.GetSheetSummaryAsync(id, ct: ct);
+        if (detail is null || quote is null || summary is null)
+            return QuoteNotFound(id);
+
+        var vm = new SheetSummaryVm
+        {
+            Quote = detail,
+            Summary = summary,
+            CanEdit = (await ActionsForAsync(quote)).CanEdit,
+            PrintedOn = Today
+        };
+
+        SetPage("Sheets and adhesive", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })));
+        return View(vm);
+    }
+
+    /// <summary>
     /// The parts of the costing sheet that a change can move, rendered on their own:
     /// both line tables, the quotation check and the next-step buttons. The sheet
     /// swaps them in after every change, because one change can move other lines (a
@@ -624,6 +650,14 @@ public sealed class CostingPrintVm
 {
     public QuoteDetail Quote { get; init; } = null!;
     public CostingSheetDto Sheet { get; init; } = null!;
+    public DateOnly PrintedOn { get; init; }
+}
+
+public sealed class SheetSummaryVm
+{
+    public QuoteDetail Quote { get; init; } = null!;
+    public SheetSummary Summary { get; init; } = null!;
+    public bool CanEdit { get; init; }
     public DateOnly PrintedOn { get; init; }
 }
 

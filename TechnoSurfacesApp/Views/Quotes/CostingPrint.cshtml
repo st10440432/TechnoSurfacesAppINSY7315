@@ -85,7 +85,7 @@
                     {
                         <tr>
                             <td>@(i.Number is null ? i.Name : $"{i.Number}. {i.Name}")</td>
-                            <td class="r">@Fmt.Pct(i.MarkupPercent)</td>
+                            <td class="r">@(i.PricePerM2 is { } p ? $"{Fmt.Rand(p)} per m²" : Fmt.Pct(i.MarkupPercent))</td>
                             <td class="r">@Fmt.Rand(i.TotalExVat)</td>
                             <td class="r">@Fmt.Qty(i.Quantity)</td>
                             <td class="r">@Fmt.Rand(i.AmountExVat)</td>
