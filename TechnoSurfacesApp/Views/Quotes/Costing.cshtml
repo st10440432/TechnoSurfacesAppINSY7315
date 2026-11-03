@@ -18,6 +18,10 @@
     var itemDto = Model.Sheet.Items.First(i => i.Id == item.ItemId);
     var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, a.CanEdit, Model.RateGrid);
     var randPerM2 = item.AreaM2 > 0 ? Fmt.Rand(item.TotalExVat / item.AreaM2) : "Not yet";
+    // What the item's costing comes to per m² at its markup, the figure to price it by area from.
+    var costedPerM2 = item.AreaM2 > 0
+        ? Fmt.Rand((item.SubTotalExVat * (1m + item.MarkupPercent / 100m) + item.BelowTheLineTotal) / item.AreaM2)
+        : "nothing yet, as it has no material";
     var several = Model.Sheet.Items.Count > 1;
     string ItemLabel(TechnoSurfaces.Application.Costing.ItemTotals i) => i.Number is null ? i.Name : $"{i.Number}. {i.Name}";
 
@@ -35,6 +39,9 @@
     <div class="page-head-actions">
         <a class="btn btn-secondary" asp-action="CostingPrint" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print the costing
+        </a>
+        <a class="btn btn-secondary" asp-action="SheetSummary" asp-route-id="@q.Id">
+            <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg> Sheets and adhesive
         </a>
         <a class="btn btn-secondary" asp-action="Quotation" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Customer quotation
@@ -93,6 +100,7 @@
                             <th scope="col">Item</th>
                             <th scope="col" class="right">Markup</th>
                             <th scope="col" class="right">One</th>
+                            <th scope="col" class="right">Per m²</th>
                             <th scope="col" class="right">Needed</th>
                             <th scope="col" class="right">Amount ex VAT</th>
                         </tr>
@@ -110,8 +118,9 @@
                                         <span class="sub">On screen</span>
                                     }
                                 </td>
-                                <td data-label="Markup" class="right">@Fmt.Pct(i.MarkupPercent)</td>
+                                <td data-label="Markup" class="right">@(i.PricePerM2 is { } p ? $"{Fmt.Rand(p)} per m²" : Fmt.Pct(i.MarkupPercent))</td>
                                 <td data-label="One" class="right">@Fmt.Rand(i.TotalExVat)</td>
+                                <td data-label="Per m²" class="right">@(i.RandPerM2 is { } r ? Fmt.Rand(r) : "No material")</td>
                                 <td data-label="Needed" class="right">@Fmt.Qty(i.Quantity)</td>
                                 <td data-label="Amount ex VAT" class="right strong">@Fmt.Rand(i.AmountExVat)</td>
                             </tr>
@@ -143,6 +152,32 @@
                                 <input class="input input-num" id="item-quantity" name="quantity" type="number" inputmode="decimal" min="0.0001" step="any"
                                        required value="@Fmt.Input(itemDto.Quantity)" />
                             </div>
+                        </div>
+                        <div class="field-row field-row-2">
+                            <div class="field">
+                                <label class="label" for="item-section">Section <span class="optional">optional</span></label>
+                                <input class="input" id="item-section" name="section" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.SectionMaxLength"
+                                       value="@itemDto.Section" aria-describedby="item-section-hint" />
+                                <span class="hint" id="item-section-hint">The heading it is listed under on a bill of quantities, such as Worktops.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="item-unit">Unit</label>
+                                <input class="input" id="item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
+                                       value="@itemDto.Unit" aria-describedby="item-unit-hint" />
+                                <span class="hint" id="item-unit-hint">Left empty, it is counted in numbers, No.</span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="item-price-m2">Price per m² <span class="optional">optional</span></label>
+                            <span class="input-group">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-num" id="item-price-m2" name="pricePerM2" type="number" inputmode="decimal" min="0" step="any"
+                                       value="@(itemDto.PricePerM2 is { } price ? Fmt.Input(price) : null)" aria-describedby="item-price-m2-hint" />
+                            </span>
+                            <span class="hint" id="item-price-m2-hint">
+                                Prices the item by the square metres of its material instead of by its markup. Left empty, the markup prices it.
+                                At its markup of @Fmt.Pct(item.MarkupPercent), its costing comes to @costedPerM2 per m².
+                            </span>
                         </div>
                         <div class="btn-row">
                             <button type="submit" class="btn btn-secondary">Save the item</button>
@@ -179,6 +214,19 @@
                                 <label class="label" for="new-item-quantity">Needed</label>
                                 <input class="input input-num" id="new-item-quantity" name="quantity" type="number" inputmode="decimal" min="0.0001" step="any"
                                        required value="1" />
+                            </div>
+                        </div>
+                        <div class="field-row field-row-2">
+                            <div class="field">
+                                <label class="label" for="new-item-section">Section <span class="optional">optional</span></label>
+                                <input class="input" id="new-item-section" name="section" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.SectionMaxLength"
+                                       value="@itemDto.Section" aria-describedby="new-item-section-hint" />
+                                <span class="hint" id="new-item-section-hint">Filled with this item's, for the next item under the same heading.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="new-item-unit">Unit</label>
+                                <input class="input" id="new-item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
+                                       value="@itemDto.Unit" />
                             </div>
                         </div>
                         <button type="submit" class="btn btn-secondary">
@@ -302,7 +350,11 @@
                 </div>
                 <div class="totals-row">
                     <span class="lbl">
-                        @if (a.CanEdit)
+                        @if (item.PricePerM2 is { } perM2)
+                        {
+                            @:Priced at @Fmt.Rand(perM2) per m², over its costing
+                        }
+                        else if (a.CanEdit)
                         {
                             <label for="markup">Markup</label>
                             <span class="input-group input-group-sm input-inline">
@@ -340,7 +392,7 @@
                     <h3 class="section-label">The whole quote</h3>
                     <div class="totals-row">
                         <span class="lbl">@Model.Sheet.Items.Count items</span>
-                        <span class="val" data-total="itemsTotal">@Fmt.Rand(t.TotalExVat - t.TransportAmount)</span>
+                        <span class="val" data-total="itemsTotal">@Fmt.Rand(t.TotalExVat - t.TransportAmount - t.AllowanceAmount)</span>
                     </div>
                 }
                 <div class="totals-row">
@@ -361,6 +413,25 @@
                         }
                     </span>
                     <span class="val" data-total="transportAmount">@Fmt.Rand(t.TransportAmount)</span>
+                </div>
+                <div class="totals-row">
+                    <span class="lbl">
+                        @if (a.CanEdit)
+                        {
+                            <label for="allowance">Allowances</label>
+                            <span class="input-group input-group-sm input-inline">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-sm input-num" id="allowance" type="number" inputmode="decimal" min="0" step="any"
+                                       required value="@Fmt.Input(t.AllowanceAmount)" data-costing-field="allowanceAmount" data-saved="@Fmt.Input(t.AllowanceAmount)"
+                                       aria-describedby="transport-hint" />
+                            </span>
+                        }
+                        else
+                        {
+                            @:Allowances
+                        }
+                    </span>
+                    <span class="val" data-total="allowanceAmount">@Fmt.Rand(t.AllowanceAmount)</span>
                 </div>
                 <div class="totals-row total-line">
                     <span class="lbl">Total ex VAT</span>
@@ -387,7 +458,10 @@
                 <p class="totals-note" id="markup-hint">
                     The markup is this item's, and applies to its sub total only. Cut-outs and grooves are added after it, at cost, as the client confirmed.
                 </p>
-                <p class="totals-note" id="transport-hint">Transport is for the whole job, added once after every item.</p>
+                <p class="totals-note" id="transport-hint">
+                    Transport and allowances, such as travel, inspection and time away, are for the whole job, added once after every item at cost.
+                    On a bill of quantities they can be spread over the items' rates.
+                </p>
 
                 @* Read out by a screen reader after every recalculation. *@
                 <p class="sr-only" id="totals-status" role="status" aria-live="polite" aria-atomic="true"></p>

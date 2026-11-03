@@ -211,4 +211,37 @@ public sealed class QuoteItemServiceTests : IAsyncLifetime
         Assert.InRange(lines[1].AmountExVat - vanityLine.LineTotal() * 1.2m * 3m, -0.05m, 0.05m);
         Assert.True((await WithQuotationAsync(s => s.CheckAsync(_quoteId)))!.Matches);
     }
+
+    [Fact]
+    public async Task Buffer_stock_is_saved_for_a_material_on_the_quote_and_read_back_on_the_summary()
+    {
+        var line = (await AddMaterialAsync(itemId: null, sheets: 2m)).Line!;
+
+        var saved = await WithCostingAsync(s => s.SetBufferStockAsync(_quoteId, line.Description, 3m));
+        var unknown = await WithCostingAsync(s => s.SetBufferStockAsync(_quoteId, "Not a material on this quote", 3m));
+
+        Assert.Equal(CostingOutcome.Ok, saved.Outcome);
+        Assert.Equal(CostingOutcome.NotApplicable, unknown.Outcome);
+        var material = Assert.Single((await WithCostingAsync(s => s.GetSheetSummaryAsync(_quoteId)))!.Materials);
+        Assert.Equal((2m, 3m, 5m), (material.Sheets, material.BufferSheets, material.SheetsToOrder));
+
+        await WithCostingAsync(s => s.SetBufferStockAsync(_quoteId, line.Description, 0m));
+        Assert.Equal(0m, (await WithCostingAsync(s => s.GetSheetSummaryAsync(_quoteId)))!.Materials[0].BufferSheets);
+    }
+
+    [Fact]
+    public async Task Copied_quotation_lines_of_an_item_priced_per_square_metre_add_up_to_its_price()
+    {
+        await AddMaterialAsync(itemId: null, sheets: 2m);
+        await WithCostingAsync(s => s.AddRateLineAsync(_quoteId, new AddRateLine(_sandingId, 2m)));
+        var first = (await SheetAsync()).Version!.Items[0].Id;
+        await WithCostingAsync(s => s.ChangeItemAsync(_quoteId, first, new ItemInput("Kitchen", null, 1m, PricePerM2: 4500m)));
+
+        await WithQuotationAsync(s => s.AddLinesFromCostingAsync(_quoteId));
+
+        var sheet = await SheetAsync();
+        var figures = sheet.Totals!.Items[0];
+        Assert.Equal(decimal.Round(figures.AreaM2 * 4500m, 2, MidpointRounding.AwayFromZero), figures.TotalExVat);
+        Assert.True((await WithQuotationAsync(s => s.CheckAsync(_quoteId)))!.Matches);
+    }
 }

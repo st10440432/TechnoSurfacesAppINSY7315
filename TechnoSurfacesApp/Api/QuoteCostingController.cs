@@ -66,8 +66,8 @@ public sealed class QuoteCostingController : ControllerBase
     }
 
     /// <summary>
-    /// PUT /api/quotes/{quoteId}/costing: markup (US-07) for every item, and the
-    /// transport amount. PUT /api/quotes/{quoteId}/items/{itemId}/costing: one item's markup.
+    /// PUT /api/quotes/{quoteId}/costing: markup (US-07) for every item, the
+    /// transport amount and the allowance. PUT /api/quotes/{quoteId}/items/{itemId}/costing: one item's markup.
     /// </summary>
     [HttpPut("costing")]
     [HttpPut("items/{itemId:int}/costing")]
@@ -82,7 +82,7 @@ public sealed class QuoteCostingController : ControllerBase
             return refused;
 
         var result = await _costing.ChangeCostingAsync(quoteId,
-            new ChangeCosting(request.MarkupPercent, request.TransportAmount, itemId), ct);
+            new ChangeCosting(request.MarkupPercent, request.TransportAmount, itemId, request.AllowanceAmount), ct);
         return result.Outcome == CostingOutcome.Ok ? Ok(result.Totals) : Failure(result, quoteId);
     }
 
@@ -232,6 +232,37 @@ public sealed class QuoteCostingController : ControllerBase
         var result = await _costing.RemoveItemAsync(quoteId, itemId, ct);
         return result.Outcome == CostingOutcome.Ok
             ? Ok(new RemovedLineResponse(result.Totals!))
+            : Failure(result, quoteId);
+    }
+
+    /// <summary>
+    /// GET /api/quotes/{quoteId}/sheet-summary: internal, the sheets and seam kits per
+    /// item and material, the order with its buffer stock, and what it costs to buy.
+    /// </summary>
+    [HttpGet("sheet-summary")]
+    [ProducesResponseType<SheetSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SheetSummary(int quoteId, CancellationToken ct) =>
+        await _costing.GetSheetSummaryAsync(quoteId, ct: ct) is { } summary
+            ? Ok(summary)
+            : Failure(new CostingResult(CostingOutcome.QuoteNotFound), quoteId);
+
+    /// <summary>PUT /api/quotes/{quoteId}/buffer-stock: one material's buffer stock; no sheets takes it off.</summary>
+    [HttpPut("buffer-stock")]
+    [ProducesResponseType<SheetSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> BufferStock(int quoteId, BufferStockRequest request, CancellationToken ct)
+    {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
+        var result = await _costing.SetBufferStockAsync(quoteId, request.Material, request.Sheets, ct);
+        return result.Outcome == CostingOutcome.Ok
+            ? Ok(SheetsAndAdhesive.Summarise(result.Version!))
             : Failure(result, quoteId);
     }
 

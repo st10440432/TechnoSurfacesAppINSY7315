@@ -132,10 +132,13 @@ public sealed class ChangeCostingRequest : IValidatableObject
     public decimal? MarkupPercent { get; set; }
     public decimal? TransportAmount { get; set; }
 
+    /// <summary>The travel, inspection and away allowance for the whole job.</summary>
+    public decimal? AllowanceAmount { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (MarkupPercent is null && TransportAmount is null)
-            yield return new("Nothing to change. Send a markup percentage or a transport amount.");
+        if (MarkupPercent is null && TransportAmount is null && AllowanceAmount is null)
+            yield return new("Nothing to change. Send a markup percentage, a transport amount or an allowance.");
 
         // The column holds five digits with two decimals.
         if (MarkupPercent is < 0 or > 999.99m)
@@ -146,6 +149,12 @@ public sealed class ChangeCostingRequest : IValidatableObject
 
         if (TransportAmount > ColumnLimits.Money)
             yield return new("This transport amount is too large.", new[] { nameof(TransportAmount) });
+
+        if (AllowanceAmount < 0)
+            yield return new("An allowance cannot be negative.", new[] { nameof(AllowanceAmount) });
+
+        if (AllowanceAmount > ColumnLimits.Money)
+            yield return new("This allowance is too large.", new[] { nameof(AllowanceAmount) });
     }
 }
 
@@ -165,7 +174,19 @@ public sealed class ItemRequest : IValidatableObject
 
     public decimal? MarkupPercent { get; set; }
 
-    public ItemInput ToInput() => new(Name.Trim(), string.IsNullOrWhiteSpace(Number) ? null : Number.Trim(), Quantity, MarkupPercent);
+    /// <summary>The unit on the bill of quantities. None given is a number of them, No.</summary>
+    [StringLength(QuoteItem.UnitMaxLength)]
+    public string? Unit { get; set; }
+
+    /// <summary>The heading the item is listed under on the bill of quantities, such as Worktops.</summary>
+    [StringLength(QuoteItem.SectionMaxLength)]
+    public string? Section { get; set; }
+
+    /// <summary>Prices the item per square metre of its material instead of by its markup. None prices it by its markup.</summary>
+    public decimal? PricePerM2 { get; set; }
+
+    public ItemInput ToInput() => new(Name.Trim(), string.IsNullOrWhiteSpace(Number) ? null : Number.Trim(), Quantity, MarkupPercent,
+        Unit, Section, PricePerM2);
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -180,13 +201,41 @@ public sealed class ItemRequest : IValidatableObject
 
         if (MarkupPercent is < 0 or > 999.99m)
             yield return new("A markup must be between 0 and 999.99 per cent.", new[] { nameof(MarkupPercent) });
+
+        if (PricePerM2 < 0)
+            yield return new("A price per square metre cannot be negative.", new[] { nameof(PricePerM2) });
+
+        if (PricePerM2 > ColumnLimits.Money)
+            yield return new("This price per square metre is too large.", new[] { nameof(PricePerM2) });
+    }
+}
+
+/// <summary>The body of PUT /api/quotes/{quoteId}/buffer-stock: sheets of one material beyond what the items need.</summary>
+public sealed class BufferStockRequest : IValidatableObject
+{
+    /// <summary>The material as the summary of sheets lists it.</summary>
+    [Required, StringLength(QuoteBufferStock.MaterialMaxLength)]
+    public string Material { get; set; } = "";
+
+    /// <summary>No sheets takes the buffer off.</summary>
+    public decimal Sheets { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Sheets < 0)
+            yield return new("Buffer stock cannot be negative.", new[] { nameof(Sheets) });
+
+        if (Sheets > ColumnLimits.Quantity)
+            yield return new("This number of sheets is too large.", new[] { nameof(Sheets) });
     }
 }
 
 /// <summary>An item on the quote as the costing sheet shows it.</summary>
-public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent)
+public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent, string Unit, string? Section,
+    decimal? PricePerM2 = null)
 {
-    public static ItemDto From(QuoteItem item) => new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent);
+    public static ItemDto From(QuoteItem item) =>
+        new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent, item.Unit, item.Section, item.PricePerM2);
 }
 
 public sealed record ItemResponse(ItemDto Item, QuoteTotals Totals)

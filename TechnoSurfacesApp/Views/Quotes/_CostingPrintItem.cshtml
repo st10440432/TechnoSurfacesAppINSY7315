@@ -79,7 +79,7 @@ else
         <span class="val">@Fmt.Rand(i.SubTotalExVat)</span>
     </div>
     <div class="totals-row">
-        <span class="lbl">Markup @Fmt.Pct(i.MarkupPercent)</span>
+        <span class="lbl">@(i.PricePerM2 is { } p ? $"Priced at {Fmt.Rand(p)} per m², over its costing" : $"Markup {Fmt.Pct(i.MarkupPercent)}")</span>
         <span class="val">@Fmt.Rand(i.MarkupAmount)</span>
     </div>
 </div>

@@ -185,6 +185,91 @@ public sealed class CostingApiTests
     }
 
     [Fact]
+    public async Task A_bill_of_quantities_lists_each_item_with_the_allowance_spread_over_the_rates()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var client = await SignedInAsync(AppFactory.EstimatorEmail);
+        var sandingId = await RateItemIdAsync("Sanding time");
+        await AddRateLineAsync(client, quoteId, sandingId);
+        var created = await client.PostAsync($"/api/quotes/{quoteId}/items",
+            new { name = "Floor unit, 4919 mm", number = "4", quantity = 2m, unit = "No", section = "Floor units" });
+        var itemId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        await client.PostAsync($"/api/quotes/{quoteId}/items/{itemId}/lines", new { type = "rate", rateItemId = sandingId, quantity = 1m });
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PutAsync($"/api/quotes/{quoteId}/costing", new { allowanceAmount = 1500m })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PutAsync($"/api/quotes/{quoteId}/quotation/layout", new { layout = "BillOfQuantities" })).StatusCode);
+
+        var document = await (await client.GetAsync($"/api/quotes/{quoteId}/quotation")).Content.ReadFromJsonAsync<JsonElement>();
+        var floorUnits = document.GetProperty("bill").GetProperty("sections").EnumerateArray()
+            .Single(s => s.GetProperty("heading").GetString() == "Floor units").GetProperty("items")[0];
+        Assert.Equal(("4", 2m), (floorUnits.GetProperty("number").GetString(), floorUnits.GetProperty("quantity").GetDecimal()));
+        Assert.Equal(2m * floorUnits.GetProperty("amountEach").GetDecimal(), floorUnits.GetProperty("amountExVat").GetDecimal());
+        Assert.Equal(0, document.GetProperty("bill").GetProperty("extras").GetArrayLength());
+
+        var check = await (await client.GetAsync($"/api/quotes/{quoteId}/quotation/check")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(check.GetProperty("matches").GetBoolean());
+
+        var bad = await client.PutAsync($"/api/quotes/{quoteId}/quotation/layout", new { layout = "Spreadsheet" });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+
+        var page = await client.GetAsync($"/Quotes/Quotation/{quoteId}");
+        Assert.Contains("Floor unit, 4919 mm", await page.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task The_summary_of_sheets_counts_the_material_and_keeps_the_buffer_stock()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var client = await SignedInAsync(AppFactory.EstimatorEmail);
+        int colourId, sheetSizeId;
+        using (var scope = _app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TechnoSurfacesDbContext>();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var price = await db.MaterialPrices
+                .Where(p => p.ColourId != null && p.EffectiveFrom <= today && p.EffectiveTo == null
+                         && p.Colour!.Status == TechnoSurfaces.Domain.CatalogueStatus.Active)
+                .OrderBy(p => p.Id)
+                .FirstAsync();
+            (colourId, sheetSizeId) = (price.ColourId!.Value, price.SheetSizeId);
+        }
+        var added = await client.PostAsync($"/api/quotes/{quoteId}/lines", new { type = "material", colourId, sheetSizeId, quantity = 2m });
+        var material = (await added.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("line").GetProperty("description").GetString();
+
+        var buffer = await client.PutAsync($"/api/quotes/{quoteId}/buffer-stock", new { material, sheets = 1.5m });
+        Assert.Equal(HttpStatusCode.OK, buffer.StatusCode);
+
+        var summary = await (await client.GetAsync($"/api/quotes/{quoteId}/sheet-summary")).Content.ReadFromJsonAsync<JsonElement>();
+        var column = summary.GetProperty("materials")[0];
+        Assert.Equal((material, 2m, 1.5m, 3.5m),
+            (column.GetProperty("material").GetString(), column.GetProperty("sheets").GetDecimal(),
+             column.GetProperty("bufferSheets").GetDecimal(), column.GetProperty("sheetsToOrder").GetDecimal()));
+
+        var unknown = await client.PutAsync($"/api/quotes/{quoteId}/buffer-stock", new { material = "Not on this quote", sheets = 1m });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, unknown.StatusCode);
+
+        var page = await client.GetAsync($"/Quotes/SheetSummary/{quoteId}");
+        Assert.Contains("Analysis of sheets and adhesive", await page.Content.ReadAsStringAsync());
+
+        var other = await SignedInAsync(OtherEstimatorEmail);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await other.PutAsync($"/api/quotes/{quoteId}/buffer-stock", new { material, sheets = 1m })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Another_estimator_cannot_change_the_quotation_layout()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var other = await SignedInAsync(OtherEstimatorEmail);
+
+        var response = await other.PutAsync($"/api/quotes/{quoteId}/quotation/layout", new { layout = "BillOfQuantities" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Another_estimator_cannot_add_an_item_to_a_quote()
     {
         var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);

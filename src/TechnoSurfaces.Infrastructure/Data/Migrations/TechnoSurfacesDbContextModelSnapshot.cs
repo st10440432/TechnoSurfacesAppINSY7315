@@ -862,6 +862,34 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                     b.ToTable("Quotes");
                 });
 
+            modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteBufferStock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Material")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int>("QuoteVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Sheets")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuoteVersionId", "Material")
+                        .IsUnique();
+
+                    b.ToTable("QuoteBufferStock");
+                });
+
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteItem", b =>
                 {
                     b.Property<int>("Id")
@@ -883,6 +911,10 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<decimal?>("PricePerM2")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -890,8 +922,19 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                     b.Property<int>("QuoteVersionId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Section")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("No");
 
                     b.HasKey("Id");
 
@@ -907,6 +950,17 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AllowanceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("AllowanceDescription")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("AllowancesOnOwnLines")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -956,6 +1010,9 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
 
                     b.Property<DateOnly?>("IssuedValidUntil")
                         .HasColumnType("date");
+
+                    b.Property<int>("Layout")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("MarkupPercent")
                         .HasPrecision(5, 2)
@@ -1249,6 +1306,15 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteBufferStock", b =>
+                {
+                    b.HasOne("TechnoSurfaces.Domain.Quoting.QuoteVersion", null)
+                        .WithMany("BufferStock")
+                        .HasForeignKey("QuoteVersionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteItem", b =>
                 {
                     b.HasOne("TechnoSurfaces.Domain.Quoting.QuoteVersion", null)
@@ -1328,6 +1394,8 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteVersion", b =>
                 {
+                    b.Navigation("BufferStock");
+
                     b.Navigation("CostingLines");
 
                     b.Navigation("Items");

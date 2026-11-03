@@ -87,6 +87,23 @@ A quote is made of items, as the client costs a tender with one spreadsheet page
 - An item's total is for one of it. The number needed, such as three of the same reception counter, counts it that many times. Transport is added once for the job.
 - The costing sheet shows one item at a time, with the list of items above it; the printout gives every item in full, one to a printed page, then the whole quote.
 - A new item starts at the markup of the item before it. Removing an item removes its costing and the quotation lines copied from it; the last item stays.
+- Allowances, such as travel, inspection and time away for a tender out of town, are one amount for the job, typed beside transport and added at cost.
+- An item can be priced per square metre of its material instead of by its markup, as the client sometimes prices a job. Its cut-outs and grooves are still added at cost. The list of items shows what each comes to per square metre, and the item's form what its costing comes to per square metre at its markup, to price from.
+
+### Sheets and adhesive
+
+The costing sheet's Sheets and adhesive page is the analysis the client draws up for a tender's order. Internal, as it carries cost prices.
+
+- For every item, the sheets of each material and the seam kits joining them, as many times as the item is needed. Each material, as the costing sheet names it with its colour and sheet size, is a column.
+- Per material: the sheets for the items, the buffer stock typed by the estimator, the sheets to order, the cost of a sheet after any supplier discount, and the purchase cost; then the total purchase cost.
+- Seam kits are the rate card's Seamkit lines. An item of one material uses its seam kits on that material; the seam kits of an item of several materials are counted on their own, as they cannot be told apart.
+
+### Bill of quantities
+
+The customer quotation has two layouts, chosen per quote on the quotation page. Written lines, one per room or element, suit a kitchen or a vanity. A bill of quantities lists the work as the client sends a tender: each item's number, description, unit, quantity, rate and amount, under its section heading, such as Worktops or Floor units.
+
+- The bill is built from the items on the costing sheet, where each item's unit and section are set, so it always adds up to the costing and nothing is typed twice. The rate is the price of one of the item, with its own markup; the customer sees no cost or markup.
+- Transport and the allowance are spread over the items' rates in proportion to each item's amount, as the client prices a tender. The amount stays the rate for the quantity, and the cents lost to rounding go on the rate of the last item needed once. Switched off, they are listed after the items on lines of their own, with the allowance's wording editable.
 
 ### Customers from Sage Pastel
 
@@ -187,7 +204,7 @@ item markup          = item sub total x the item's markup %
 item below the line  = the item's cut-outs and grooves, at cost
 item total           = item sub total + item markup + item below the line
 item amount          = item total x the number of the item needed
-total ex VAT         = sum of item amounts + petrol/delivery
+total ex VAT         = sum of item amounts + petrol/delivery + allowances
 VAT                  = total ex VAT x 15%
 ```
 
@@ -216,7 +233,7 @@ The costing sheet and the quote screens talk to these endpoints. Every error com
 | `GET /api/quotes/{id}/versions` | Version history |
 | `GET /api/quotes/{id}/versions/{n}/costing` | Any version's costing |
 | `GET /api/quotes/{id}/versions/{n}/quotation` | Any version's customer quotation |
-| `GET, PUT /api/quotes/{id}/costing` | The current costing; change every item's markup or petrol/delivery |
+| `GET, PUT /api/quotes/{id}/costing` | The current costing; change every item's markup, petrol/delivery or the allowance |
 | `POST /api/quotes/{id}/items`, `PUT, DELETE /api/quotes/{id}/items/{itemId}` | Add, change or remove an item |
 | `PUT /api/quotes/{id}/items/{itemId}/costing` | One item's markup |
 | `POST /api/quotes/{id}/items/{itemId}/lines` | Add a costing line to an item (422 if the price cannot be resolved) |
@@ -227,6 +244,9 @@ The costing sheet and the quote screens talk to these endpoints. Every error com
 | `GET /api/quotes/{id}/quotation/check` | Whether it adds up to the costing |
 | `POST /api/quotes/{id}/quotation-lines/from-costing` | Write the quotation lines from the costing, adding only what is not on the quotation yet |
 | `PUT /api/quotes/{id}/quotation/sheet-counts` | Show or hide the number of sheets on copied material lines |
+| `GET /api/quotes/{id}/sheet-summary` | Internal: sheets and seam kits per item and material, the order and its purchase cost |
+| `PUT /api/quotes/{id}/buffer-stock` | One material's buffer stock; no sheets takes it off |
+| `PUT /api/quotes/{id}/quotation/layout` | Written lines or a bill of quantities; spread the allowances or list them; the allowance's wording |
 | `POST, PUT, DELETE /api/quotes/{id}/quotation-lines...` | Edit and reorder quotation lines |
 | `GET, POST /api/quotes/{id}/invoice` | The Pastel invoice record |
 | `/api/customers...` | Customers and contacts: list, create, change, deactivate, reactivate |
@@ -450,7 +470,7 @@ These are the differences between what the Task 1 document describes and what wa
 - **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check and the old price list check are built: the review screen names each supplier on the quote whose price list is more than a year old, by the same rule as the dashboard and the catalogue. The other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
 - **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns hold the user's id but are not foreign keys, because changes made by the system itself are recorded against the user id "system", which has no user record.
 - **Deployment slots on the Basic tier.** Slots need the Standard tier, which costs US$101.47 a month for the plan against US$17.74 for Basic, and the client's budget for hosting is up to R1 000 a month. The client offered to run the Standard tier with a slot for up to three months after handover; two are planned, then the plan moves back to Basic, where rollback is by redeploying.
-- **Large tenders.** Items with their own costing and markup are built. Still to come: the customer quotation as a bill of quantities with a rate per item, travel and inspection allowances spread over the items, the summary of sheets and seam kits per colour, and pricing an item at a rate per square metre.
+- **Large tenders.** Items with their own costing and markup, the bill of quantities, spread allowances, the summary of sheets and adhesive and pricing an item per square metre are built.
 - **Rate card and bank details** from the client.
 
 ## Team

@@ -24,21 +24,25 @@ internal static class CostingOnQuotation
             .Where(l => l.LineType == CostingLineType.Material && l.LineTotal() > 0)
             .OrderBy(l => l.SortOrder).ThenBy(l => l.Id)
             .ToList();
-        var hasOtherCosts = version.TransportAmount > 0
+        var hasOtherCosts = version.JobExtras() > 0
             || version.CostingLines.Any(l => l.LineType == CostingLineType.Rate && l.LineTotal() > 0);
 
         // A material is shown at its selling price: its cost with its item's markup,
         // as many times as the item is needed. The markup is never shown on its own
-        // (US-11).
+        // (US-11). An item priced per square metre has no markup percentage: its
+        // materials take the share of its price that their cost is of its costing.
         var amounts = materials.Select(l =>
         {
             var item = version.ItemOf(l);
-            return decimal.Round(l.LineTotal() * (1m + item.MarkupPercent / 100m) * item.Quantity, 2, MidpointRounding.AwayFromZero);
+            var factor = item.IsPricedByArea
+                ? version.SubTotalExVat(item) is var subTotal and > 0 ? (subTotal + version.MarkupAmount(item)) / subTotal : 0m
+                : 1m + item.MarkupPercent / 100m;
+            return decimal.Round(l.LineTotal() * factor * item.Quantity, 2, MidpointRounding.AwayFromZero);
         }).ToList();
 
         // The rest is the difference to the costing total, so the lines add up to it
         // to the cent: the marked-up labour and consumables, the cut-outs and grooves
-        // at cost, and transport. With no such costs, the cents lost to rounding each
+        // at cost, transport and the allowance. With no such costs, the cents lost to rounding each
         // material go on the last material instead.
         var remainder = totals.TotalExVat - amounts.Sum();
         if (!hasOtherCosts && amounts.Count > 0)

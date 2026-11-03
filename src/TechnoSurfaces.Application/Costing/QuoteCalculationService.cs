@@ -41,6 +41,7 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
             MarkupAmount: version.MarkupAmount(),
             BelowTheLineTotal: version.BelowTheLineTotal(),
             TransportAmount: version.TransportAmount,
+            AllowanceAmount: version.AllowanceAmount,
             TotalExVat: version.TotalExVat(),
             VatRate: version.VatRate,
             VatAmount: version.VatAmount(),
@@ -59,7 +60,8 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
                 TotalExVat: version.TotalExVat(item),
                 AmountExVat: version.AmountExVat(item),
                 AreaM2: version.AreaM2(item),
-                SheetCount: version.SheetCount(item))).ToList());
+                SheetCount: version.SheetCount(item),
+                PricePerM2: item.PricePerM2)).ToList());
     }
 
     /// <summary>
@@ -130,8 +132,9 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
 /// </summary>
 /// <param name="SubTotalExVat">Sum of line totals above the line.</param>
 /// <param name="MarkupAmount">Applied to the sub-total only.</param>
-/// <param name="BelowTheLineTotal">Cost recovery items, not marked up. Includes transport.</param>
+/// <param name="BelowTheLineTotal">Cost recovery items, not marked up. Includes transport and the allowance.</param>
 /// <param name="TransportAmount">The petrol and delivery amount typed for the job.</param>
+/// <param name="AllowanceAmount">The travel, inspection and away allowance typed for the job.</param>
 /// <param name="TotalAreaM2">Total square metres of material, shown on the summary.</param>
 /// <param name="Items">Each item's own figures, for one of it and for the number needed.</param>
 public sealed record QuoteTotals(
@@ -140,6 +143,7 @@ public sealed record QuoteTotals(
     decimal MarkupAmount,
     decimal BelowTheLineTotal,
     decimal TransportAmount,
+    decimal AllowanceAmount,
     decimal TotalExVat,
     decimal VatRate,
     decimal VatAmount,
@@ -155,6 +159,7 @@ public sealed record QuoteTotals(
 /// One item's figures. Its total is for one of it, which is its rate; the amount
 /// is that total as many times as the job needs it. Internal, like the quote's totals.
 /// </summary>
+/// <param name="PricePerM2">Set for an item priced per square metre: its markup is then what that price gives over its costing.</param>
 public sealed record ItemTotals(
     int ItemId,
     string? Number,
@@ -167,4 +172,9 @@ public sealed record ItemTotals(
     decimal TotalExVat,
     decimal AmountExVat,
     decimal AreaM2,
-    decimal SheetCount);
+    decimal SheetCount,
+    decimal? PricePerM2 = null)
+{
+    /// <summary>What one of the item comes to per square metre of its material, or null with no material.</summary>
+    public decimal? RandPerM2 => AreaM2 > 0 ? decimal.Round(TotalExVat / AreaM2, 2, MidpointRounding.AwayFromZero) : null;
+}

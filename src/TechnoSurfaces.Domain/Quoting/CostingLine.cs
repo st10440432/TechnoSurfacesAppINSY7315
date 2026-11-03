@@ -191,6 +191,16 @@ public class CostingLine
     public bool IsDerived => Derivation != DerivationRule.Entered;
 
     /// <summary>
+    /// A seam kit: the adhesive the sheets of a job are joined with, counted on the
+    /// summary of sheets and adhesive. Known by its name, as the rate card calls it
+    /// Seamkit and the client's own sheets "seamkit 50ml" or "seam kit".
+    /// </summary>
+    public bool IsSeamKit =>
+        LineType == CostingLineType.Rate
+        && (Description.Contains("seamkit", StringComparison.OrdinalIgnoreCase)
+            || Description.Contains("seam kit", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// A copy of this line for a new version of the quote. Everything is carried
     /// across as it stands, including the copied price and any override; the price
     /// is not resolved again. Internal so that only QuoteVersion can make one.
