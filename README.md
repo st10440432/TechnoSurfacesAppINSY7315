@@ -298,6 +298,8 @@ A repository ruleset protects `main` and `develop`: no direct pushes, a pull req
 
 **Rollback** with a slot is the **Rollback** workflow (`.github/workflows/rollback.yml`): started from the Actions tab and approved like a release, it swaps the slot back, so the previous release is live again within seconds. Without a slot (the Basic tier), rollback is to re-run the CD run of the previous release, which rebuilds and redeploys it. This has been tried on staging and works.
 
+A rollback restores the code, not the database. The app applies its migrations when it starts and never undoes them, so the previous release has to run on the newer schema. That holds for every migration so far: each one only adds tables, nullable columns, columns with a default, constraints or triggers. A release whose migration renames or removes a column cannot be rolled back, because the previous release would look for the old column; it is fixed with a new release instead. A migration that damages data is recovered with Azure SQL point-in-time restore, which keeps seven days of backups on the Basic tier.
+
 Dependabot opens pull requests against `develop` for NuGet packages and GitHub Actions each week.
 
 ![Pipeline run](docs/images/pipeline-run.png)
