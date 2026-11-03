@@ -13,6 +13,8 @@
     var check = Model.Check;
     var canEditLines = a.CanEdit;
     var toAllocate = check is null ? 0m : -check.Difference;
+    var bill = Model.IsBillOfQuantities;
+    var extras = Model.AllowanceAmount + Model.TransportAmount;
 }
 
 <header class="page-head no-print">
@@ -62,6 +64,81 @@
     }
 
     @if (canEditLines && check is not null)
+    {
+        <section class="card" aria-labelledby="layout-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>
+                <h2 id="layout-title">How the quotation lists the work</h2>
+            </div>
+            <div class="card-body stack-gap">
+                <form data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{d.QuoteId}/quotation/layout")"
+                      data-success="Layout changed">
+                    <fieldset>
+                        <legend class="sr-only">Layout of the quotation</legend>
+                        <label class="check">
+                            <input type="radio" name="layout" value="Lines" checked="@(!bill)" data-autosubmit aria-describedby="layout-lines-hint" />
+                            <span>
+                                Lines written for the customer
+                                <span class="hint" id="layout-lines-hint">One line per room or element, as for a kitchen or a vanity.</span>
+                            </span>
+                        </label>
+                        <label class="check">
+                            <input type="radio" name="layout" value="BillOfQuantities" checked="@bill" data-autosubmit aria-describedby="layout-bill-hint" />
+                            <span>
+                                Bill of quantities
+                                <span class="hint" id="layout-bill-hint">
+                                    As a tender is sent: each item with its number, description, unit, quantity, rate and amount, under its section.
+                                    Built from the items on the costing sheet, so it always adds up to the costing.
+                                </span>
+                            </span>
+                        </label>
+                    </fieldset>
+                </form>
+
+                @if (bill)
+                {
+                    <p class="hint">
+                        The items' numbers, names, units, sections and quantities are changed on the
+                        <a asp-action="Costing" asp-route-id="@d.QuoteId">costing sheet</a>.
+                        Allowance @Fmt.Rand(Model.AllowanceAmount) and transport @Fmt.Rand(Model.TransportAmount) are typed there too.
+                    </p>
+                    <form data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{d.QuoteId}/quotation/layout")"
+                          data-success="@(Model.SpreadAllowances ? "Listed on their own lines" : "Spread over the items")">
+                        <label class="check">
+                            <input type="checkbox" id="spread-allowances" name="spreadAllowances" value="true" checked="@Model.SpreadAllowances" data-autosubmit
+                                   aria-describedby="spread-hint" />
+                            <span>
+                                Spread the allowance and transport over the items' rates
+                                <span class="hint" id="spread-hint">
+                                    Each item carries a share in proportion to its amount, as on the client's tenders.
+                                    Off, they are listed after the items on lines of their own.
+                                    @if (extras == 0)
+                                    {
+                                        @:There is no allowance or transport on this quote yet.
+                                    }
+                                </span>
+                            </span>
+                        </label>
+                    </form>
+                    @if (!Model.SpreadAllowances)
+                    {
+                        <form novalidate data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{d.QuoteId}/quotation/layout")"
+                              data-success="Wording saved">
+                            <div class="field">
+                                <label class="label" for="allowance-description">The allowance on the quotation</label>
+                                <input class="input" id="allowance-description" name="allowanceDescription" required
+                                       maxlength="@TechnoSurfaces.Domain.Quoting.QuoteVersion.AllowanceDescriptionMaxLength"
+                                       value="@Model.AllowanceDescription" />
+                            </div>
+                            <button type="submit" class="btn btn-secondary">Save the wording</button>
+                        </form>
+                    }
+                }
+            </div>
+        </section>
+    }
+
+    @if (canEditLines && check is not null && !bill)
     {
         <section class="card" aria-labelledby="lines-editor-title" id="quotation-editor"
                  data-api="@Url.Content($"~/api/quotes/{d.QuoteId}/")"
@@ -199,7 +276,7 @@
             </form>
         </section>
     }
-    else if (!canEditLines && d.Lines.Count == 0)
+    else if (!canEditLines && !bill && d.Lines.Count == 0)
     {
         <div class="notice notice-warn" role="note">
             <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
@@ -212,7 +289,7 @@
 <partial name="_QuotationDocument" model="d" />
 
 @section Scripts {
-    @if (canEditLines)
+    @if (canEditLines && !bill)
     {
         <script src="~/js/quotation.js" asp-append-version="true"></script>
     }

@@ -156,8 +156,10 @@ public sealed class CostingQueryBudgetTests
         Assert.True(refresh <= RefreshBudget, $"Refreshing the line tables took {refresh} SQL commands; the budget is {RefreshBudget}.");
     }
 
-    private const int PageBudget = 16;
-    private const int ChangeBudget = 8;
-    private const int RemoveBudget = 8;
-    private const int RefreshBudget = 15;
+    // Each request reads the quote's items, whose markups the totals need: one command
+    // more than before items.
+    private const int PageBudget = 17;
+    private const int ChangeBudget = 9;
+    private const int RemoveBudget = 9;
+    private const int RefreshBudget = 16;
 }

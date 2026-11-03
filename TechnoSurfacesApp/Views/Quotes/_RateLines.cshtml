@@ -19,7 +19,7 @@
         _ => Words.Humanise(category)
     };
 }
-<div id="rate-lines">
+<div id="@(Model.IdPrefix)rate-lines">
 @if (editable)
 {
     <p class="card-body grid-help mb-0" id="rate-grid-help">

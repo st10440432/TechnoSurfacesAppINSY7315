@@ -36,5 +36,17 @@ public interface IQuoteRepository
     /// <summary>Deletes a quotation line, for the same reason as a costing line.</summary>
     void RemoveQuotationLine(QuotationLine line);
 
+    /// <summary>Deletes an item, once its costing lines have been removed.</summary>
+    void RemoveItem(QuoteItem item);
+
+    /// <summary>
+    /// Reads a version's buffer stock. Not read with every quote: only the summary of
+    /// sheets and adhesive and a revision use it, so the costing sheet does not pay
+    /// for another query on every change (NFR-05).
+    /// </summary>
+    Task LoadBufferStockAsync(QuoteVersion version, CancellationToken ct = default);
+
+    void RemoveBufferStock(QuoteBufferStock buffer);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

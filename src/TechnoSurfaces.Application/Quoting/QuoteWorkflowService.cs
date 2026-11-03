@@ -261,10 +261,13 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
         }, ct);
 
     public Task<WorkflowResult> ReopenAsync(int quoteId, CancellationToken ct = default) =>
-        StepAsync(quoteId, QuoteTransition.Reopen, quote =>
+        StepAsync(quoteId, QuoteTransition.Reopen, async quote =>
         {
+            // The revision starts with the buffer stock too, which is read only when needed.
+            if (quote.CurrentVersion is { } current)
+                await _quotes.LoadBufferStockAsync(current, ct);
             quote.Reopen(_user.UserId, Today);
-            return Task.FromResult<string?>(null);
+            return (string?)null;
         }, ct);
 
     public async Task<int> ExpireLapsedAsync(CancellationToken ct = default)
@@ -340,11 +343,14 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
     /// </summary>
     private string? QuotationMismatch(QuoteVersion version)
     {
-        if (version.QuotationLines.Count == 0)
-            return "Write the customer quotation lines before the quote is approved.";
+        var totals = _calculator.Calculate(version);
+        if (!CustomerQuotationTotal.HasContent(version, totals))
+            return version.Layout == QuotationLayout.BillOfQuantities
+                ? "Cost the items on the costing sheet before the quote is approved."
+                : "Write the customer quotation lines before the quote is approved.";
 
-        var quotation = version.QuotationSubtotalExVat();
-        var costing = _calculator.Calculate(version).TotalExVat;
+        var quotation = CustomerQuotationTotal.Of(version, totals);
+        var costing = totals.TotalExVat;
         return quotation == costing
             ? null
             : $"The quotation lines add up to R{Money(quotation)} but the costing total is R{Money(costing)}. " +

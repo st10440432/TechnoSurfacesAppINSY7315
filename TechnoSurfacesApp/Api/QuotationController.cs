@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Quoting;
+using TechnoSurfaces.Domain.Quoting;
 using TechnoSurfacesApp.Identity;
 
 namespace TechnoSurfacesApp.Api;
@@ -160,6 +161,27 @@ public sealed class QuotationController : ControllerBase
         return result.Outcome == QuotationOutcome.Ok ? Ok(result) : Failure(result, quoteId);
     }
 
+    /// <summary>
+    /// PUT /api/quotes/{quoteId}/quotation/layout: the written lines or a bill of
+    /// quantities; on a bill, whether transport and the allowance are spread over the
+    /// rates, and the allowance's wording. Send only what changes.
+    /// </summary>
+    [HttpPut("quotation/layout")]
+    [ProducesResponseType<QuotationResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Layout(int quoteId, QuotationLayoutRequest request, CancellationToken ct)
+    {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
+        var result = await _quotation.SetLayoutAsync(quoteId,
+            new QuotationLayoutInput(request.Layout, request.SpreadAllowances, request.AllowanceDescription), ct);
+        return result.Outcome == QuotationOutcome.Ok ? Ok(result) : Failure(result, quoteId);
+    }
+
     private async Task<IActionResult?> RefuseUnlessEditableAsync(int quoteId, CancellationToken ct)
     {
         var quote = await _quotes.GetAsync(quoteId, ct);
@@ -233,4 +255,23 @@ public sealed class QuotationOrderRequest
 public sealed class QuotationSheetCountsRequest
 {
     public bool ShowSheetCounts { get; set; }
+}
+
+/// <summary>The body of PUT quotation/layout. Send only what changes.</summary>
+public sealed class QuotationLayoutRequest : IValidatableObject
+{
+    /// <summary>Lines or BillOfQuantities.</summary>
+    public string? Layout { get; set; }
+
+    public bool? SpreadAllowances { get; set; }
+
+    /// <summary>The allowance as the customer reads it. Empty puts back the usual wording.</summary>
+    [StringLength(QuoteVersion.AllowanceDescriptionMaxLength)]
+    public string? AllowanceDescription { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Layout is null && SpreadAllowances is null && AllowanceDescription is null)
+            yield return new("Nothing to change. Send a layout, whether to spread the allowances, or the allowance's wording.");
+    }
 }
