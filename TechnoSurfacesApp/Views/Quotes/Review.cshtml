@@ -14,6 +14,7 @@
     var changedPrices = lines.Count(l => l.HasPriceOverride);
     var enteredPrices = lines.Count(l => l.PriceOrigin == TechnoSurfaces.Application.Quoting.CostingSheetService.EnteredOnQuoteOrigin);
     var typedOver = lines.Count(l => l.IsQuantityOverridden);
+    var oldLists = Model.OldPriceLists;
 }
 
 <header class="page-head">
@@ -103,6 +104,29 @@ else if (q.Status != "PendingApproval")
                                     }.Where(s => s is not null))
                                     They are marked in the costing below.
                                 </span>
+                            </span>
+                        }
+                    </li>
+                    <li class="check-row">
+                        @if (oldLists.Count > 0)
+                        {
+                            <span class="check-dot check-warn" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-alert" /></svg></span>
+                            <span class="check-body">
+                                <span class="check-title">@(oldLists.Count == 1 ? "Old price list" : "Old price lists")</span>
+                                <span class="check-detail">
+                                    @string.Join("; ", oldLists.Select(s => $"{s.Name}, dated {Fmt.Date(s.PriceListDated)}")).
+                                    @(oldLists.Count == 1 ? "This list is" : "These lists are") more than a year old. Check the prices with the supplier before approving.
+                                </span>
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="check-dot check-ok" aria-hidden="true"><svg class="ico ico-sm"><use href="#i-check" /></svg></span>
+                            <span class="check-body">
+                                <span class="check-title">Price lists up to date</span>
+                                <span class="check-detail">@(Model.Suppliers.Count == 0
+                                    ? "There is no material on this quote, so no supplier's price list to check."
+                                    : $"Every supplier on this quote has a price list dated within the last year: {string.Join(", ", Model.Suppliers.Select(s => $"{s.Name}, {Fmt.Date(s.PriceListDated)}"))}.")</span>
                             </span>
                         }
                     </li>

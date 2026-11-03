@@ -10,10 +10,17 @@ namespace TechnoSurfaces.Application.Quoting;
 public interface IQuoteRepository
 {
     /// <summary>
-    /// A quote with its customer and contact, and every version with its lines and
-    /// recorded terms, tracked for changes.
+    /// A quote with its customer and contact, and its current version with its
+    /// lines and recorded terms, tracked for changes. Enough to read, edit,
+    /// approve or reopen the quote. Earlier versions are not loaded, so
+    /// <see cref="Quote.Version"/> finds only the current one and
+    /// <see cref="Quote.OriginalVersion"/> is not the original: use
+    /// <see cref="GetWithAllVersionsAsync"/> to read an earlier version.
     /// </summary>
     Task<Quote?> GetAsync(int quoteId, CancellationToken ct = default);
+
+    /// <summary>As <see cref="GetAsync"/>, with every version, for the version history.</summary>
+    Task<Quote?> GetWithAllVersionsAsync(int quoteId, CancellationToken ct = default);
 
     Task<bool> ReferenceExistsAsync(string reference, CancellationToken ct = default);
 
