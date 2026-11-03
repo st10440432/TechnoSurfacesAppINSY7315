@@ -161,14 +161,14 @@ public class QuoteCalculationTests
         var totals = _calculator.Calculate(version);
 
         Assert.Equal(8.3904m, totals.TotalAreaM2);         // 3 sheets x 2,7968
-        Assert.Equal(9m, consumables.Quantity);            // rounded up to a whole m²
+        Assert.Equal(8.3904m, consumables.Quantity);       // the exact area, not rounded
     }
 
     [Theory]
-    [InlineData(19.5776, 20)]   // the costing sheet that prompted the rule
-    [InlineData(8.0001, 9)]     // any part of a unit counts as a whole one
-    [InlineData(12, 12)]        // a whole figure is left as it is
-    public void Sandpaper_and_consumables_round_up_to_a_whole_square_metre(decimal area, decimal expected)
+    [InlineData(19.5776, 19.5776)]
+    [InlineData(8.0001, 8.0001)]   // part of a square metre is charged as part, not as a whole one
+    [InlineData(12, 12)]
+    public void Sandpaper_and_consumables_are_charged_on_the_exact_area(decimal area, decimal expected)
     {
         var version = NewVersion();
         version.AddCostingLine(Material(unitPrice: 1000m, quantity: 1m, sheetArea: area));
@@ -178,14 +178,14 @@ public class QuoteCalculationTests
 
         var totals = _calculator.Calculate(version);
 
-        Assert.Equal(area, totals.TotalAreaM2);             // the area itself is not rounded
+        Assert.Equal(area, totals.TotalAreaM2);
         Assert.Equal(expected, consumables.Quantity);
     }
 
     [Fact]
-    public void Silicon_rounds_up_to_a_whole_tube()
+    public void Silicon_is_exactly_two_per_sheet()
     {
-        // 2,75 sheets at two per sheet is 5,5 tubes, charged as 6.
+        // 2,75 sheets at two per sheet is 5,5 tubes, charged as 5,5.
         var version = NewVersion();
         version.AddCostingLine(Material(unitPrice: 1000m, quantity: 2.75m));
         var silicon = Rate(unitPrice: 55m, quantity: 0m,
@@ -194,12 +194,35 @@ public class QuoteCalculationTests
 
         _calculator.Calculate(version);
 
-        Assert.Equal(6m, silicon.Quantity);
-        Assert.Equal(330.00m, silicon.LineTotal());
+        Assert.Equal(5.5m, silicon.Quantity);
+        Assert.Equal(302.50m, silicon.LineTotal());
     }
 
     [Fact]
-    public void A_rounded_quantity_the_estimator_typed_over_is_left_as_typed()
+    public void Calculated_quantities_match_the_clients_own_costing_sheet()
+    {
+        // As the client's costing sheet works it out: 1,6 sheets of 3658 x 760 is
+        // 4,448128 m², so sandpaper is 4,4481 m² (the four decimal places a quantity
+        // is stored at) and silicon is 3,2 at two per sheet.
+        var version = NewVersion();
+        version.AddCostingLine(Material(unitPrice: 7719.17m, quantity: 1.6m, sheetArea: 2.78008m));
+        var sandpaper = Rate(unitPrice: 55m, quantity: 0m,
+            derivation: DerivationRule.FromTotalAreaM2, description: "Sandpaper & consumables");
+        var silicon = Rate(unitPrice: 59m, quantity: 0m,
+            derivation: DerivationRule.FromSheetCount, description: "Silicon + sealing", derivationFactor: 2m);
+        version.AddCostingLine(sandpaper);
+        version.AddCostingLine(silicon);
+
+        _calculator.Calculate(version);
+
+        Assert.Equal(4.4481m, sandpaper.Quantity);
+        Assert.Equal(244.65m, sandpaper.LineTotal());
+        Assert.Equal(3.2m, silicon.Quantity);
+        Assert.Equal(188.80m, silicon.LineTotal());
+    }
+
+    [Fact]
+    public void A_calculated_quantity_the_estimator_typed_over_is_left_as_typed()
     {
         var version = NewVersion();
         version.AddCostingLine(Material(unitPrice: 1000m, quantity: 1m, sheetArea: 2.7968m));

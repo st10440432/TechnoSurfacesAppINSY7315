@@ -7,6 +7,9 @@ public interface ICustomerService
 {
     Task<IReadOnlyList<CustomerSummary>> ListAsync(string? search = null, bool includeInactive = false, CancellationToken ct = default);
 
+    /// <summary>One page of the customer list, <see cref="CustomerService.ListPageSize"/> customers at a time.</summary>
+    Task<CustomerPage> ListPageAsync(string? search, bool includeInactive, int page, CancellationToken ct = default);
+
     Task<CustomerResult> GetAsync(int customerId, CancellationToken ct = default);
 
     /// <summary>The customer and contact choice on the new-quote form: active ones only.</summary>
@@ -44,12 +47,19 @@ public sealed class CustomerService : ICustomerService
 {
     private static readonly EmailAddressAttribute EmailRule = new();
 
+    /// <summary>Customers per page on the customer list. The client's Pastel list has
+    /// about 1 560, so the whole list on one page would be over a megabyte.</summary>
+    public const int ListPageSize = 25;
+
     private readonly ICustomerRepository _customers;
 
     public CustomerService(ICustomerRepository customers) => _customers = customers;
 
     public Task<IReadOnlyList<CustomerSummary>> ListAsync(string? search = null, bool includeInactive = false, CancellationToken ct = default) =>
         _customers.SearchAsync(Clean(search), includeInactive, ct);
+
+    public Task<CustomerPage> ListPageAsync(string? search, bool includeInactive, int page, CancellationToken ct = default) =>
+        _customers.SearchPageAsync(Clean(search), includeInactive, page, ListPageSize, ct);
 
     public async Task<CustomerResult> GetAsync(int customerId, CancellationToken ct = default)
     {
@@ -178,9 +188,9 @@ public sealed class CustomerService : ICustomerService
         contact.Position = input.Position;
     }
 
-    // ---- Input rules ----
+    // ---- Input rules, shared with CustomerImportService ----
 
-    private static CustomerInput Normalise(CustomerInput i) => new(
+    internal static CustomerInput Normalise(CustomerInput i) => new(
         Clean(i.Name) ?? "",
         Clean(i.AccountCode)?.ToUpperInvariant(),
         Clean(i.AddressLine1),
@@ -189,13 +199,13 @@ public sealed class CustomerService : ICustomerService
         Clean(i.PostalCode),
         Clean(i.VatNumber));
 
-    private static ContactInput Normalise(ContactInput i) => new(
+    internal static ContactInput Normalise(ContactInput i) => new(
         Clean(i.FullName) ?? "",
         Clean(i.Email),
         Clean(i.Phone),
         Clean(i.Position));
 
-    private static Dictionary<string, string[]>? Validate(CustomerInput i)
+    internal static Dictionary<string, string[]>? Validate(CustomerInput i)
     {
         var errors = new Dictionary<string, string[]>();
         Required(errors, nameof(i.Name), i.Name, "A customer needs a name.");
@@ -209,7 +219,7 @@ public sealed class CustomerService : ICustomerService
         return errors.Count == 0 ? null : errors;
     }
 
-    private static Dictionary<string, string[]>? Validate(ContactInput i)
+    internal static Dictionary<string, string[]>? Validate(ContactInput i)
     {
         var errors = new Dictionary<string, string[]>();
         Required(errors, nameof(i.FullName), i.FullName, "A contact needs a name.");
