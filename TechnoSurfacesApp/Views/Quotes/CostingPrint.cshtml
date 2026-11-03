@@ -112,6 +112,13 @@
             <span class="lbl">Transport</span>
             <span class="val">@Fmt.Rand(t.TransportAmount)</span>
         </div>
+        @if (t.AllowanceAmount > 0)
+        {
+            <div class="totals-row">
+                <span class="lbl">Allowances</span>
+                <span class="val">@Fmt.Rand(t.AllowanceAmount)</span>
+            </div>
+        }
         <div class="totals-row total-line">
             <span class="lbl">Total ex VAT</span>
             <span class="val">@Fmt.Rand(t.TotalExVat)</span>

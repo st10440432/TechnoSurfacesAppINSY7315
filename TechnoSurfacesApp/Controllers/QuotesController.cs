@@ -312,7 +312,11 @@ public class QuotesController : AppController
             Document = document,
             Check = await _quotation.CheckAsync(id, ct),
             Actions = await ActionsForAsync(quote),
-            ShowSheetCounts = quote.CurrentVersion?.ShowSheetCounts ?? false
+            ShowSheetCounts = quote.CurrentVersion?.ShowSheetCounts ?? false,
+            SpreadAllowances = quote.CurrentVersion?.SpreadAllowances ?? true,
+            AllowanceDescription = quote.CurrentVersion?.AllowanceWording ?? QuoteVersion.DefaultAllowanceDescription,
+            AllowanceAmount = quote.CurrentVersion?.AllowanceAmount ?? 0m,
+            TransportAmount = quote.CurrentVersion?.TransportAmount ?? 0m
         };
 
         SetPage("Customer quotation", "quotes", QuotesCrumb,
@@ -659,6 +663,15 @@ public sealed class QuotationVm
 
     /// <summary>Whether copied material lines give their sheets, for the switch above the lines.</summary>
     public bool ShowSheetCounts { get; init; }
+
+    // For the bill of quantities settings. The amounts are the job's, typed on the
+    // costing sheet; they are shown here so the estimator knows what is spread.
+    public bool SpreadAllowances { get; init; }
+    public string AllowanceDescription { get; init; } = "";
+    public decimal AllowanceAmount { get; init; }
+    public decimal TransportAmount { get; init; }
+
+    public bool IsBillOfQuantities => Document.Bill is not null;
 }
 
 public sealed class ApprovalsVm

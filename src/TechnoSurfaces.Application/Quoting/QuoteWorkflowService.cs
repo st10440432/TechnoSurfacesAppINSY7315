@@ -340,11 +340,14 @@ public sealed class QuoteWorkflowService : IQuoteWorkflowService
     /// </summary>
     private string? QuotationMismatch(QuoteVersion version)
     {
-        if (version.QuotationLines.Count == 0)
-            return "Write the customer quotation lines before the quote is approved.";
+        var totals = _calculator.Calculate(version);
+        if (!CustomerQuotationTotal.HasContent(version, totals))
+            return version.Layout == QuotationLayout.BillOfQuantities
+                ? "Cost the items on the costing sheet before the quote is approved."
+                : "Write the customer quotation lines before the quote is approved.";
 
-        var quotation = version.QuotationSubtotalExVat();
-        var costing = _calculator.Calculate(version).TotalExVat;
+        var quotation = CustomerQuotationTotal.Of(version, totals);
+        var costing = totals.TotalExVat;
         return quotation == costing
             ? null
             : $"The quotation lines add up to R{Money(quotation)} but the costing total is R{Money(costing)}. " +

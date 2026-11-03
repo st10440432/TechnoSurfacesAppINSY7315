@@ -24,7 +24,7 @@ internal static class CostingOnQuotation
             .Where(l => l.LineType == CostingLineType.Material && l.LineTotal() > 0)
             .OrderBy(l => l.SortOrder).ThenBy(l => l.Id)
             .ToList();
-        var hasOtherCosts = version.TransportAmount > 0
+        var hasOtherCosts = version.JobExtras() > 0
             || version.CostingLines.Any(l => l.LineType == CostingLineType.Rate && l.LineTotal() > 0);
 
         // A material is shown at its selling price: its cost with its item's markup,
@@ -38,7 +38,7 @@ internal static class CostingOnQuotation
 
         // The rest is the difference to the costing total, so the lines add up to it
         // to the cent: the marked-up labour and consumables, the cut-outs and grooves
-        // at cost, and transport. With no such costs, the cents lost to rounding each
+        // at cost, transport and the allowance. With no such costs, the cents lost to rounding each
         // material go on the last material instead.
         var remainder = totals.TotalExVat - amounts.Sum();
         if (!hasOtherCosts && amounts.Count > 0)

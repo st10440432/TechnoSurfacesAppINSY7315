@@ -52,6 +52,13 @@ public interface IQuotationGenerationService
 
     /// <summary>Whether the copied material lines give their sheet count, or one item each.</summary>
     Task<QuotationResult> SetShowSheetCountsAsync(int quoteId, bool show, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether the quotation lists the written lines or a bill of quantities built from
+    /// the items, and on a bill whether the transport and the allowance are spread over
+    /// the rates, and the allowance's wording.
+    /// </summary>
+    Task<QuotationResult> SetLayoutAsync(int quoteId, QuotationLayoutInput input, CancellationToken ct = default);
 }
 
 public sealed class QuotationGenerationService : IQuotationGenerationService
@@ -108,7 +115,12 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
                 .ToList();
         }
 
-        var subtotal = version.QuotationSubtotalExVat();
+        // A bill of quantities is built from the items; the written lines are the
+        // other layout and are not printed with it.
+        var bill = version.Layout == QuotationLayout.BillOfQuantities
+            ? BillOfQuantitiesBuilder.Build(version, _calculator.Calculate(version))
+            : null;
+        var subtotal = bill is null ? version.QuotationSubtotalExVat() : BillOfQuantitiesBuilder.Total(bill);
         var vat = decimal.Round(subtotal * version.VatRate, 2, MidpointRounding.AwayFromZero);
         var isCurrent = version.VersionNo == quote.CurrentVersion?.VersionNo;
 
@@ -120,13 +132,15 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
             isCurrent ? quote.Status.ToString() : version.IsIssued ? "Issued" : "Superseded",
             version.HasRecordedTerms,
             Heading(quote, version),
-            Lines(version),
+            bill is null ? Lines(version) : [],
             new QuotationTotals(subtotal, version.VatRate, vat, subtotal + vat),
             terms,
             warranties,
             BankDetailsSet: terms.Any(s => s.Section == nameof(TermSection.BankDetails) && s.Lines.Count > 0),
             IsCurrentVersion: isCurrent,
-            HeadingAsIssued: version.IsIssued);
+            HeadingAsIssued: version.IsIssued,
+            Layout: version.Layout.ToString(),
+            Bill: bill);
     }
 
     /// <summary>
@@ -341,6 +355,39 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
         return new(QuotationOutcome.Ok, Check: Check(version));
     }
 
+    public async Task<QuotationResult> SetLayoutAsync(int quoteId, QuotationLayoutInput input, CancellationToken ct = default)
+    {
+        var (version, refused) = await OpenVersionAsync(quoteId, ct);
+        if (refused is not null)
+            return refused;
+
+        var errors = new Dictionary<string, string[]>();
+        QuotationLayout? layout = null;
+        if (input.Layout is not null)
+        {
+            if (Enum.TryParse<QuotationLayout>(input.Layout, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
+                && !int.TryParse(input.Layout, out _))
+                layout = parsed;
+            else
+                errors[nameof(QuotationLayoutInput.Layout)] = new[] { "Choose Lines or BillOfQuantities." };
+        }
+        var description = input.AllowanceDescription?.Trim();
+        if (description is { Length: > QuoteVersion.AllowanceDescriptionMaxLength })
+            errors[nameof(QuotationLayoutInput.AllowanceDescription)] = new[] { $"No more than {QuoteVersion.AllowanceDescriptionMaxLength} characters." };
+        if (errors.Count > 0)
+            return new(QuotationOutcome.Invalid, Errors: errors);
+
+        if (layout is { } chosen)
+            version!.SetLayout(chosen);
+        if (input.SpreadAllowances is { } spread)
+            version!.SetSpreadAllowances(spread);
+        if (input.AllowanceDescription is not null)
+            version!.SetAllowance(version.AllowanceAmount, description);
+
+        await _quotes.SaveChangesAsync(ct);
+        return new(QuotationOutcome.Ok, Check: Check(version!));
+    }
+
     /// <summary>
     /// A material as the customer reads it: "[brand] [colour] [thickness] mm". A product
     /// line with no brand gives its own name instead. A band price covers several
@@ -385,10 +432,11 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
 
     private QuotationCheck Check(QuoteVersion version)
     {
-        var quotation = version.QuotationSubtotalExVat();
-        var costing = _calculator.Calculate(version).TotalExVat;
-        return new QuotationCheck(version.QuotationLines.Count > 0, quotation, costing, quotation - costing,
-            version.QuotationLines.Count > 0 && quotation == costing);
+        var totals = _calculator.Calculate(version);
+        var quotation = CustomerQuotationTotal.Of(version, totals);
+        var hasContent = CustomerQuotationTotal.HasContent(version, totals);
+        return new QuotationCheck(hasContent, quotation, totals.TotalExVat, quotation - totals.TotalExVat,
+            hasContent && quotation == totals.TotalExVat);
     }
 
     private static IReadOnlyList<CustomerQuotationLine> Lines(QuoteVersion version) =>

@@ -132,10 +132,13 @@ public sealed class ChangeCostingRequest : IValidatableObject
     public decimal? MarkupPercent { get; set; }
     public decimal? TransportAmount { get; set; }
 
+    /// <summary>The travel, inspection and away allowance for the whole job.</summary>
+    public decimal? AllowanceAmount { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (MarkupPercent is null && TransportAmount is null)
-            yield return new("Nothing to change. Send a markup percentage or a transport amount.");
+        if (MarkupPercent is null && TransportAmount is null && AllowanceAmount is null)
+            yield return new("Nothing to change. Send a markup percentage, a transport amount or an allowance.");
 
         // The column holds five digits with two decimals.
         if (MarkupPercent is < 0 or > 999.99m)
@@ -146,6 +149,12 @@ public sealed class ChangeCostingRequest : IValidatableObject
 
         if (TransportAmount > ColumnLimits.Money)
             yield return new("This transport amount is too large.", new[] { nameof(TransportAmount) });
+
+        if (AllowanceAmount < 0)
+            yield return new("An allowance cannot be negative.", new[] { nameof(AllowanceAmount) });
+
+        if (AllowanceAmount > ColumnLimits.Money)
+            yield return new("This allowance is too large.", new[] { nameof(AllowanceAmount) });
     }
 }
 
@@ -165,7 +174,16 @@ public sealed class ItemRequest : IValidatableObject
 
     public decimal? MarkupPercent { get; set; }
 
-    public ItemInput ToInput() => new(Name.Trim(), string.IsNullOrWhiteSpace(Number) ? null : Number.Trim(), Quantity, MarkupPercent);
+    /// <summary>The unit on the bill of quantities. None given is a number of them, No.</summary>
+    [StringLength(QuoteItem.UnitMaxLength)]
+    public string? Unit { get; set; }
+
+    /// <summary>The heading the item is listed under on the bill of quantities, such as Worktops.</summary>
+    [StringLength(QuoteItem.SectionMaxLength)]
+    public string? Section { get; set; }
+
+    public ItemInput ToInput() => new(Name.Trim(), string.IsNullOrWhiteSpace(Number) ? null : Number.Trim(), Quantity, MarkupPercent,
+        Unit, Section);
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -184,9 +202,10 @@ public sealed class ItemRequest : IValidatableObject
 }
 
 /// <summary>An item on the quote as the costing sheet shows it.</summary>
-public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent)
+public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent, string Unit, string? Section)
 {
-    public static ItemDto From(QuoteItem item) => new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent);
+    public static ItemDto From(QuoteItem item) =>
+        new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent, item.Unit, item.Section);
 }
 
 public sealed record ItemResponse(ItemDto Item, QuoteTotals Totals)

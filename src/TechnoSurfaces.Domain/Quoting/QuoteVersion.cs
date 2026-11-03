@@ -73,6 +73,36 @@ public class QuoteVersion
     /// </summary>
     public bool ShowSheetCounts { get; private set; }
 
+    /// <summary>
+    /// The job's allowances, such as travel, inspection and time away for a tender out
+    /// of town: one amount for the whole job, typed by the estimator. Cost recovery
+    /// like transport, so it sits below the markup line and is not marked up.
+    /// </summary>
+    public decimal AllowanceAmount { get; private set; }
+
+    /// <summary>What the allowance is called on the quotation, when it is not the usual wording.</summary>
+    public string? AllowanceDescription { get; private set; }
+
+    /// <summary>The allowance as the customer reads it.</summary>
+    public string AllowanceWording => AllowanceDescription ?? DefaultAllowanceDescription;
+
+    /// <summary>How the customer quotation lists the work: the written lines, or a bill of quantities.</summary>
+    public QuotationLayout Layout { get; private set; }
+
+    /// <summary>
+    /// On a bill of quantities, the transport and the allowance are spread over the
+    /// items' rates in proportion to their amounts, as the client prices a tender.
+    /// When this is set they are listed as lines of their own after the items instead.
+    /// </summary>
+    public bool AllowancesOnOwnLines { get; private set; }
+
+    public bool SpreadAllowances => !AllowancesOnOwnLines;
+
+    /// <summary>The allowance's wording on the client's tenders.</summary>
+    public const string DefaultAllowanceDescription = "Travel, inspection and away allowances";
+
+    public const int AllowanceDescriptionMaxLength = 200;
+
     /// <summary>Once sealed the version is a read-only record.</summary>
     public bool IsSealed { get; private set; }
 
@@ -179,22 +209,25 @@ public class QuoteVersion
     /// A new item, listed last, at the markup of the item before it unless another is
     /// given: the client mostly marks every item of a job up alike.
     /// </summary>
-    public QuoteItem AddItem(string name, string? number = null, decimal quantity = 1m, decimal? markupPercent = null)
+    public QuoteItem AddItem(string name, string? number = null, decimal quantity = 1m, decimal? markupPercent = null,
+        string? unit = null, string? section = null)
     {
         EnsureUnsealed();
         var item = new QuoteItem(name, markupPercent ?? Items[^1].MarkupPercent, quantity, number)
         {
             SortOrder = _items.Count == 0 ? 1 : _items.Max(i => i.SortOrder) + 1
         };
+        item.PlaceOnBill(unit, section);
         _items.Add(item);
         return item;
     }
 
-    public void ChangeItem(QuoteItem item, string name, string? number, decimal quantity)
+    public void ChangeItem(QuoteItem item, string name, string? number, decimal quantity, string? unit = null, string? section = null)
     {
         EnsureUnsealed();
         OwnItem(item).Rename(name, number);
         item.SetQuantity(quantity);
+        item.PlaceOnBill(unit, section);
     }
 
     /// <summary>
@@ -321,6 +354,32 @@ public class QuoteVersion
         TransportAmount = amount;
     }
 
+    /// <summary>The job's allowance, and its wording on the quotation; no wording keeps the usual one.</summary>
+    public void SetAllowance(decimal amount, string? description = null)
+    {
+        EnsureUnsealed();
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "An allowance cannot be negative.");
+        AllowanceAmount = amount;
+        AllowanceDescription = string.IsNullOrWhiteSpace(description) || description.Trim() == DefaultAllowanceDescription
+            ? null
+            : description.Trim();
+    }
+
+    public void SetLayout(QuotationLayout layout)
+    {
+        EnsureUnsealed();
+        if (!Enum.IsDefined(layout))
+            throw new ArgumentOutOfRangeException(nameof(layout), "Not a quotation layout.");
+        Layout = layout;
+    }
+
+    public void SetSpreadAllowances(bool spread)
+    {
+        EnsureUnsealed();
+        AllowancesOnOwnLines = !spread;
+    }
+
     /// <summary>
     /// Changes a quantity on this quote. On a derived line, such as silicon at two
     /// per sheet, the typed figure replaces the derived one until it is restored.
@@ -376,7 +435,11 @@ public class QuoteVersion
         var revision = new QuoteVersion(versionNo, createdByUserId, MarkupPercent, VatRate)
         {
             TransportAmount = TransportAmount,
-            ShowSheetCounts = ShowSheetCounts
+            ShowSheetCounts = ShowSheetCounts,
+            AllowanceAmount = AllowanceAmount,
+            AllowanceDescription = AllowanceDescription,
+            Layout = Layout,
+            AllowancesOnOwnLines = AllowancesOnOwnLines
         };
 
         // Each copied line belongs to the copy of its item, and a copied quotation
@@ -438,7 +501,8 @@ public class QuoteVersion
     //
     // Each item is costed for one of it: its own lines, its own markup on its own
     // sub-total, and its own cut-outs and grooves after the markup. The quote adds
-    // up each item as many times as the job needs it, then transport once.
+    // up each item as many times as the job needs it, then transport and the
+    // allowance once.
 
     /// <summary>Sum of one item's line totals above the line.</summary>
     public decimal SubTotalExVat(QuoteItem item) =>
@@ -477,13 +541,17 @@ public class QuoteVersion
 
     /// <summary>
     /// Below-the-line items are cost recovery and are not marked up: the cut-out
-    /// and groove charges, and transport.
+    /// and groove charges, transport and the allowance.
     /// </summary>
     public decimal BelowTheLineTotal() =>
-        Round(Items.Sum(i => BelowTheLineTotal(i) * i.Quantity) + TransportAmount);
+        Round(Items.Sum(i => BelowTheLineTotal(i) * i.Quantity) + TransportAmount + AllowanceAmount);
+
+    /// <summary>What the job carries beside its items: transport and the allowance.</summary>
+    public decimal JobExtras() =>
+        Round(TransportAmount + AllowanceAmount);
 
     public decimal TotalExVat() =>
-        Round(Items.Sum(AmountExVat) + TransportAmount);
+        Round(Items.Sum(AmountExVat) + JobExtras());
 
     public decimal VatAmount() =>
         Round(TotalExVat() * VatRate);

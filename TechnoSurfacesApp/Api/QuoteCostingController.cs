@@ -66,8 +66,8 @@ public sealed class QuoteCostingController : ControllerBase
     }
 
     /// <summary>
-    /// PUT /api/quotes/{quoteId}/costing: markup (US-07) for every item, and the
-    /// transport amount. PUT /api/quotes/{quoteId}/items/{itemId}/costing: one item's markup.
+    /// PUT /api/quotes/{quoteId}/costing: markup (US-07) for every item, the
+    /// transport amount and the allowance. PUT /api/quotes/{quoteId}/items/{itemId}/costing: one item's markup.
     /// </summary>
     [HttpPut("costing")]
     [HttpPut("items/{itemId:int}/costing")]
@@ -82,7 +82,7 @@ public sealed class QuoteCostingController : ControllerBase
             return refused;
 
         var result = await _costing.ChangeCostingAsync(quoteId,
-            new ChangeCosting(request.MarkupPercent, request.TransportAmount, itemId), ct);
+            new ChangeCosting(request.MarkupPercent, request.TransportAmount, itemId, request.AllowanceAmount), ct);
         return result.Outcome == CostingOutcome.Ok ? Ok(result.Totals) : Failure(result, quoteId);
     }
 

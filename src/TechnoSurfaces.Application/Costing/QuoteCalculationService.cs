@@ -41,6 +41,7 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
             MarkupAmount: version.MarkupAmount(),
             BelowTheLineTotal: version.BelowTheLineTotal(),
             TransportAmount: version.TransportAmount,
+            AllowanceAmount: version.AllowanceAmount,
             TotalExVat: version.TotalExVat(),
             VatRate: version.VatRate,
             VatAmount: version.VatAmount(),
@@ -130,8 +131,9 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
 /// </summary>
 /// <param name="SubTotalExVat">Sum of line totals above the line.</param>
 /// <param name="MarkupAmount">Applied to the sub-total only.</param>
-/// <param name="BelowTheLineTotal">Cost recovery items, not marked up. Includes transport.</param>
+/// <param name="BelowTheLineTotal">Cost recovery items, not marked up. Includes transport and the allowance.</param>
 /// <param name="TransportAmount">The petrol and delivery amount typed for the job.</param>
+/// <param name="AllowanceAmount">The travel, inspection and away allowance typed for the job.</param>
 /// <param name="TotalAreaM2">Total square metres of material, shown on the summary.</param>
 /// <param name="Items">Each item's own figures, for one of it and for the number needed.</param>
 public sealed record QuoteTotals(
@@ -140,6 +142,7 @@ public sealed record QuoteTotals(
     decimal MarkupAmount,
     decimal BelowTheLineTotal,
     decimal TransportAmount,
+    decimal AllowanceAmount,
     decimal TotalExVat,
     decimal VatRate,
     decimal VatAmount,

@@ -144,6 +144,20 @@
                                        required value="@Fmt.Input(itemDto.Quantity)" />
                             </div>
                         </div>
+                        <div class="field-row field-row-2">
+                            <div class="field">
+                                <label class="label" for="item-section">Section <span class="optional">optional</span></label>
+                                <input class="input" id="item-section" name="section" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.SectionMaxLength"
+                                       value="@itemDto.Section" aria-describedby="item-section-hint" />
+                                <span class="hint" id="item-section-hint">The heading it is listed under on a bill of quantities, such as Worktops.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="item-unit">Unit</label>
+                                <input class="input" id="item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
+                                       value="@itemDto.Unit" aria-describedby="item-unit-hint" />
+                                <span class="hint" id="item-unit-hint">Left empty, it is counted in numbers, No.</span>
+                            </div>
+                        </div>
                         <div class="btn-row">
                             <button type="submit" class="btn btn-secondary">Save the item</button>
                             @if (several)
@@ -179,6 +193,19 @@
                                 <label class="label" for="new-item-quantity">Needed</label>
                                 <input class="input input-num" id="new-item-quantity" name="quantity" type="number" inputmode="decimal" min="0.0001" step="any"
                                        required value="1" />
+                            </div>
+                        </div>
+                        <div class="field-row field-row-2">
+                            <div class="field">
+                                <label class="label" for="new-item-section">Section <span class="optional">optional</span></label>
+                                <input class="input" id="new-item-section" name="section" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.SectionMaxLength"
+                                       value="@itemDto.Section" aria-describedby="new-item-section-hint" />
+                                <span class="hint" id="new-item-section-hint">Filled with this item's, for the next item under the same heading.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="new-item-unit">Unit</label>
+                                <input class="input" id="new-item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
+                                       value="@itemDto.Unit" />
                             </div>
                         </div>
                         <button type="submit" class="btn btn-secondary">
@@ -340,7 +367,7 @@
                     <h3 class="section-label">The whole quote</h3>
                     <div class="totals-row">
                         <span class="lbl">@Model.Sheet.Items.Count items</span>
-                        <span class="val" data-total="itemsTotal">@Fmt.Rand(t.TotalExVat - t.TransportAmount)</span>
+                        <span class="val" data-total="itemsTotal">@Fmt.Rand(t.TotalExVat - t.TransportAmount - t.AllowanceAmount)</span>
                     </div>
                 }
                 <div class="totals-row">
@@ -361,6 +388,25 @@
                         }
                     </span>
                     <span class="val" data-total="transportAmount">@Fmt.Rand(t.TransportAmount)</span>
+                </div>
+                <div class="totals-row">
+                    <span class="lbl">
+                        @if (a.CanEdit)
+                        {
+                            <label for="allowance">Allowances</label>
+                            <span class="input-group input-group-sm input-inline">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-sm input-num" id="allowance" type="number" inputmode="decimal" min="0" step="any"
+                                       required value="@Fmt.Input(t.AllowanceAmount)" data-costing-field="allowanceAmount" data-saved="@Fmt.Input(t.AllowanceAmount)"
+                                       aria-describedby="transport-hint" />
+                            </span>
+                        }
+                        else
+                        {
+                            @:Allowances
+                        }
+                    </span>
+                    <span class="val" data-total="allowanceAmount">@Fmt.Rand(t.AllowanceAmount)</span>
                 </div>
                 <div class="totals-row total-line">
                     <span class="lbl">Total ex VAT</span>
@@ -387,7 +433,10 @@
                 <p class="totals-note" id="markup-hint">
                     The markup is this item's, and applies to its sub total only. Cut-outs and grooves are added after it, at cost, as the client confirmed.
                 </p>
-                <p class="totals-note" id="transport-hint">Transport is for the whole job, added once after every item.</p>
+                <p class="totals-note" id="transport-hint">
+                    Transport and allowances, such as travel, inspection and time away, are for the whole job, added once after every item at cost.
+                    On a bill of quantities they can be spread over the items' rates.
+                </p>
 
                 @* Read out by a screen reader after every recalculation. *@
                 <p class="sr-only" id="totals-status" role="status" aria-live="polite" aria-atomic="true"></p>

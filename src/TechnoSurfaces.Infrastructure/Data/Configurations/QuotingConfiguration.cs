@@ -93,6 +93,8 @@ public sealed class QuoteVersionConfiguration : IEntityTypeConfiguration<QuoteVe
         e.Property(x => x.MarkupPercent).HasPrecision(5, 2);
         e.Property(x => x.VatRate).HasPrecision(5, 4);
         e.Property(x => x.TransportAmount).HasPrecision(18, 2);
+        e.Property(x => x.AllowanceAmount).HasPrecision(18, 2);
+        e.Property(x => x.AllowanceDescription).HasMaxLength(QuoteVersion.AllowanceDescriptionMaxLength);
 
         e.HasMany(x => x.Items)
             .WithOne()
@@ -215,6 +217,11 @@ public sealed class QuoteItemConfiguration : IEntityTypeConfiguration<QuoteItem>
         e.Property(x => x.Name).HasMaxLength(QuoteItem.NameMaxLength).IsRequired();
         e.Property(x => x.Quantity).HasPrecision(18, 4);
         e.Property(x => x.MarkupPercent).HasPrecision(5, 2);
+
+        // Items saved before units were recorded are counted in numbers, as every item
+        // on the client's tenders is.
+        e.Property(x => x.Unit).HasMaxLength(QuoteItem.UnitMaxLength).IsRequired().HasDefaultValue(QuoteItem.DefaultUnit);
+        e.Property(x => x.Section).HasMaxLength(QuoteItem.SectionMaxLength);
 
         e.HasIndex(x => x.QuoteVersionId);
     }

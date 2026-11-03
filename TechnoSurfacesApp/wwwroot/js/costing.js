@@ -6,7 +6,7 @@
    - The price of the chosen sheet, where it came from and the sheet's size,
      shown before the line is added (NFR-01, US-02). A price that cannot be found
      is shown as a blocking, explained error and the line cannot be added (US-03).
-   - Every change to a line, the markup or the transport is saved through the
+   - Every change to a line, the markup, the transport or the allowance is saved through the
      costing API as soon as the field is left. The totals update from the answer
      and are read out to a screen reader, and the line tables are refreshed from
      the server because one change can move other lines (US-05).
@@ -121,7 +121,7 @@
         if (!t || !totalsPanel) return;
         var values = Object.assign({}, t, {
             randPerM2: t.totalAreaM2 > 0 ? t.totalExVat / t.totalAreaM2 : null,
-            itemsTotal: t.totalExVat - t.transportAmount
+            itemsTotal: t.totalExVat - t.transportAmount - t.allowanceAmount
         });
         totalsPanel.querySelectorAll("[data-total]").forEach(function (node) {
             showValue(node, values[node.dataset.total]);
