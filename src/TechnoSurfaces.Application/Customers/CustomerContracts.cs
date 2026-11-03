@@ -23,6 +23,22 @@ public sealed record ContactView(int Id, string FullName, string? Email, string?
 /// <summary>A row on the customer list.</summary>
 public sealed record CustomerSummary(int Id, string Name, string? AccountCode, string? City, bool IsActive, int ActiveContactCount);
 
+/// <summary>
+/// One page of the customer list, by name. <paramref name="Page"/> counts from 1 and is
+/// always a page that exists, so asking past the end returns the last page.
+/// </summary>
+public sealed record CustomerPage(IReadOnlyList<CustomerSummary> Customers, int TotalCount, int Page, int PageSize)
+{
+    public int PageCount => Math.Max(1, (TotalCount + PageSize - 1) / PageSize);
+    public bool HasPrevious => Page > 1;
+    public bool HasNext => Page < PageCount;
+
+    /// <summary>The position of the first customer on this page, counting from 1; 0 when there are none.</summary>
+    public int First => TotalCount == 0 ? 0 : (Page - 1) * PageSize + 1;
+
+    public int Last => (Page - 1) * PageSize + Customers.Count;
+}
+
 /// <summary>A customer with all of its contacts, active and inactive.</summary>
 public sealed record CustomerView(
     int Id,
@@ -75,6 +91,9 @@ public interface ICustomerRepository
     /// <summary>Customers matching the search on name or account code, ordered by name.</summary>
     Task<IReadOnlyList<CustomerSummary>> SearchAsync(string? search, bool includeInactive, CancellationToken ct = default);
 
+    /// <summary>One page of <see cref="SearchAsync"/>, with the number of customers that match.</summary>
+    Task<CustomerPage> SearchPageAsync(string? search, bool includeInactive, int page, int pageSize, CancellationToken ct = default);
+
     /// <summary>Active customers that have at least one active contact, with those contacts.</summary>
     Task<IReadOnlyList<CustomerChoice>> ChoicesAsync(CancellationToken ct = default);
 
@@ -82,6 +101,9 @@ public interface ICustomerRepository
     Task<Customer?> GetAsync(int customerId, CancellationToken ct = default);
 
     Task<bool> AccountCodeTakenAsync(string accountCode, int? exceptCustomerId, CancellationToken ct = default);
+
+    /// <summary>The account code and name of every customer, active or not, for the Pastel import.</summary>
+    Task<IReadOnlyList<ExistingCustomerKey>> ExistingKeysAsync(CancellationToken ct = default);
 
     void Add(Customer customer);
 

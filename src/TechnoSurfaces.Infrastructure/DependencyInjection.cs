@@ -47,6 +47,7 @@ public static class DependencyInjection
         // Customers and their contacts.
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<ICustomerImportService, CustomerImportService>();
 
         // The quote workflow and the lists the screens show. One QuoteQueries per
         // request serves both interfaces, so lapsed quotes are expired on the same
