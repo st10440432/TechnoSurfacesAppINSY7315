@@ -1,0 +1,225 @@
+@model TechnoSurfacesApp.Controllers.CustomerImportVm
+@*
+    Import from Sage Pastel (Managing Director only). The Customer Listing report is
+    uploaded and checked first: the page shows what would be added and what would be
+    left out, and nothing is saved until the Managing Director imports it. Customers
+    already in the app are never changed, so the import can be run again after a
+    later export.
+*@
+@{
+    var plan = Model.Plan;
+    const int SampleSize = 25;
+}
+
+<header class="page-head">
+    <div>
+        <h1>Import from Pastel</h1>
+        <p>Bring the customer list in from Sage Pastel, with each customer's contact person.</p>
+    </div>
+</header>
+
+@if (Model.Error is not null)
+{
+    <div class="notice notice-alert mb-section" role="alert">
+        <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+        <div><strong>Nothing read.</strong> @Model.Error</div>
+    </div>
+}
+
+<div class="grid grid-main">
+    <div class="stack-gap">
+        @if (plan is not null)
+        {
+            <section class="card" aria-labelledby="preview-title">
+                <div class="card-head">
+                    <h2 id="preview-title">Check before importing</h2>
+                    <span class="spacer"></span>
+                    <span class="sub">@Model.FileName</span>
+                </div>
+                <div class="card-body">
+                    <div class="grid grid-4 mb-section">
+                        <div class="tile tile-accent">
+                            <div class="tile-label">Customers to add</div>
+                            <div class="tile-value">@plan.ToAdd.Count</div>
+                            <div class="tile-note">@plan.InactiveCount of them inactive (blocked in Pastel)</div>
+                        </div>
+                        <div class="tile tile-accent blue">
+                            <div class="tile-label">Contacts to add</div>
+                            <div class="tile-value">@plan.ContactCount</div>
+                            <div class="tile-note">one per customer that names a person</div>
+                        </div>
+                        <div class="tile tile-accent amber">
+                            <div class="tile-label">Without a contact</div>
+                            <div class="tile-value">@plan.WithoutContactCount</div>
+                            <div class="tile-note">add one before quoting them</div>
+                        </div>
+                        <div class="tile tile-accent navy">
+                            <div class="tile-label">Left out</div>
+                            <div class="tile-value">@plan.Skipped.Count</div>
+                            <div class="tile-note">listed below, with the reason</div>
+                        </div>
+                    </div>
+
+                    @if (plan.Problems.Count > 0)
+                    {
+                        <div class="notice notice-alert mb-section" role="alert">
+                            <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
+                            <div>
+                                <strong>Parts of the file could not be read.</strong>
+                                <ul class="mb-0">
+                                    @foreach (var p in plan.Problems) { <li>@p</li> }
+                                </ul>
+                            </div>
+                        </div>
+                    }
+
+                    @if (plan.ToAdd.Count > 0)
+                    {
+                        <h3>The first @Math.Min(SampleSize, plan.ToAdd.Count) customers as they will be saved</h3>
+                        <div class="table-wrap" tabindex="0" role="region" aria-label="Customers to add">
+                            <table class="data stack">
+                                <caption class="sr-only">The first customers to add</caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Customer</th>
+                                        <th scope="col">Address</th>
+                                        <th scope="col">Contact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in plan.ToAdd.Take(SampleSize))
+                                    {
+                                        var c = row.Customer;
+                                        <tr>
+                                            <td data-label="Customer">
+                                                <span class="strong">@c.Name</span>
+                                                <span class="sub">@c.AccountCode@(c.VatNumber is null ? "" : $" · VAT {c.VatNumber}")@(row.IsActive ? "" : " · inactive")</span>
+                                            </td>
+                                            <td data-label="Address">
+                                                @string.Join(", ", new[] { c.AddressLine1, c.AddressLine2, c.City, c.PostalCode }.Where(x => x is not null))
+                                            </td>
+                                            <td data-label="Contact">
+                                                @if (row.Contact is { } k)
+                                                {
+                                                    <span>@k.FullName</span>
+                                                    <span class="sub">@string.Join(" · ", new[] { k.Email, k.Phone }.Where(x => x is not null))</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="sub">None in Pastel</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (plan.ToAdd.Count > SampleSize)
+                        {
+                            <p class="hint">And @(plan.ToAdd.Count - SampleSize) more, saved the same way.</p>
+                        }
+                    }
+                </div>
+                @if (plan.ToAdd.Count > 0)
+                {
+                    <div class="card-foot">
+                        <form asp-action="ConfirmImport" method="post"
+                              data-confirm="Import @plan.ToAdd.Count customers?"
+                              data-confirm-detail="They are added to the customer list and recorded in the audit trail. Customers already in the app are not changed."
+                              data-confirm-label="Import">
+                            <input type="hidden" name="previewKey" value="@Model.PreviewKey" />
+                            <button class="btn btn-primary" type="submit">Import @plan.ToAdd.Count customers</button>
+                        </form>
+                        <a class="btn btn-ghost" asp-action="Import">Start again</a>
+                    </div>
+                }
+            </section>
+
+            var noted = plan.ToAdd.Where(r => r.Notes.Count > 0).ToList();
+            if (noted.Count > 0)
+            {
+                <section class="card" aria-labelledby="notes-title">
+                    <div class="card-head"><h2 id="notes-title">Imported, with something to check (@noted.Count)</h2></div>
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Customers with something to check">
+                        <table class="data stack">
+                            <caption class="sr-only">Customers that will be imported with something to check</caption>
+                            <thead>
+                                <tr><th scope="col">Customer</th><th scope="col">To check</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in noted)
+                                {
+                                    <tr>
+                                        <td data-label="Customer"><span class="strong">@row.Customer.Name</span> <span class="sub">@row.Customer.AccountCode</span></td>
+                                        <td data-label="To check">@string.Join(" ", row.Notes)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+
+            if (plan.Skipped.Count > 0)
+            {
+                <section class="card" aria-labelledby="skipped-title">
+                    <div class="card-head"><h2 id="skipped-title">Left out (@plan.Skipped.Count)</h2></div>
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Customers left out">
+                        <table class="data stack">
+                            <caption class="sr-only">Customers that will not be imported</caption>
+                            <thead>
+                                <tr><th scope="col">Account code</th><th scope="col">Name in Pastel</th><th scope="col">Why</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in plan.Skipped)
+                                {
+                                    <tr>
+                                        <td data-label="Account code">@s.AccountCode</td>
+                                        <td data-label="Name in Pastel">@(string.IsNullOrEmpty(s.Name) ? "(none)" : s.Name)</td>
+                                        <td data-label="Why">@s.Reason</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+        }
+        else
+        {
+            <section class="card" aria-labelledby="how-title">
+                <div class="card-head"><h2 id="how-title">How it works</h2></div>
+                <div class="card-body">
+                    <ol>
+                        <li>In Sage Pastel, print the <strong>Customer Listing</strong> report to a text file.</li>
+                        <li>Choose that file here and click <strong>Check the file</strong>. Nothing is saved yet.</li>
+                        <li>Read the preview: what will be added, what needs checking, and what is left out.</li>
+                        <li>Click <strong>Import</strong> to add the customers.</li>
+                    </ol>
+                    <p class="mb-0">Customers already in the app are never changed, so the import can be run again after a later export. Only new account codes are added.</p>
+                </div>
+            </section>
+        }
+    </div>
+
+    <aside class="card" aria-labelledby="upload-title">
+        <div class="card-head"><h2 id="upload-title">The Pastel file</h2></div>
+        <div class="card-body">
+            <form asp-action="Import" method="post" enctype="multipart/form-data">
+                <div class="field">
+                    <label class="label" for="listing">Customer Listing <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="listing" name="listing" type="file" accept=".txt,.csv,text/plain" required aria-describedby="listing-hint" />
+                    <span class="hint" id="listing-hint">The text file Sage Pastel exports. It is read and then discarded; it is not stored.</span>
+                </div>
+                <button class="btn btn-primary" type="submit">Check the file</button>
+            </form>
+            <h3 class="mt-section">How each customer is saved</h3>
+            <ul class="small mb-0">
+                <li>The address is the postal address, or the delivery address when there is no postal one.</li>
+                <li>The Pastel tax reference becomes the VAT number.</li>
+                <li>The contact person keeps their email and phone numbers. A customer with no contact person gets none.</li>
+                <li>A customer blocked in Pastel comes in inactive.</li>
+            </ul>
+        </div>
+    </aside>
+</div>

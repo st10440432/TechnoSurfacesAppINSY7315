@@ -74,10 +74,20 @@ All twenty screens from the Task 1 journey maps are built, plus a few the build 
 
 - Getting in: sign in (with a button to show the password while typing it), forgotten password, activate account, set your password
 - Quoting: dashboard, quote list, new quote, costing sheet, costing printout, customer quotation, approval queue, review quote, version history, one version in full, invoice record
-- Data: material catalogue, price history and price editor, suppliers, one supplier with its product lines, sizes, bands and colours, customers, customer detail
+- Data: material catalogue, price history and price editor, suppliers, one supplier with its product lines, sizes, bands and colours, customers (25 to a page), customer detail, import from Sage Pastel
 - Running the app: rate card, users, quotation terms, audit trail
 
 Six screens are for the Managing Director only and do not appear in an estimator's menu. An estimator who opens one by its address gets a read-only view, or for users and the audit trail a page saying who it is for, rather than an error page, as the Task 1 journey map specified.
+
+### Customers from Sage Pastel
+
+The Managing Director brings the customer list in from Sage Pastel under Customers, Import from Pastel. Pastel's Customer Listing report is uploaded as a text file and checked first: the page shows what would be added, what needs checking and what is left out, and nothing is saved until the Managing Director imports it. The file is read and discarded, never stored, and no customer data is kept in this repository.
+
+- A customer already in the app is never changed. It is matched on its Pastel account code, or on its name when it was added by hand without one, so the import can be run again after a later export.
+- The address is the postal address, as on the Pastel invoice, or the delivery address when there is no postal one. The tax reference becomes the VAT number.
+- The contact is the person Pastel names, with their email and phone numbers. A customer with no contact person gets none, and the customer list marks it "Add a contact to quote".
+- A customer blocked in Pastel comes in inactive.
+- Every customer is checked by the same rules as one typed in on screen, and the import is recorded in the audit trail with personal details masked.
 
 ### User stories
 
@@ -226,7 +236,7 @@ These are the controls committed to in Task 1 section 8 and where each one is. P
 ### Who can do what
 
 - A global fallback policy requires a signed-in user everywhere. Only the sign-in and password help pages, the error page, static files and `/health` allow anonymous access, so a forgotten attribute fails closed.
-- Named policies, defined once in `Program.cs`: `CanEditCatalogue`, `CanManageUsers`, `CanViewAuditTrail`, `CanApproveQuote` and `CanRecordInvoice` for the Managing Director, and `CanEditQuote` and `CanReopenQuote`, which look at the quote itself (`Identity/EditQuoteHandler.cs`, `Identity/ReopenQuoteHandler.cs`). Every check is on the server, whatever the page shows.
+- Named policies, defined once in `Program.cs`: `CanEditCatalogue`, `CanManageUsers`, `CanViewAuditTrail`, `CanApproveQuote`, `CanRecordInvoice` and `CanImportCustomers` for the Managing Director, and `CanEditQuote` and `CanReopenQuote`, which look at the quote itself (`Identity/EditQuoteHandler.cs`, `Identity/ReopenQuoteHandler.cs`). Every check is on the server, whatever the page shows.
 
 ### Audit trail
 
@@ -425,7 +435,7 @@ These are the differences between what the Task 1 document describes and what wa
 - **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check and the old price list check are built: the review screen names each supplier on the quote whose price list is more than a year old, by the same rule as the dashboard and the catalogue. The other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
 - **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns hold the user's id but are not foreign keys, because changes made by the system itself are recorded against the user id "system", which has no user record.
 - **Deployment slots on the Basic tier.** Slots need the Standard tier, which costs US$101.47 a month for the plan against US$17.74 for Basic, and the client's budget for hosting is up to R1 000 a month. The client offered to run the Standard tier with a slot for up to three months after handover; two are planned, then the plan moves back to Basic, where rollback is by redeploying.
-- **Customer import and large tenders.** Waiting for the client: the column headings of the customer sheet, and the scope of pricing a large tender by item.
+- **Large tenders.** Waiting for the client: the scope of pricing a large tender by item.
 - **Rate card and bank details** from the client.
 
 ## Team
