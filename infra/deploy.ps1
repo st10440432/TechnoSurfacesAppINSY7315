@@ -28,15 +28,22 @@ To allow SQL logins again, first run
   az sql server ad-only-auth disable --resource-group <group> --name <server>
 and then deploy without -EntraOnly.
 
+Deploying into a new subscription while the old apps still exist needs a new
+-AppPrefix, because App Service names are unique across Azure. A subscription
+billed in rand takes -BudgetAmount 1000.
+
 .EXAMPLE
 ./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail team@example.com -WhatIf
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com -EntraOnly
+./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail owner@example.com -AppPrefix technosurfaces-quotes -BudgetAmount 1000
 #>
 param(
     [Parameter(Mandatory)] [ValidateSet('staging', 'production')] [string] $Environment,
     [Parameter(Mandatory)] [string] $ResourceGroup,
     [Parameter(Mandatory)] [string] $AlertEmail,
+    [string] $AppPrefix = 'tsqa-app',
+    [int] $BudgetAmount = 54,
     [switch] $DemoAccounts,
     [switch] $NoBudget,
     [switch] $EntraOnly,
@@ -53,6 +60,8 @@ function Read-Secret([string] $prompt) {
 $parameters = @{
     environment      = @{ value = $Environment }
     alertEmail       = @{ value = $AlertEmail }
+    appPrefix        = @{ value = $AppPrefix }
+    budgetAmount     = @{ value = $BudgetAmount }
     demoAccounts     = @{ value = [bool] $DemoAccounts }
     createBudget     = @{ value = -not $NoBudget }
     entraOnlyAuthentication = @{ value = [bool] $EntraOnly }
