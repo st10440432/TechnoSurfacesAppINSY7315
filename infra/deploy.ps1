@@ -32,11 +32,20 @@ Deploying into a new subscription while the old apps still exist needs a new
 -AppPrefix, because App Service names are unique across Azure. A subscription
 billed in rand takes -BudgetAmount 1000.
 
+-PlanSku S1 puts the shared plan on the Standard tier and gives production a
+staging slot. Both environments share the plan, so pass the same -PlanSku to
+each, or the second deployment moves the plan back. To use the slot, set the
+variable SLOT_NAME=staging on the GitHub production environment. To go back to
+B1, first remove SLOT_NAME, then delete the slot with
+  az webapp deployment slot delete --resource-group <group> --name <app> --slot staging
+and then deploy both environments with -PlanSku B1.
+
 .EXAMPLE
 ./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail team@example.com -WhatIf
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com -EntraOnly
 ./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail owner@example.com -AppPrefix technosurfaces-quotes -BudgetAmount 1000
+./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail owner@example.com -AppPrefix technosurfaces-quotes -PlanSku S1 -EntraOnly
 #>
 param(
     [Parameter(Mandatory)] [ValidateSet('staging', 'production')] [string] $Environment,
@@ -44,6 +53,7 @@ param(
     [Parameter(Mandatory)] [string] $AlertEmail,
     [string] $AppPrefix = 'tsqa-app',
     [int] $BudgetAmount = 54,
+    [ValidateSet('B1', 'S1')] [string] $PlanSku = 'B1',
     [switch] $DemoAccounts,
     [switch] $NoBudget,
     [switch] $EntraOnly,
@@ -62,6 +72,7 @@ $parameters = @{
     alertEmail       = @{ value = $AlertEmail }
     appPrefix        = @{ value = $AppPrefix }
     budgetAmount     = @{ value = $BudgetAmount }
+    planSku          = @{ value = $PlanSku }
     demoAccounts     = @{ value = [bool] $DemoAccounts }
     createBudget     = @{ value = -not $NoBudget }
     entraOnlyAuthentication = @{ value = [bool] $EntraOnly }

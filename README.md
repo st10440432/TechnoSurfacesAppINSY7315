@@ -276,7 +276,7 @@ Everything runs in one resource group in South Africa North, defined in `infra/m
 
 | Resource | Purpose |
 |---|---|
-| App Service plan, Basic B1 (Linux) | Shared by staging and production |
+| App Service plan, Basic B1 or Standard S1 (Linux) | Shared by staging and production. On S1, production also has a staging slot for swapping releases in and back out |
 | Two App Services | `tsqa-app-staging` and `tsqa-app-production`, HTTPS only, TLS 1.2, Always On |
 | Azure SQL server, two Basic databases | One database per environment. Public network access is disabled; the apps reach it through a private endpoint on a virtual network |
 | Key Vault | The connection strings and the first Managing Director's details, read by the apps' managed identities |
@@ -304,7 +304,9 @@ A repository ruleset protects `main` and `develop`: no direct pushes, a pull req
 
 **CD** (`.github/workflows/cd.yml`) runs after a merge. It builds, runs the unit tests again, publishes, generates the idempotent migration scripts, signs in to Azure with OIDC, deploys, and calls `/health` for up to five minutes. A deployment that does not report Healthy fails the run. A merge to `develop` deploys to staging; a merge to `main` deploys to production, which waits for a reviewer to approve it in the `production` environment.
 
-**Rollback** is to redeploy the previous successful build. This has been tried on staging and works.
+**Deployment slots.** On the Standard tier (`-PlanSku S1` in `infra/deploy.ps1`) production has a `staging` slot. With the variable `SLOT_NAME` set on the `production` environment, a release is deployed to the slot, must report Healthy there, and is then swapped into production, so the live site never serves a version that is still starting. The slot then holds the previous release.
+
+**Rollback** with a slot is the **Rollback** workflow (`.github/workflows/rollback.yml`): started from the Actions tab and approved like a release, it swaps the slot back, so the previous release is live again within seconds. Without a slot (the Basic tier), rollback is to re-run the CD run of the previous release, which rebuilds and redeploys it. This has been tried on staging and works.
 
 Dependabot opens pull requests against `develop` for NuGet packages and GitHub Actions each week.
 
@@ -430,7 +432,7 @@ These are the differences between what the Task 1 document describes and what wa
 - **Transport per sheet (US-05).** Add a transport line to the rate card worked out from the sheet count, added after the markup, for the materials it applies to, and rename the typed amount on screen to "Petrol / delivery". Waiting for the client's rate and the list of materials it applies to.
 - **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check and the old price list check are built: the review screen names each supplier on the quote whose price list is more than a year old, by the same rule as the dashboard and the catalogue. The other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
 - **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns hold the user's id but are not foreign keys, because changes made by the system itself are recorded against the user id "system", which has no user record.
-- **Deployment slots.** Not added. They need the Standard tier of App Service, at about R1 500 a month, and the client's budget for hosting is up to R1 000 a month.
+- **Deployment slots on the Basic tier.** Slots need the Standard tier, which costs US$101.47 a month for the plan against US$17.74 for Basic, and the client's budget for hosting is up to R1 000 a month. The client offered to run the Standard tier with a slot for up to three months after handover; two are planned, then the plan moves back to Basic, where rollback is by redeploying.
 - **Large tenders.** Waiting for the client: the scope of pricing a large tender by item.
 - **Rate card and bank details** from the client.
 
