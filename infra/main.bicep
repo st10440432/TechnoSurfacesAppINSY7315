@@ -6,6 +6,9 @@ param environment string
 
 param location string = resourceGroup().location
 
+@description('Start of the two App Service names, which must be unique across Azure. A new subscription needs a new prefix while the old apps still exist.')
+param appPrefix string = 'tsqa-app'
+
 param sqlAdminLogin string = 'tsadmin'
 
 @description('SQL admin password. Required on the first deployment, which creates the server. Not used when entraOnlyAuthentication is true.')
@@ -41,7 +44,7 @@ param entraOnlyAuthentication bool = false
 @description('Create the monthly budget. Set to false if the subscription does not support budgets.')
 param createBudget bool = true
 
-@description('Monthly budget in the subscription billing currency. 54 USD is the client ceiling of R1 000 at the R18.50 per USD rate used in Task 1 section 10.')
+@description('Monthly budget in the subscription billing currency. 54 USD is the client ceiling of R1 000 at the R18.50 per USD rate used in Task 1 section 10; a subscription billed in rand takes 1000.')
 param budgetAmount int = 54
 
 @description('First day of the current month, yyyy-MM-01. A budget cannot start in the past.')
@@ -51,7 +54,7 @@ var isProd = environment == 'production'
 var unique = uniqueString(resourceGroup().id)
 
 var planName = 'tsqa-plan'
-var appName = 'tsqa-app-${environment}'
+var appName = '${appPrefix}-${environment}'
 var sqlServerName = 'tsqa-sql-${unique}'
 var databaseName = 'tsqa-db-${environment}'
 var kvName = 'tsqa-kv-${unique}'
@@ -384,6 +387,9 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
+    // The app keeps nothing on the server between requests, so the ARRAffinity
+    // cookies only added the two ZAP low findings (risk R17).
+    clientAffinityEnabled: false
     virtualNetworkSubnetId: webSubnetId
     siteConfig: {
       linuxFxVersion: linuxRuntime
@@ -397,6 +403,16 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: ai.properties.ConnectionString
+        }
+        {
+          // The App Service agent records each request and its SQL calls, with no
+          // SDK in the app. Production had it switched on in the portal only.
+          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+          value: '~3'
+        }
+        {
+          name: 'XDT_MicrosoftApplicationInsights_Mode'
+          value: 'recommended'
         }
         {
           name: 'ConnectionStrings__DefaultConnection'
@@ -542,7 +558,9 @@ resource availAlert 'Microsoft.Insights/metricalerts@2018-03-01' = {
 }
 
 // -----------------------------------------------------------------------------
-// Budget alert: warns at 80 percent of the client's monthly ceiling
+// Budget alert: warns when the month is forecast to pass 90 percent of the
+// client's ceiling, and again when it passes the ceiling. The running cost is
+// about 82 percent of it (October 2026), so an 80 percent alert fired every month.
 // -----------------------------------------------------------------------------
 
 resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (createBudget) {
@@ -555,10 +573,19 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (createBudget) {
       startDate: budgetStartDate
     }
     notifications: {
-      actualOver80Percent: {
+      forecastOver90Percent: {
         enabled: true
         operator: 'GreaterThan'
-        threshold: 80
+        threshold: 90
+        thresholdType: 'Forecasted'
+        contactEmails: [
+          alertEmail
+        ]
+      }
+      actualOver100Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 100
         thresholdType: 'Actual'
         contactEmails: [
           alertEmail
