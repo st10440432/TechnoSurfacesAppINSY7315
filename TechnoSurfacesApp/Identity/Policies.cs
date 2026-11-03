@@ -13,4 +13,5 @@ public static class Policies
     public const string CanEditQuote = nameof(CanEditQuote);
     public const string CanReopenQuote = nameof(CanReopenQuote);
     public const string CanRecordInvoice = nameof(CanRecordInvoice);
+    public const string CanImportCustomers = nameof(CanImportCustomers);
 }

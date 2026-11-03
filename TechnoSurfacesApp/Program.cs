@@ -142,7 +142,14 @@ builder.Services.AddAuthorization(options =>
 
     // Recording the Pastel invoice is for the Managing Director only (US-25, team decision).
     options.AddPolicy(Policies.CanRecordInvoice, p => p.RequireRole(Roles.ManagingDirector));
+
+    // Bringing the customer list in from Sage Pastel adds every customer at once, so it
+    // is for the Managing Director only. Adding one customer on screen stays open to both.
+    options.AddPolicy(Policies.CanImportCustomers, p => p.RequireRole(Roles.ManagingDirector));
 });
+
+// Holds an import's preview between the upload and the Managing Director's go-ahead.
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IAuthorizationHandler, EditQuoteHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, ReopenQuoteHandler>();
 
