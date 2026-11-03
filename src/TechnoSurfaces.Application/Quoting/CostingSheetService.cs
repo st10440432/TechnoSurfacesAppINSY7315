@@ -6,15 +6,19 @@ using TechnoSurfaces.Domain.Quoting;
 
 namespace TechnoSurfaces.Application.Quoting;
 
-/// <summary>A material line: the colour and sheet size chosen in the cascade.</summary>
-public sealed record AddMaterialLine(int ColourId, int SheetSizeId, decimal Quantity, decimal SupplierDiscountPercent);
+/// <summary>
+/// A material line: the colour and sheet size chosen in the cascade, for the item
+/// named, or the quote's first item.
+/// </summary>
+public sealed record AddMaterialLine(int ColourId, int SheetSizeId, decimal Quantity, decimal SupplierDiscountPercent, int? ItemId = null);
 
 /// <summary>
 /// A line from the rate card. <paramref name="UnitPrice"/> is a price typed for this
 /// job, accepted only for an item the rate card has no price for, such as the wood
-/// boards, sinks and hardware the client prices per job.
+/// boards, sinks and hardware the client prices per job. For the item named, or
+/// the quote's first item.
 /// </summary>
-public sealed record AddRateLine(int RateItemId, decimal Quantity, decimal? UnitPrice = null);
+public sealed record AddRateLine(int RateItemId, decimal Quantity, decimal? UnitPrice = null, int? ItemId = null);
 
 /// <summary>
 /// Changes to one line on this quote only (US-04, US-06, US-08). Every field is
@@ -27,8 +31,14 @@ public sealed record ChangeLine(
     decimal? SupplierDiscountPercent = null,
     bool RestoreDerivedQuantity = false);
 
-/// <summary>The figures held on the version rather than on a line.</summary>
-public sealed record ChangeCosting(decimal? MarkupPercent = null, decimal? TransportAmount = null);
+/// <summary>
+/// The figures held on the quote rather than on a line. The markup is the named
+/// item's, or every item's when none is named. Transport is for the whole job.
+/// </summary>
+public sealed record ChangeCosting(decimal? MarkupPercent = null, decimal? TransportAmount = null, int? ItemId = null);
+
+/// <summary>An item on the quote: its name, its number on a bill of quantities, and how many are needed.</summary>
+public sealed record ItemInput(string Name, string? Number, decimal Quantity, decimal? MarkupPercent = null);
 
 public enum CostingOutcome
 {
@@ -49,7 +59,10 @@ public enum CostingOutcome
     VersionSealed,
 
     /// <summary>The change does not apply to this line, for example a supplier discount on a rate line.</summary>
-    NotApplicable
+    NotApplicable,
+
+    /// <summary>The quote's current version has no item with that id.</summary>
+    ItemNotFound
 }
 
 public sealed record CostingResult(
@@ -58,7 +71,8 @@ public sealed record CostingResult(
     CostingLine? Line = null,
     QuoteTotals? Totals = null,
     string? Problem = null,
-    QuoteVersion? Version = null);
+    QuoteVersion? Version = null,
+    QuoteItem? Item = null);
 
 public interface ICostingSheetService
 {
@@ -83,6 +97,15 @@ public interface ICostingSheetService
 
     /// <summary>Markup (US-07) and the transport amount typed per job.</summary>
     Task<CostingResult> ChangeCostingAsync(int quoteId, ChangeCosting request, CancellationToken ct = default);
+
+    /// <summary>A new item with an empty costing sheet, listed last.</summary>
+    Task<CostingResult> AddItemAsync(int quoteId, ItemInput request, CancellationToken ct = default);
+
+    /// <summary>Renames an item, or changes its number, how many are needed or its markup.</summary>
+    Task<CostingResult> ChangeItemAsync(int quoteId, int itemId, ItemInput request, CancellationToken ct = default);
+
+    /// <summary>Takes an item and its costing off the quote. The last item stays.</summary>
+    Task<CostingResult> RemoveItemAsync(int quoteId, int itemId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -160,6 +183,10 @@ public sealed class CostingSheetService : ICostingSheetService
         if (version.IsSealed)
             return Sealed(version);
 
+        var item = ItemOrFirst(version, request.ItemId);
+        if (item is null)
+            return ItemNotFound(request.ItemId);
+
         var colour = await _catalogue.GetColourAsync(request.ColourId, ct);
         if (colour is { IsSelectable: false })
             return new(CostingOutcome.NotSelectable,
@@ -184,7 +211,7 @@ public sealed class CostingSheetService : ICostingSheetService
             sheetAreaM2: size.AreaM2,
             supplierDiscountPercent: request.SupplierDiscountPercent);
 
-        return await AddAsync(quote, version, line, ct);
+        return await AddAsync(quote, version, item, line, ct);
     }
 
     public async Task<CostingResult> AddRateLineAsync(int quoteId, AddRateLine request, CancellationToken ct = default)
@@ -194,6 +221,10 @@ public sealed class CostingSheetService : ICostingSheetService
             return new(CostingOutcome.QuoteNotFound);
         if (version.IsSealed)
             return Sealed(version);
+
+        var quoteItem = ItemOrFirst(version, request.ItemId);
+        if (quoteItem is null)
+            return ItemNotFound(request.ItemId);
 
         var item = await _catalogue.GetRateItemAsync(request.RateItemId, ct);
         if (item is null)
@@ -236,7 +267,7 @@ public sealed class CostingSheetService : ICostingSheetService
             item.IsBelowTheLine, item.Derivation, item.DerivationFactor);
         line.SortOrder = item.SortOrder;
 
-        return await AddAsync(quote, version, line, ct);
+        return await AddAsync(quote, version, quoteItem, line, ct);
     }
 
     public async Task<CostingResult> ChangeLineAsync(int quoteId, int lineId, ChangeLine request, CancellationToken ct = default)
@@ -304,8 +335,17 @@ public sealed class CostingSheetService : ICostingSheetService
         if (version.IsSealed)
             return Sealed(version);
 
+        QuoteItem? item = null;
+        if (request.ItemId is { } itemId && (item = version.Items.FirstOrDefault(i => i.Id == itemId)) is null)
+            return ItemNotFound(itemId);
+
         if (request.MarkupPercent is { } markup)
-            version.SetMarkupPercent(markup);
+        {
+            if (item is null)
+                version.SetMarkupPercent(markup);
+            else
+                version.SetItemMarkupPercent(item, markup);
+        }
         if (request.TransportAmount is { } transport)
             version.SetTransportAmount(transport);
 
@@ -314,9 +354,80 @@ public sealed class CostingSheetService : ICostingSheetService
         return new(CostingOutcome.Ok, quote, Totals: totals);
     }
 
-    private async Task<CostingResult> AddAsync(Quote quote, QuoteVersion version, CostingLine line, CancellationToken ct)
+    public async Task<CostingResult> AddItemAsync(int quoteId, ItemInput request, CancellationToken ct = default)
     {
-        version.AddCostingLine(line);
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        if (quote?.CurrentVersion is not { } version)
+            return new(CostingOutcome.QuoteNotFound);
+        if (version.IsSealed)
+            return Sealed(version);
+
+        var item = version.AddItem(request.Name, request.Number, request.Quantity, request.MarkupPercent);
+        await _quotes.SaveChangesAsync(ct);
+        return new(CostingOutcome.Ok, quote, Totals: _calculator.Calculate(version), Version: version, Item: item);
+    }
+
+    public async Task<CostingResult> ChangeItemAsync(int quoteId, int itemId, ItemInput request, CancellationToken ct = default)
+    {
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        if (quote?.CurrentVersion is not { } version)
+            return new(CostingOutcome.QuoteNotFound);
+        if (version.IsSealed)
+            return Sealed(version);
+        if (version.Items.FirstOrDefault(i => i.Id == itemId) is not { } item)
+            return ItemNotFound(itemId);
+
+        version.ChangeItem(item, request.Name, request.Number, request.Quantity);
+        if (request.MarkupPercent is { } markup)
+            version.SetItemMarkupPercent(item, markup);
+
+        var totals = CalculateAndFollow(version);
+        await _quotes.SaveChangesAsync(ct);
+        return new(CostingOutcome.Ok, quote, Totals: totals, Version: version, Item: item);
+    }
+
+    public async Task<CostingResult> RemoveItemAsync(int quoteId, int itemId, CancellationToken ct = default)
+    {
+        var quote = await _quotes.GetAsync(quoteId, ct);
+        if (quote?.CurrentVersion is not { } version)
+            return new(CostingOutcome.QuoteNotFound);
+        if (version.IsSealed)
+            return Sealed(version);
+        if (version.Items.FirstOrDefault(i => i.Id == itemId) is not { } item)
+            return ItemNotFound(itemId);
+        if (version.Items.Count == 1)
+            return new(CostingOutcome.NotApplicable, Problem: "A quote keeps at least one item. Rename this one instead.");
+
+        // The quotation lines copied from the item's materials go first, then the item
+        // and its lines are deleted before they leave the version, so nothing is left
+        // pointing at a row that is gone.
+        var lines = version.LinesOf(item).ToHashSet();
+        foreach (var copied in version.QuotationLines.Where(l => l.CostingLine is { } source && lines.Contains(source)).ToList())
+        {
+            version.RemoveQuotationLine(copied);
+            _quotes.RemoveQuotationLine(copied);
+        }
+        foreach (var line in lines)
+            _quotes.RemoveCostingLine(line);
+        _quotes.RemoveItem(item);
+        version.RemoveItem(item);
+
+        var totals = CalculateAndFollow(version);
+
+        await _quotes.SaveChangesAsync(ct);
+        return new(CostingOutcome.Ok, quote, Totals: totals, Version: version);
+    }
+
+    /// <summary>The item named, or the first item when none is; null for an item not on the quote.</summary>
+    private static QuoteItem? ItemOrFirst(QuoteVersion version, int? itemId) =>
+        itemId is { } id ? version.Items.FirstOrDefault(i => i.Id == id) : version.Items[0];
+
+    private static CostingResult ItemNotFound(int? itemId) =>
+        new(CostingOutcome.ItemNotFound, Problem: $"This quote has no item {itemId}.");
+
+    private async Task<CostingResult> AddAsync(Quote quote, QuoteVersion version, QuoteItem item, CostingLine line, CancellationToken ct)
+    {
+        version.AddCostingLine(line, item);
         var totals = CalculateAndFollow(version);
         await _quotes.SaveChangesAsync(ct);
         return new(CostingOutcome.Ok, quote, line, totals);

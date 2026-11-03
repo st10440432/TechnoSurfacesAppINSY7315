@@ -27,10 +27,14 @@ internal static class CostingOnQuotation
         var hasOtherCosts = version.TransportAmount > 0
             || version.CostingLines.Any(l => l.LineType == CostingLineType.Rate && l.LineTotal() > 0);
 
-        // A material is shown at its selling price: its cost with the quote's markup.
-        // The markup is never shown on its own (US-11).
-        var factor = 1m + version.MarkupPercent / 100m;
-        var amounts = materials.Select(l => decimal.Round(l.LineTotal() * factor, 2, MidpointRounding.AwayFromZero)).ToList();
+        // A material is shown at its selling price: its cost with its item's markup,
+        // as many times as the item is needed. The markup is never shown on its own
+        // (US-11).
+        var amounts = materials.Select(l =>
+        {
+            var item = version.ItemOf(l);
+            return decimal.Round(l.LineTotal() * (1m + item.MarkupPercent / 100m) * item.Quantity, 2, MidpointRounding.AwayFromZero);
+        }).ToList();
 
         // The rest is the difference to the costing total, so the lines add up to it
         // to the cent: the marked-up labour and consumables, the cut-outs and grooves
@@ -46,9 +50,9 @@ internal static class CostingOnQuotation
         return new SellingPrices(materials.Zip(amounts).ToList(), remainder, hasOtherCosts);
     }
 
-    /// <summary>The quantity a copied material line gives: its sheets, or one item.</summary>
+    /// <summary>The quantity a copied material line gives: its sheets for every one of its item, or one item.</summary>
     internal static decimal Quantity(QuoteVersion version, CostingLine material) =>
-        version.ShowSheetCounts ? material.SheetCount() : 1m;
+        version.ShowSheetCounts ? material.SheetCount() * version.ItemOf(material).Quantity : 1m;
 
     /// <summary>
     /// Brings every copied line up to date with the costing. A line whose material has

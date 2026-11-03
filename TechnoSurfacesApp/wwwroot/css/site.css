@@ -1218,6 +1218,9 @@ table.data .input-sm { width: 6.5rem; margin-left: auto; }
 /* The material cascade and the price it finds */
 h3.section-label { margin: 0 0 var(--space-1); }
 .card-body-top { border-top: 1px solid var(--line); }
+/* The items of a quote on the costing sheet: the one on screen is marked, and the forms for it and a new item sit one above the other. */
+.item-forms { display: grid; gap: var(--space-5); border-top: 1px solid var(--line); }
+tr.is-current > td { background: var(--surface-sunken); }
 .from-costing { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .cascade-qty { margin-top: var(--space-4); }
 /* The Add to the costing button has no label, so it drops by a label's height to sit level with
@@ -1292,6 +1295,9 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
     font-size: var(--text-sm);
 }
 .doc-internal-foot { margin: var(--space-6) 0 0; }
+/* An item of a quote with several on the costing printout. Printed one item to a page, as the client's tender costing is. */
+.doc-item { margin: var(--space-8) 0 var(--space-2); padding-top: var(--space-4); border-top: 2px solid var(--brand-navy); font-size: var(--text-md); color: var(--brand-navy); }
+@media print { .costing-print .doc-item:not(:first-of-type) { break-before: page; } }
 .doc-section { margin: var(--space-6) 0 var(--space-2); font-size: var(--text-sm); color: var(--brand-navy); text-transform: uppercase; letter-spacing: 0.06em; }
 .costing-print table.doc-lines { font-size: var(--text-sm); }
 /* The description gets the room; the figures' headings wrap instead of widening their columns. */

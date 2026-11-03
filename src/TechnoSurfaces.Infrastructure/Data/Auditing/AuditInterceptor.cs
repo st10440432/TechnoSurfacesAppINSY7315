@@ -26,7 +26,7 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
 
     private static readonly HashSet<Type> AuditedTypes = new()
     {
-        typeof(MaterialPrice), typeof(RatePrice), typeof(Quote), typeof(QuoteVersion), typeof(CostingLine),
+        typeof(MaterialPrice), typeof(RatePrice), typeof(Quote), typeof(QuoteVersion), typeof(QuoteItem), typeof(CostingLine),
 
         // US-23/24 and NFR-10: adding, correcting, retiring and reinstating catalogue
         // entries are catalogue changes too.

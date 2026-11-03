@@ -36,7 +36,8 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
 
         return new QuoteTotals(
             SubTotalExVat: version.SubTotalExVat(),
-            MarkupPercent: version.MarkupPercent,
+            // One item's markup is the quote's; with several, each item shows its own.
+            MarkupPercent: version.Items.Count == 1 ? version.Items[0].MarkupPercent : version.MarkupPercent,
             MarkupAmount: version.MarkupAmount(),
             BelowTheLineTotal: version.BelowTheLineTotal(),
             TransportAmount: version.TransportAmount,
@@ -45,7 +46,20 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
             VatAmount: version.VatAmount(),
             TotalIncVat: version.TotalIncVat(),
             TotalAreaM2: version.TotalAreaM2(),
-            TotalSheetCount: version.TotalSheetCount());
+            TotalSheetCount: version.TotalSheetCount(),
+            Items: version.Items.Select(item => new ItemTotals(
+                ItemId: item.Id,
+                Number: item.Number,
+                Name: item.Name,
+                Quantity: item.Quantity,
+                SubTotalExVat: version.SubTotalExVat(item),
+                MarkupPercent: item.MarkupPercent,
+                MarkupAmount: version.MarkupAmount(item),
+                BelowTheLineTotal: version.BelowTheLineTotal(item),
+                TotalExVat: version.TotalExVat(item),
+                AmountExVat: version.AmountExVat(item),
+                AreaM2: version.AreaM2(item),
+                SheetCount: version.SheetCount(item))).ToList());
     }
 
     /// <summary>
@@ -70,17 +84,22 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
     /// Certain quantities follow from the job rather than from the estimator, and
     /// are computed before the totals. This reproduces behaviour already present in
     /// the client's spreadsheet. A derived quantity the estimator has typed over is
-    /// left as typed.
+    /// left as typed. Each item's follow its own material, as each item is its own
+    /// page of the client's tender costing.
     /// </summary>
     private static void ApplyDerivedQuantities(QuoteVersion version)
     {
-        var totalArea = version.CostingLines.Sum(l => l.AreaM2());
-        var totalSheets = version.CostingLines.Sum(l => l.SheetCount());
-
-        foreach (var line in version.CostingLines)
+        foreach (var item in version.Items)
         {
-            if (DerivedQuantity(line.Derivation, line.DerivationFactor, totalArea, totalSheets) is { } quantity)
-                line.SetDerivedQuantity(quantity);
+            var lines = version.LinesOf(item).ToList();
+            var totalArea = lines.Sum(l => l.AreaM2());
+            var totalSheets = lines.Sum(l => l.SheetCount());
+
+            foreach (var line in lines)
+            {
+                if (DerivedQuantity(line.Derivation, line.DerivationFactor, totalArea, totalSheets) is { } quantity)
+                    line.SetDerivedQuantity(quantity);
+            }
         }
     }
 
@@ -114,6 +133,7 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
 /// <param name="BelowTheLineTotal">Cost recovery items, not marked up. Includes transport.</param>
 /// <param name="TransportAmount">The petrol and delivery amount typed for the job.</param>
 /// <param name="TotalAreaM2">Total square metres of material, shown on the summary.</param>
+/// <param name="Items">Each item's own figures, for one of it and for the number needed.</param>
 public sealed record QuoteTotals(
     decimal SubTotalExVat,
     decimal MarkupPercent,
@@ -125,4 +145,26 @@ public sealed record QuoteTotals(
     decimal VatAmount,
     decimal TotalIncVat,
     decimal TotalAreaM2,
-    decimal TotalSheetCount);
+    decimal TotalSheetCount,
+    IReadOnlyList<ItemTotals> Items)
+{
+    public ItemTotals? Item(int itemId) => Items.FirstOrDefault(i => i.ItemId == itemId);
+}
+
+/// <summary>
+/// One item's figures. Its total is for one of it, which is its rate; the amount
+/// is that total as many times as the job needs it. Internal, like the quote's totals.
+/// </summary>
+public sealed record ItemTotals(
+    int ItemId,
+    string? Number,
+    string Name,
+    decimal Quantity,
+    decimal SubTotalExVat,
+    decimal MarkupPercent,
+    decimal MarkupAmount,
+    decimal BelowTheLineTotal,
+    decimal TotalExVat,
+    decimal AmountExVat,
+    decimal AreaM2,
+    decimal SheetCount);

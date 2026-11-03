@@ -94,6 +94,12 @@ public sealed class QuoteVersionConfiguration : IEntityTypeConfiguration<QuoteVe
         e.Property(x => x.VatRate).HasPrecision(5, 4);
         e.Property(x => x.TransportAmount).HasPrecision(18, 2);
 
+        e.HasMany(x => x.Items)
+            .WithOne()
+            .HasForeignKey(i => i.QuoteVersionId)
+            .OnDelete(DeleteBehavior.NoAction);
+        e.Navigation(x => x.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+
         e.HasMany(x => x.CostingLines)
             .WithOne()
             .HasForeignKey(l => l.QuoteVersionId)
@@ -187,6 +193,28 @@ public sealed class CostingLineConfiguration : IEntityTypeConfiguration<CostingL
             t.HasCheckConstraint("CK_CostingLine_PricePositive", "[ResolvedUnitPrice] > 0");
             t.HasCheckConstraint("CK_CostingLine_OverridePositive", "[OverriddenUnitPrice] IS NULL OR [OverriddenUnitPrice] > 0");
         });
+
+        // The item whose costing the line is part of. Nullable in the database so a
+        // line written by an earlier release still saves; the app always sets it.
+        e.HasOne(x => x.Item)
+            .WithMany()
+            .HasForeignKey(x => x.QuoteItemId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.ClientSetNull);
+
+        e.HasIndex(x => x.QuoteVersionId);
+        e.HasIndex(x => x.QuoteItemId);
+    }
+}
+
+public sealed class QuoteItemConfiguration : IEntityTypeConfiguration<QuoteItem>
+{
+    public void Configure(EntityTypeBuilder<QuoteItem> e)
+    {
+        e.Property(x => x.Number).HasMaxLength(QuoteItem.NumberMaxLength);
+        e.Property(x => x.Name).HasMaxLength(QuoteItem.NameMaxLength).IsRequired();
+        e.Property(x => x.Quantity).HasPrecision(18, 4);
+        e.Property(x => x.MarkupPercent).HasPrecision(5, 2);
 
         e.HasIndex(x => x.QuoteVersionId);
     }

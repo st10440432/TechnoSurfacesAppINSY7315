@@ -158,6 +158,7 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
             .Include(q => q.Customer)
             .Include(q => q.Contact)
             .Include(q => q.Versions).ThenInclude(v => v.CostingLines)
+            .Include(q => q.Versions).ThenInclude(v => v.Items)
             .AsSplitQuery();
 
     /// <summary>
@@ -171,6 +172,7 @@ public sealed class QuoteQueries : IQuoteQueries, ILapsedQuotes
             .Include(q => q.Customer)
             .Include(q => q.Contact)
             .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.CostingLines)
+            .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.Items)
             .AsSplitQuery();
 
     private async Task<IReadOnlyList<QuoteSummary>> SummariseAsync(List<Quote> quotes, DateOnly today, CancellationToken ct)

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using TechnoSurfaces.Application.Costing;
+using TechnoSurfaces.Application.Quoting;
 using TechnoSurfaces.Domain.Quoting;
 
 namespace TechnoSurfacesApp.Api;
@@ -148,6 +149,52 @@ public sealed class ChangeCostingRequest : IValidatableObject
     }
 }
 
+/// <summary>
+/// The body of POST /api/quotes/{quoteId}/items and PUT /api/quotes/{quoteId}/items/{itemId}.
+/// A new item without a markup takes the quote's.
+/// </summary>
+public sealed class ItemRequest : IValidatableObject
+{
+    [Required(ErrorMessage = "Give the item a name, such as Kitchen or Floor unit."), StringLength(QuoteItem.NameMaxLength)]
+    public string Name { get; set; } = "";
+
+    [StringLength(QuoteItem.NumberMaxLength)]
+    public string? Number { get; set; }
+
+    public decimal Quantity { get; set; } = 1m;
+
+    public decimal? MarkupPercent { get; set; }
+
+    public ItemInput ToInput() => new(Name.Trim(), string.IsNullOrWhiteSpace(Number) ? null : Number.Trim(), Quantity, MarkupPercent);
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            yield return new("Give the item a name, such as Kitchen or Floor unit.", new[] { nameof(Name) });
+
+        if (Quantity <= 0)
+            yield return new("An item is needed at least once.", new[] { nameof(Quantity) });
+
+        if (Quantity > ColumnLimits.Quantity)
+            yield return new("This quantity is too large.", new[] { nameof(Quantity) });
+
+        if (MarkupPercent is < 0 or > 999.99m)
+            yield return new("A markup must be between 0 and 999.99 per cent.", new[] { nameof(MarkupPercent) });
+    }
+}
+
+/// <summary>An item on the quote as the costing sheet shows it.</summary>
+public sealed record ItemDto(int Id, string? Number, string Name, decimal Quantity, decimal MarkupPercent)
+{
+    public static ItemDto From(QuoteItem item) => new(item.Id, item.Number, item.Name, item.Quantity, item.MarkupPercent);
+}
+
+public sealed record ItemResponse(ItemDto Item, QuoteTotals Totals)
+{
+    /// <summary>The item's id at the top level, for a form that opens the item it created.</summary>
+    public int Id => Item.Id;
+}
+
 /// <summary>A costing line as the costing sheet shows it, with its price and where it came from.</summary>
 public sealed record CostingLineDto(
     int Id,
@@ -164,7 +211,8 @@ public sealed record CostingLineDto(
     decimal LineTotal,
     bool IsBelowTheLine,
     decimal? SheetAreaM2,
-    int? RateItemId = null)
+    int? RateItemId = null,
+    int? ItemId = null)
 {
     public static CostingLineDto From(CostingLine line) => new(
         line.Id,
@@ -181,7 +229,8 @@ public sealed record CostingLineDto(
         line.LineTotal(),
         line.IsBelowTheLine,
         line.SheetAreaM2,
-        line.RateItemId);
+        line.RateItemId,
+        line.Item?.Id ?? line.QuoteItemId);
 }
 
 public sealed record LineResponse(CostingLineDto Line, QuoteTotals Totals);
@@ -189,16 +238,33 @@ public sealed record LineResponse(CostingLineDto Line, QuoteTotals Totals);
 /// <summary>The answer to removing a line: the quote's totals without it.</summary>
 public sealed record RemovedLineResponse(QuoteTotals Totals);
 
-/// <summary>The current version of a quote as the costing sheet loads it.</summary>
+/// <summary>
+/// The current version of a quote as the costing sheet loads it: every item, and
+/// every line with the item it belongs to. <see cref="ForItem"/> narrows the lines
+/// to one item, as the costing screen shows them.
+/// </summary>
 public sealed record CostingSheetDto(
     int QuoteId,
     string Reference,
     string Status,
     int VersionNo,
     bool IsSealed,
+    IReadOnlyList<ItemDto> Items,
     IReadOnlyList<CostingLineDto> Lines,
     QuoteTotals Totals)
 {
+    /// <summary>The same sheet with only one item's lines.</summary>
+    public CostingSheetDto ForItem(int itemId) =>
+        this with { Lines = Lines.Where(l => l.ItemId == itemId).ToList(), CurrentItemId = itemId };
+
+    /// <summary>The item the lines were narrowed to, if they were.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int? CurrentItemId { get; init; }
+
+    /// <summary>The figures of the item the lines were narrowed to, if they were.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ItemTotals? CurrentItem => CurrentItemId is int id ? Totals.Item(id) : null;
+
     public static CostingSheetDto From(Quote quote, QuoteTotals totals) =>
         From(quote, quote.CurrentVersion!, totals);
 
@@ -211,7 +277,9 @@ public sealed record CostingSheetDto(
             quote.Status.ToString(),
             version.VersionNo,
             version.IsSealed,
-            version.CostingLines.OrderBy(l => l.SortOrder).ThenBy(l => l.Id).Select(CostingLineDto.From).ToList(),
+            version.Items.Select(ItemDto.From).ToList(),
+            version.CostingLines.OrderBy(l => l.SortOrder).ThenBy(l => l.Id)
+                .Select(l => CostingLineDto.From(l) with { ItemId = version.ItemOf(l).Id }).ToList(),
             totals);
     }
 }

@@ -152,12 +152,17 @@ public class QuotesController : AppController
     //  Costing sheet: the internal costing, with the material cascade
     // ======================================================================
 
-    public async Task<IActionResult> Costing(int id, CancellationToken ct)
+    /// <summary>
+    /// The costing sheet of one item on the quote, the first unless another is asked
+    /// for. Each item has its own lines and markup, as the client costs a tender with
+    /// one spreadsheet page per item.
+    /// </summary>
+    public async Task<IActionResult> Costing(int id, int? item, CancellationToken ct)
     {
         if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return QuoteNotFound(id);
 
-        var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
+        var sheet = ItemSheet(CostingSheetDto.From(costing.Quote!, costing.Totals!), item);
         var vm = new CostingVm
         {
             Quote = detail,
@@ -202,17 +207,21 @@ public class QuotesController : AppController
     /// line calculated from the total area follows the materials) and can make a
     /// step possible, such as submitting once the first line is added.
     /// </summary>
-    public async Task<IActionResult> CostingLines(int id, CancellationToken ct)
+    public async Task<IActionResult> CostingLines(int id, int? item, CancellationToken ct)
     {
         if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return NotFound();
 
         var actions = await ActionsForAsync(costing.Quote!);
-        var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
+        var sheet = ItemSheet(CostingSheetDto.From(costing.Quote!, costing.Totals!), item);
         return PartialView("_CostingRefresh", new CostingRefreshVm(
             new CostingLinesVm(sheet, actions.CanEdit, await RateGridAsync(costing.Quote!.IssueDate, sheet, ct)),
             new QuoteActionBar(detail, actions, await _quotation.CheckAsync(id, ct))));
     }
+
+    /// <summary>The sheet narrowed to the item asked for, or to the first item when that one is not on the quote.</summary>
+    private static CostingSheetDto ItemSheet(CostingSheetDto sheet, int? itemId) =>
+        sheet.ForItem(sheet.Items.FirstOrDefault(i => i.Id == itemId)?.Id ?? sheet.Items[0].Id);
 
     /// <summary>
     /// The whole rate card as the costing sheet lists it: every item that can be
@@ -235,10 +244,11 @@ public class QuotesController : AppController
                 ? found
                 : PriceResolution.Failure($"Rate item {item.Id} is not on the rate card.");
             var card = PricePreviewResult.From(resolution, issueDate);
-            // The same rule the calculator applies, so the figure shown before the
-            // line is added is the one it is added with.
+            // The same rule the calculator applies, to the item's own material, so the
+            // figure shown before the line is added is the one it is added with.
             var calculated = Enum.TryParse<DerivationRule>(item.Derivation, out var rule)
-                ? QuoteCalculationService.DerivedQuantity(rule, item.DerivationFactor, sheet.Totals.TotalAreaM2, sheet.Totals.TotalSheetCount)
+                ? QuoteCalculationService.DerivedQuantity(rule, item.DerivationFactor,
+                    sheet.CurrentItem?.AreaM2 ?? sheet.Totals.TotalAreaM2, sheet.CurrentItem?.SheetCount ?? sheet.Totals.TotalSheetCount)
                 : null;
             rows.Add(new RateGridRow(item, card, calculated, rateLines.Where(l => l.RateItemId == item.Id).ToList()));
         }
@@ -616,7 +626,14 @@ public sealed class CostingPrintVm
 /// <summary>One table of rate lines on the printout. Transport is a line of the table added after the markup.</summary>
 public sealed record CostingPrintRatesVm(string Caption, IReadOnlyList<CostingLineDto> Lines, decimal Transport = 0);
 
-public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null);
+/// <summary>One item's costing on the printout: its own lines and figures.</summary>
+public sealed record CostingPrintItemVm(CostingSheetDto Sheet, ItemTotals Item, bool Several);
+
+/// <summary>
+/// The line tables of one sheet. <paramref name="IdPrefix"/> keeps the tables' ids
+/// apart when a page shows several items' tables; the costing screen uses none.
+/// </summary>
+public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null, string IdPrefix = "");
 
 /// <summary>
 /// One rate card item on the costing sheet: its rate-card price on the quote date,

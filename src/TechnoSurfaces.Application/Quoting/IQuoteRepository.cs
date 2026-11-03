@@ -36,5 +36,8 @@ public interface IQuoteRepository
     /// <summary>Deletes a quotation line, for the same reason as a costing line.</summary>
     void RemoveQuotationLine(QuotationLine line);
 
+    /// <summary>Deletes an item, once its costing lines have been removed.</summary>
+    void RemoveItem(QuoteItem item);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

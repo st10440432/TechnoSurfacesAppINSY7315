@@ -50,6 +50,13 @@ public class CostingLine
     public int Id { get; private set; }
     public int QuoteVersionId { get; private set; }
 
+    /// <summary>The item on the quote this line is part of the costing of.</summary>
+    public int? QuoteItemId { get; private set; }
+    public QuoteItem? Item { get; private set; }
+
+    /// <summary>Puts the line in an item's costing. Made through QuoteVersion.</summary>
+    internal void PlaceIn(QuoteItem item) => Item = item;
+
     public CostingLineType LineType { get; private set; }
 
     /// <summary>Set on a material line. Traceability only; the price is copied below.</summary>

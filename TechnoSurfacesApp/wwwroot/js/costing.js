@@ -23,6 +23,8 @@
     var TS = window.TS;
     var F = TS.format;
     var api = root.dataset.api;
+    // Lines are added to, and the markup set on, the item on screen.
+    var itemApi = root.dataset.itemApi || api;
     var catalogue = root.dataset.catalogue;
 
     // ------------------------------------------------------------ small helpers
@@ -105,21 +107,36 @@
         else totalsPanel.removeAttribute("aria-busy");
     }
 
+    function showValue(node, value) {
+        if (value === undefined) return;
+        switch (node.dataset.format) {
+            case "rate": node.textContent = F.percent(value * 100); break;
+            case "area": node.textContent = F.area(value); break;
+            case "quantity": node.textContent = F.quantity(value); break;
+            default: node.textContent = value === null ? "Not yet" : F.rand(value);
+        }
+    }
+
     function showTotals(t) {
         if (!t || !totalsPanel) return;
         var values = Object.assign({}, t, {
-            randPerM2: t.totalAreaM2 > 0 ? t.totalExVat / t.totalAreaM2 : null
+            randPerM2: t.totalAreaM2 > 0 ? t.totalExVat / t.totalAreaM2 : null,
+            itemsTotal: t.totalExVat - t.transportAmount
         });
         totalsPanel.querySelectorAll("[data-total]").forEach(function (node) {
-            var value = values[node.dataset.total];
-            if (value === undefined) return;
-            switch (node.dataset.format) {
-                case "rate": node.textContent = F.percent(value * 100); break;
-                case "area": node.textContent = F.area(value); break;
-                case "quantity": node.textContent = F.quantity(value); break;
-                default: node.textContent = value === null ? "Not yet" : F.rand(value);
-            }
+            showValue(node, values[node.dataset.total]);
         });
+
+        // The figures of the item on screen: one of it, and as many as are needed.
+        var item = (t.items || []).filter(function (i) { return String(i.itemId) === root.dataset.item; })[0];
+        if (item) {
+            var itemValues = Object.assign({}, item, {
+                randPerM2: item.areaM2 > 0 ? item.totalExVat / item.areaM2 : null
+            });
+            totalsPanel.querySelectorAll("[data-item-total]").forEach(function (node) {
+                showValue(node, itemValues[node.dataset.itemTotal]);
+            });
+        }
         totalsBusy(false);
         announce("totals-status",
             "Totals updated. Total excluding VAT " + F.rand(t.totalExVat) +
@@ -273,7 +290,7 @@
         saving(+1);
         totalsBusy(true);
 
-        TS.api("PUT", api + "costing", body).then(function (result) {
+        TS.api("PUT", itemApi + "costing", body).then(function (result) {
             delete input.dataset.inflight;
             if (result.ok) {
                 input.dataset.saved = input.value;
@@ -601,7 +618,7 @@
             saving(+1);
             totalsBusy(true);
 
-            TS.api("POST", api + "lines", {
+            TS.api("POST", itemApi + "lines", {
                 type: "material",
                 colourId: Number(colour.value),
                 sheetSizeId: Number(sheetSize.value),
@@ -724,7 +741,7 @@
             // A rate typed over the card price before the quantity becomes an override once the line exists.
             var override = resolved && typedRate !== "" && Number(typedRate) !== Number(row.dataset.card) ? Number(typedRate) : null;
             creating[item] = { latest: raw };
-            request = TS.api("POST", api + "lines", body).then(function (result) {
+            request = TS.api("POST", itemApi + "lines", body).then(function (result) {
                 if (!result.ok) {
                     delete creating[item];
                     return afterGridChange(result, null);
@@ -801,7 +818,7 @@
         row.classList.add("is-saving");
         var saved = false;
         var request = box.checked
-            ? TS.api("POST", api + "lines", { type: "rate", rateItemId: Number(row.dataset.item), quantity: 0 }).then(function (result) {
+            ? TS.api("POST", itemApi + "lines", { type: "rate", rateItemId: Number(row.dataset.item), quantity: 0 }).then(function (result) {
                 saved = result.ok;
                 return afterGridChange(result, { title: "Added to the costing", detail: name + ", with the quantity calculated from the materials." });
             })

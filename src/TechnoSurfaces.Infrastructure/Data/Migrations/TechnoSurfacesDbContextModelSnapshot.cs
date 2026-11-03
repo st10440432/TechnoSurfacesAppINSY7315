@@ -625,6 +625,9 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<int?>("QuoteItemId")
+                        .HasColumnType("int");
+
                     b.Property<int>("QuoteVersionId")
                         .HasColumnType("int");
 
@@ -649,6 +652,8 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MaterialPriceId");
+
+                    b.HasIndex("QuoteItemId");
 
                     b.HasIndex("QuoteVersionId");
 
@@ -855,6 +860,44 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                     b.HasIndex("Status", "IssueDate");
 
                     b.ToTable("Quotes");
+                });
+
+            modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("MarkupPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("QuoteVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuoteVersionId");
+
+                    b.ToTable("QuoteItems");
                 });
 
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteVersion", b =>
@@ -1143,6 +1186,10 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .HasForeignKey("MaterialPriceId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("TechnoSurfaces.Domain.Quoting.QuoteItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("QuoteItemId");
+
                     b.HasOne("TechnoSurfaces.Domain.Quoting.QuoteVersion", null)
                         .WithMany("CostingLines")
                         .HasForeignKey("QuoteVersionId")
@@ -1153,6 +1200,8 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("RateItemId")
                         .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Item");
                 });
 
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.InvoiceRecord", b =>
@@ -1198,6 +1247,15 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                     b.Navigation("Contact");
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteItem", b =>
+                {
+                    b.HasOne("TechnoSurfaces.Domain.Quoting.QuoteVersion", null)
+                        .WithMany("Items")
+                        .HasForeignKey("QuoteVersionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteVersion", b =>
@@ -1271,6 +1329,8 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuoteVersion", b =>
                 {
                     b.Navigation("CostingLines");
+
+                    b.Navigation("Items");
 
                     b.Navigation("QuotationLines");
 
