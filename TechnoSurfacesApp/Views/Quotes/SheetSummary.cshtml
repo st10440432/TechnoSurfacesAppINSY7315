@@ -1,0 +1,191 @@
+@model TechnoSurfacesApp.Controllers.SheetSummaryVm
+@*
+    The analysis of sheets and adhesive the client draws up for a tender: every item's
+    sheets and seam kits per material, as many times as it is needed, then per
+    material the buffer stock, the sheets to order, the cost of one and what the order
+    costs to buy. Read from the costing; only the buffer stock is typed. Internal: it
+    carries cost prices, so it is never sent to the customer (US-11).
+*@
+@{
+    var q = Model.Quote;
+    var s = Model.Summary;
+    var materials = s.Materials;
+    var unsplit = s.UnsplitSeamKits > 0;
+    var columns = materials.Count * 2 + (unsplit ? 1 : 0);
+    string ItemLabel(string? number) => number ?? "";
+}
+
+<header class="page-head no-print">
+    <div>
+        <h1>Sheets and adhesive</h1>
+        <p>@q.Reference for @q.CustomerName. Version @q.VersionNo.</p>
+    </div>
+    <div class="page-head-actions">
+        <a class="btn btn-secondary" asp-action="Costing" asp-route-id="@q.Id">
+            <svg class="ico" aria-hidden="true"><use href="#i-arrow-left" /></svg> Back to the costing sheet
+        </a>
+        <button type="button" class="btn btn-primary" data-print>
+            <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print or save as PDF
+        </button>
+    </div>
+</header>
+
+@if (materials.Count == 0)
+{
+    <div class="notice notice-info" role="note">
+        <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+        <div><strong>No material yet.</strong> Add sheets to the items on the costing sheet and they are counted here.</div>
+    </div>
+}
+else
+{
+    <article class="doc costing-print" aria-labelledby="summary-title">
+        <div class="doc-top">
+            <img src="~/img/techno-surfaces-logo.jpg" alt="Techno Surfaces" width="2000" height="475" />
+            <p class="doc-internal">
+                <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+                <span><strong>Internal:</strong> shows cost prices. Not for the customer.</span>
+            </p>
+        </div>
+
+        <h2 class="doc-title" id="summary-title">Analysis of sheets and adhesive</h2>
+        <p>@q.Reference for @q.CustomerName@(q.Project is null ? "" : $", {q.Project}"). Version @q.VersionNo, printed @Fmt.Date(Model.PrintedOn).</p>
+
+        <div class="doc-scroll" tabindex="0" role="region" aria-label="Sheets and seam kits per item">
+            <table class="doc-lines doc-summary">
+                <caption class="sr-only">Sheets and seam kits for every item, per material, then the order and its cost</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" rowspan="2">Item</th>
+                        <th scope="col" rowspan="2">Description</th>
+                        <th scope="colgroup" colspan="@materials.Count" class="c">Sheets</th>
+                        <th scope="colgroup" colspan="@(materials.Count + (unsplit ? 1 : 0))" class="c">Seam kits</th>
+                    </tr>
+                    <tr>
+                        @foreach (var m in materials)
+                        {
+                            <th scope="col" class="r doc-col-material">@m.Material</th>
+                        }
+                        @foreach (var m in materials)
+                        {
+                            <th scope="col" class="r doc-col-material">@m.Material</th>
+                        }
+                        @if (unsplit)
+                        {
+                            <th scope="col" class="r doc-col-material">Not split by material</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in s.Items)
+                    {
+                        <tr>
+                            <td>@ItemLabel(i.Number)</td>
+                            <th scope="row" class="doc-row-head">
+                                @i.Name
+                                @if (i.Quantity != 1)
+                                {
+                                    <span class="sub">Needed @Fmt.Qty(i.Quantity) times</span>
+                                }
+                            </th>
+                            @foreach (var n in i.Sheets)
+                            {
+                                <td class="r">@(n == 0 ? "" : Fmt.Qty(n))</td>
+                            }
+                            @foreach (var n in i.SeamKits)
+                            {
+                                <td class="r">@(n == 0 ? "" : Fmt.Qty(n))</td>
+                            }
+                            @if (unsplit)
+                            {
+                                <td class="r">@(i.UnsplitSeamKits == 0 ? "" : Fmt.Qty(i.UnsplitSeamKits))</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tbody class="doc-summary-totals">
+                    <tr>
+                        <td></td>
+                        <th scope="row" class="doc-row-head">For the items</th>
+                        @foreach (var m in materials) { <td class="r">@Fmt.Qty(m.Sheets)</td> }
+                        @foreach (var m in materials) { <td class="r">@Fmt.Qty(m.SeamKits)</td> }
+                        @if (unsplit) { <td class="r">@Fmt.Qty(s.UnsplitSeamKits)</td> }
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <th scope="row" class="doc-row-head">Buffer stock</th>
+                        @foreach (var m in materials) { <td class="r">@Fmt.Qty(m.BufferSheets)</td> }
+                        <td colspan="@(materials.Count + (unsplit ? 1 : 0))"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <th scope="row" class="doc-row-head">To order</th>
+                        @foreach (var m in materials) { <td class="r strong">@Fmt.Qty(m.SheetsToOrder)</td> }
+                        @foreach (var m in materials) { <td class="r strong">@Fmt.Qty(m.SeamKits)</td> }
+                        @if (unsplit) { <td class="r strong">@Fmt.Qty(s.UnsplitSeamKits)</td> }
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <th scope="row" class="doc-row-head">Cost of one</th>
+                        @foreach (var m in materials) { <td class="r">@Fmt.Rand(m.CostPerSheet)</td> }
+                        @foreach (var m in materials) { <td class="r">@(m.SeamKits == 0 ? "" : Fmt.Rand(m.CostPerSeamKit))</td> }
+                        @if (unsplit) { <td class="r">@Fmt.Rand(decimal.Round(s.UnsplitSeamKitCost / s.UnsplitSeamKits, 2, MidpointRounding.AwayFromZero))</td> }
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <th scope="row" class="doc-row-head">Purchase cost</th>
+                        @foreach (var m in materials) { <td class="r">@Fmt.Rand(m.SheetCost)</td> }
+                        @foreach (var m in materials) { <td class="r">@(m.SeamKits == 0 ? "" : Fmt.Rand(m.SeamKitCost))</td> }
+                        @if (unsplit) { <td class="r">@Fmt.Rand(s.UnsplitSeamKitCost)</td> }
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="doc-totals">
+            <div class="totals-row grand">
+                <span class="lbl">Total purchase cost</span>
+                <span class="val">@Fmt.Rand(s.TotalPurchaseCost)</span>
+            </div>
+        </div>
+
+        <p class="totals-note">
+            Sheets and seam kits are counted for every one of an item the job needs. The cost of a sheet is what the costing pays for it,
+            after any supplier discount. Buffer stock is bought at that cost but charged on no item.
+            @if (unsplit)
+            {
+                @:An item made of more than one material uses its seam kits on all of them, so they are counted under Not split by material.
+            }
+        </p>
+    </article>
+
+    @if (Model.CanEdit)
+    {
+        <section class="card no-print" aria-labelledby="buffer-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
+                <h2 id="buffer-title">Buffer stock</h2>
+            </div>
+            <div class="card-body stack-gap">
+                <p class="hint">Sheets ordered beyond what the items need. Bought, but charged on no item. Enter 0 to take a buffer off.</p>
+                @for (var n = 0; n < materials.Count; n++)
+                {
+                    var m = materials[n];
+                    <form novalidate data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{q.Id}/buffer-stock")"
+                          data-success="Buffer stock saved" class="field-row field-row-2">
+                        <input type="hidden" name="material" value="@m.Material" />
+                        <div class="field">
+                            <label class="label" for="buffer-@n">@m.Material</label>
+                            <input class="input input-num" id="buffer-@n" name="sheets" type="number" inputmode="decimal" min="0" step="any"
+                                   required value="@Fmt.Input(m.BufferSheets)" />
+                        </div>
+                        <div class="field">
+                            <span class="label" aria-hidden="true">&nbsp;</span>
+                            <button type="submit" class="btn btn-secondary" aria-label="Save the buffer stock of @m.Material">Save</button>
+                        </div>
+                    </form>
+                }
+            </div>
+        </section>
+    }
+}

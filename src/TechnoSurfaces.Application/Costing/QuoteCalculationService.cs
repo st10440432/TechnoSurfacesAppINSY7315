@@ -60,7 +60,8 @@ public sealed class QuoteCalculationService : IQuoteCalculationService
                 TotalExVat: version.TotalExVat(item),
                 AmountExVat: version.AmountExVat(item),
                 AreaM2: version.AreaM2(item),
-                SheetCount: version.SheetCount(item))).ToList());
+                SheetCount: version.SheetCount(item),
+                PricePerM2: item.PricePerM2)).ToList());
     }
 
     /// <summary>
@@ -158,6 +159,7 @@ public sealed record QuoteTotals(
 /// One item's figures. Its total is for one of it, which is its rate; the amount
 /// is that total as many times as the job needs it. Internal, like the quote's totals.
 /// </summary>
+/// <param name="PricePerM2">Set for an item priced per square metre: its markup is then what that price gives over its costing.</param>
 public sealed record ItemTotals(
     int ItemId,
     string? Number,
@@ -170,4 +172,9 @@ public sealed record ItemTotals(
     decimal TotalExVat,
     decimal AmountExVat,
     decimal AreaM2,
-    decimal SheetCount);
+    decimal SheetCount,
+    decimal? PricePerM2 = null)
+{
+    /// <summary>What one of the item comes to per square metre of its material, or null with no material.</summary>
+    public decimal? RandPerM2 => AreaM2 > 0 ? decimal.Round(TotalExVat / AreaM2, 2, MidpointRounding.AwayFromZero) : null;
+}
