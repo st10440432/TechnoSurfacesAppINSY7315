@@ -451,6 +451,76 @@
         });
     }
 
+    // The show or hide button beside a password field (_ShowPassword):
+    // <button type="button" data-password-toggle="Password" aria-pressed="false">
+    // The label stays "Show password" and aria-pressed says whether it is on, so a
+    // screen reader reads "Show password, pressed" rather than two states at once.
+    // Focus stays on the button. Every field goes back to hidden before its form is
+    // sent, so the browser's password manager still sees a password field.
+    function wirePasswordToggles() {
+        var toggles = document.querySelectorAll("[data-password-toggle]");
+        if (toggles.length === 0) return;
+
+        function setShown(button, shown) {
+            var input = document.getElementById(button.dataset.passwordToggle);
+            if (!input) return;
+            input.type = shown ? "text" : "password";
+            button.setAttribute("aria-pressed", shown ? "true" : "false");
+            var use = button.querySelector("use");
+            if (use) use.setAttribute("href", shown ? "#i-eye-off" : "#i-eye");
+        }
+
+        toggles.forEach(function (button) {
+            button.addEventListener("click", function () {
+                setShown(button, button.getAttribute("aria-pressed") !== "true");
+            });
+        });
+
+        document.addEventListener("submit", function (e) {
+            e.target.querySelectorAll("[data-password-toggle]").forEach(function (button) {
+                setShown(button, false);
+            });
+        }, true);
+    }
+
+    // A table too wide for its box scrolls sideways inside it. Only while it does, the
+    // box takes focus so the arrow keys can scroll it, and is named after its table's
+    // caption for a screen reader. Whether a table overflows depends on the screen
+    // width and the fonts, so it is checked on load, on resize, and when part of the
+    // page is swapped in, such as the costing sheet's line tables after a change.
+    function wireScrollableTables() {
+        function mark() {
+            document.querySelectorAll(".table-wrap").forEach(function (wrap) {
+                if (wrap.dataset.scrollFixed === "true") return;
+                var scrolls = wrap.scrollWidth > wrap.clientWidth + 1;
+                if (scrolls && !wrap.hasAttribute("tabindex")) {
+                    var caption = wrap.querySelector("caption");
+                    wrap.setAttribute("tabindex", "0");
+                    wrap.setAttribute("role", "region");
+                    wrap.setAttribute("aria-label", caption ? caption.textContent.trim() : "Table");
+                    wrap.dataset.scrollMarked = "true";
+                } else if (!scrolls && wrap.dataset.scrollMarked === "true") {
+                    wrap.removeAttribute("tabindex");
+                    wrap.removeAttribute("role");
+                    wrap.removeAttribute("aria-label");
+                    delete wrap.dataset.scrollMarked;
+                }
+            });
+        }
+
+        // A box written with its own tabindex in the view keeps it.
+        document.querySelectorAll(".table-wrap[tabindex]").forEach(function (wrap) { wrap.dataset.scrollFixed = "true"; });
+        mark();
+
+        var pending = null;
+        function later() {
+            if (pending) return;
+            pending = window.requestAnimationFrame(function () { pending = null; mark(); });
+        }
+        window.addEventListener("resize", later);
+        new MutationObserver(later).observe(document.body, { childList: true, subtree: true });
+    }
+
     // A form posted the normal way that needs a yes first, such as retiring a colour:
     // <form method="post" data-confirm="Retire Aspen?" data-confirm-detail="..." data-confirm-tone="danger">
     function wireConfirmForms() {
@@ -480,16 +550,27 @@
         });
     }
 
+    // Sets the dashboard bars from data-fill. Setting a style from a script is
+    // allowed by the CSP; a style="" attribute in the markup would need 'unsafe-inline'.
+    function wireFillBars() {
+        document.querySelectorAll("[data-fill]").forEach(function (el) {
+            el.style.setProperty("--fill", el.dataset.fill + "%");
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         wireNavigation();
         wireActionButtons();
         wireApiForms();
         wireAutoSubmit();
         wirePrint();
+        wirePasswordToggles();
+        wireScrollableTables();
         wireConfirmForms();
         wireFormBusy();
         showStoredFlash();
         focusOnLoad();
+        wireFillBars();
     });
 
     window.TS = {

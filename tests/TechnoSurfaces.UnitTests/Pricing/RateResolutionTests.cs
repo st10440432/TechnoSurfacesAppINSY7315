@@ -242,4 +242,79 @@ public sealed class RateResolutionTests : IAsyncLifetime
         Assert.Equal(items.Count, items.Select(r => r.SortOrder).Distinct().Count());
         Assert.Equal(13, items.Count(r => r.Category == RateCategory.Wood));
     }
+
+    /// <summary>
+    /// The costing sheet prices the whole card in one query. It must give every item
+    /// exactly what resolving that item on its own gives: the amount, the origin that
+    /// is copied onto a costing line, and the reason when it does not resolve.
+    /// </summary>
+    private async Task AssertWholeCardMatchesEachItemAsync(DateOnly asAt)
+    {
+        var card = await _rates.ResolveRateCardAsync(asAt);
+        var ids = await _db.RateItems.AsNoTracking().Select(r => r.Id).ToListAsync();
+
+        Assert.Equal(ids.Count, card.Count);
+        foreach (var id in ids)
+        {
+            var one = await _rates.ResolveAsync(id, null, asAt);
+            var fromCard = card[id];
+
+            Assert.Equal(one.Resolved, fromCard.Resolved);
+            Assert.Equal(one.Origin, fromCard.Origin);
+            Assert.Equal(one.FailureReason, fromCard.FailureReason);
+            if (one.Resolved)
+                Assert.Equal(one.UnitPrice, fromCard.UnitPrice);
+        }
+    }
+
+    [Fact]
+    public async Task The_whole_rate_card_resolves_exactly_as_each_item_does_on_its_own()
+    {
+        await AssertWholeCardMatchesEachItemAsync(Today);
+    }
+
+    [Fact]
+    public async Task The_whole_rate_card_follows_a_price_change_on_each_side_of_it()
+    {
+        var normalId = await RateIdAsync(NoBacksplash);
+        var seeded = await _db.RatePrices.SingleAsync(p => p.RateItemId == normalId);
+        seeded.EffectiveTo = new DateOnly(2026, 6, 30);
+        _db.RatePrices.Add(new RatePrice { RateItemId = normalId, Amount = 300.00m, EffectiveFrom = new DateOnly(2026, 7, 1) });
+
+        // A supplier-specific rate is left out of the general card, as it is when one
+        // item is resolved with no supplier.
+        _db.RatePrices.Add(new RatePrice
+        {
+            RateItemId = await RateIdAsync("Seamkit"),
+            SupplierId = await SupplierIdAsync("Max on Top"),
+            Amount = 299.00m,
+            EffectiveFrom = new DateOnly(2026, 1, 1)
+        });
+        await _db.SaveChangesAsync();
+
+        await AssertWholeCardMatchesEachItemAsync(new DateOnly(2026, 3, 1));
+        await AssertWholeCardMatchesEachItemAsync(Today);
+        Assert.Equal(450.00m, (await _rates.ResolveRateCardAsync(Today))[await RateIdAsync(NoBacksplashOvertime)].UnitPrice);
+    }
+
+    [Fact]
+    public async Task The_whole_rate_card_refuses_a_rate_that_derives_from_itself()
+    {
+        var a = new RateItem { Name = "Cycle A", Category = RateCategory.Fabrication, Unit = ChargeUnit.Hour };
+        var b = new RateItem { Name = "Cycle B", Category = RateCategory.Fabrication, Unit = ChargeUnit.Hour };
+        _db.RateItems.AddRange(a, b);
+        await _db.SaveChangesAsync();
+
+        a.DerivedFromRateItemId = b.Id;
+        a.DerivedFromRateItemMultiplier = 1m;
+        b.DerivedFromRateItemId = a.Id;
+        b.DerivedFromRateItemMultiplier = 1m;
+        await _db.SaveChangesAsync();
+
+        var card = await _rates.ResolveRateCardAsync(Today);
+
+        Assert.False(card[a.Id].Resolved);
+        Assert.Contains("derives from itself", card[a.Id].FailureReason!);
+        await AssertWholeCardMatchesEachItemAsync(Today);
+    }
 }

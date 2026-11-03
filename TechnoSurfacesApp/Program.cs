@@ -71,7 +71,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.Name = "TechnoSurfaces.Auth";
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.ExpireTimeSpan = TimeSpan.FromHours(1);
     options.SlidingExpiration = true;
     options.LoginPath = "/Account/Login";
@@ -96,6 +96,15 @@ builder.Services.ConfigureApplicationCookie(options =>
     }
 });
 
+// ZAP: the antiforgery cookie was sent without the Secure flag, because its
+// SecurePolicy defaults to None. Always Secure, like the session cookie, except on
+// a developer machine: there the README runs the app over plain HTTP, and Always
+// would make every form fail because the request is not HTTPS.
+builder.Services.AddAntiforgery(options =>
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always);
+        
 // RFC 9457 problem details for every API error.
 builder.Services.AddProblemDetails();
 
@@ -111,6 +120,7 @@ builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
     options.Filters.Add<MustChangePasswordFilter>();
+    options.Filters.Add<SignInFormExpiredFilter>();
 });
 // US-27: no page is reachable without an authenticated session. Anything not
 // explicitly marked [AllowAnonymous] requires sign-in, so a forgotten attribute
@@ -132,7 +142,14 @@ builder.Services.AddAuthorization(options =>
 
     // Recording the Pastel invoice is for the Managing Director only (US-25, team decision).
     options.AddPolicy(Policies.CanRecordInvoice, p => p.RequireRole(Roles.ManagingDirector));
+
+    // Bringing the customer list in from Sage Pastel adds every customer at once, so it
+    // is for the Managing Director only. Adding one customer on screen stays open to both.
+    options.AddPolicy(Policies.CanImportCustomers, p => p.RequireRole(Roles.ManagingDirector));
 });
+
+// Holds an import's preview between the upload and the Managing Director's go-ahead.
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IAuthorizationHandler, EditQuoteHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, ReopenQuoteHandler>();
 
@@ -140,6 +157,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISignInService, SignInService>();
 builder.Services.AddScoped<SignedInUser>();
 builder.Services.AddPlatformHealthChecks();
+builder.Services.AddApiDocument();
 builder.Services.AddSignInRateLimiting();
 
 
@@ -182,6 +200,7 @@ app.UseAuthorization();
 // CSS, scripts and the logo hold no data and must load on the sign-in page.
 app.MapStaticAssets().AllowAnonymous();
 app.MapPlatformHealthChecks();
+app.MapApiDocument();
 
 
 app.MapControllerRoute(

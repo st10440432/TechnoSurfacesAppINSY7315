@@ -553,6 +553,19 @@ img, svg { max-width: 100%; }
 }
 .input-group .addon.before + .input { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
+/* The show or hide password button (_ShowPassword). Edge draws its own eye in a
+   password field, which would sit beside this one, so that one is turned off. */
+.input-group .addon-btn {
+    min-width: 2.75rem;
+    font: inherit;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+.input-group .addon-btn:hover { background: var(--line); color: var(--ink); }
+.input-group .addon-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+.input-group .addon-btn[aria-pressed="true"] { color: var(--brand-navy); }
+.input-group input::-ms-reveal { display: none; }
+
 .field-row   { display: grid; gap: var(--space-4); }
 .field-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -685,6 +698,8 @@ dialog.dialog .dialog-foot {
    ========================================================================== */
 
 .table-wrap { overflow-x: auto; }
+/* A table box that can scroll sideways takes focus, so the arrow keys can scroll it. */
+.table-wrap[tabindex]:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 table.data caption { caption-side: top; padding: 0 0 var(--space-2); text-align: left; color: var(--ink-secondary); }
@@ -776,9 +791,10 @@ table.data tr.group-row td {
 }
 .filterbar .field { margin: 0; }
 .filterbar .select, .filterbar .input { min-width: 10rem; }
-.search { position: relative; flex: 1 1 16rem; }
-.search .ico { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--ink-secondary); pointer-events: none; }
-.search .input { padding-left: 2.25rem; }
+/* The icon shares the input's grid cell, so it centres on the input alone */
+.search { position: relative; display: grid; flex: 1 1 16rem; }
+.search .ico { grid-area: 2 / 1; align-self: center; margin-left: 0.75rem; z-index: 1; color: var(--ink-secondary); pointer-events: none; }
+.search .input { grid-area: 2 / 1; padding-left: 2.25rem; }
 
 /* ==========================================================================
    Quote screens
@@ -1235,6 +1251,10 @@ table.data tr.group-row th {
 .list-count { margin: 0; padding: var(--space-3) var(--space-5); font-size: var(--text-sm); color: var(--ink-secondary); border-bottom: 1px solid var(--line); }
 .filter-check { align-self: flex-end; min-height: 2.5rem; align-items: center; }
 
+/* Previous and next under the quote list */
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--line); }
+.pager-status { margin: 0; font-size: var(--text-sm); color: var(--ink-secondary); }
+
 /* The error summary at the top of a form */
 .error-summary:focus { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 .error-summary-title { margin-bottom: var(--space-2); font-size: var(--text-base); }
@@ -1257,6 +1277,41 @@ table.doc-warranty { width: min(100%, 30rem); margin-top: var(--space-2); border
 table.doc-warranty th, table.doc-warranty td { padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--line); text-align: left; }
 table.doc-warranty thead th { color: var(--ink-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 
+/* Costing printout: the customer quotation's document layout, with cost figures, so
+   it says on every printed copy that it is internal. */
+.doc-internal {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 0 auto;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--warning-line);
+    border-radius: var(--radius-sm);
+    background: var(--warning-bg);
+    color: var(--warning);
+    font-size: var(--text-sm);
+}
+.doc-internal-foot { margin: var(--space-6) 0 0; }
+.doc-section { margin: var(--space-6) 0 var(--space-2); font-size: var(--text-sm); color: var(--brand-navy); text-transform: uppercase; letter-spacing: 0.06em; }
+.costing-print table.doc-lines { font-size: var(--text-sm); }
+/* The description gets the room; the figures' headings wrap instead of widening their columns. */
+.costing-print table.doc-lines th:first-child { width: 48%; }
+.costing-print table.doc-lines th.r { white-space: normal; }
+.costing-print table.doc-lines tfoot td { padding: var(--space-3); border-top: 2px solid var(--brand-navy); font-weight: var(--weight-bold); }
+.costing-print .doc-totals { width: min(100%, 24rem); }
+.costing-print .doc-totals + .doc-section { margin-top: var(--space-4); }
+@media print {
+    /* Costing printout: whole rows and totals on a page, headings kept with their
+       table, the table head repeated on every page, nothing cut off by a scroll box. */
+    .costing-print .table-wrap { overflow: visible; }
+    .costing-print table.doc-lines { font-size: 9pt; }
+    .costing-print table.doc-lines td { padding: var(--space-2) var(--space-3); }
+    .costing-print table.doc-lines thead { display: table-header-group; }
+    .costing-print table.doc-lines tfoot { display: table-row-group; }
+    .costing-print .doc-section { break-after: avoid; }
+    .costing-print .doc-totals { break-inside: avoid; }
+    .doc-internal { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 
 @media (max-width: 767.98px) {
     .tabs { margin-left: calc(var(--space-3) * -1); margin-right: calc(var(--space-3) * -1); padding: 0 var(--space-3); }
@@ -1269,6 +1324,27 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
 
 @media print {
     .tabs, .qstrip, .save-state { display: none !important; }
+
+    /* An A4 page inside its margins is about 690 pixels wide, so the phone rules above
+       apply when printing. The printed document keeps its desktop layout instead: the
+       address beside the logo, the details in two columns, the signatures in a row. */
+    .doc-top { flex-direction: row; }
+    .doc-co { margin-left: auto; text-align: right; }
+    .doc-meta { grid-template-columns: 1fr 1fr; }
+    .doc-sign { grid-template-columns: repeat(3, 1fr); }
+    .doc-col-item  { width: 22%; }
+    .doc-col-qty   { width: 8%; }
+    .doc-col-total { width: 18%; }
+
+    /* A heading stays with what follows it; totals, warranty rows and the validity line stay whole. */
+    .doc-terms h3, .doc-title { break-after: avoid; }
+    .doc-totals, .doc-validity, table.doc-warranty tr { break-inside: avoid; }
+    table.doc-lines thead { display: table-header-group; }
+
+    /* Page numbers at the foot of every printed page. */
+    @page {
+        @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: var(--ink-secondary); }
+    }
 }
 
 /* ==========================================================================

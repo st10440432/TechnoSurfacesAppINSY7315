@@ -341,7 +341,8 @@
                     if (result.ok) {
                         saveSucceeded();
                         TS.toast("success", "Line removed", description + " is no longer on this quote.");
-                        return reloadTotals().then(refresh).then(function () {
+                        if (result.data && result.data.totals) showTotals(result.data.totals);
+                        return (result.data && result.data.totals ? Promise.resolve() : reloadTotals()).then(refresh).then(function () {
                             saving(-1);
                             focusAfterRemoval(tableId, position);
                         });

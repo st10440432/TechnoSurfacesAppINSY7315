@@ -131,7 +131,7 @@ public sealed class CostingSheetService : ICostingSheetService
 
     public async Task<CostingResult> GetVersionAsync(int quoteId, int versionNo, CancellationToken ct = default)
     {
-        var quote = await _quotes.GetAsync(quoteId, ct);
+        var quote = await _quotes.GetWithAllVersionsAsync(quoteId, ct);
         if (quote is null)
             return new(CostingOutcome.QuoteNotFound);
         if (quote.Version(versionNo) is not { } version)

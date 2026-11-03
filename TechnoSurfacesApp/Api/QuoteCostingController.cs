@@ -149,9 +149,13 @@ public sealed class QuoteCostingController : ControllerBase
             : Failure(result, quoteId);
     }
 
-    /// <summary>DELETE /api/quotes/{quoteId}/lines/{lineId}</summary>
+    /// <summary>
+    /// DELETE /api/quotes/{quoteId}/lines/{lineId}. Answers with the new totals, as
+    /// adding and changing a line do, so the costing sheet does not ask for them
+    /// separately.
+    /// </summary>
     [HttpDelete("lines/{lineId:int}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<RemovedLineResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
@@ -161,7 +165,9 @@ public sealed class QuoteCostingController : ControllerBase
             return refused;
 
         var result = await _costing.RemoveLineAsync(quoteId, lineId, ct);
-        return result.Outcome == CostingOutcome.Ok ? NoContent() : Failure(result, quoteId);
+        return result.Outcome == CostingOutcome.Ok
+            ? Ok(new RemovedLineResponse(result.Totals!))
+            : Failure(result, quoteId);
     }
 
     /// <summary>

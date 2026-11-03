@@ -62,6 +62,14 @@ public sealed class CatalogueReader : ICatalogueReader
             .Include(r => r.DerivedFromRateItem)
             .FirstOrDefaultAsync(r => r.Id == rateItemId, ct);
 
+    public async Task<IReadOnlyList<RateItem>> GetRateCardAsync(DateOnly asAt, CancellationToken ct = default) =>
+        await _db.RateItems
+            .AsNoTracking()
+            .Include(r => r.Prices.Where(p => p.SupplierId == null
+                                           && p.EffectiveFrom <= asAt
+                                           && (p.EffectiveTo == null || p.EffectiveTo >= asAt)))
+            .ToListAsync(ct);
+
     public Task<RatePrice?> FindRatePriceAsync(int rateItemId, int? supplierId, DateOnly asAt, CancellationToken ct = default) =>
         _db.RatePrices
             .AsNoTracking()

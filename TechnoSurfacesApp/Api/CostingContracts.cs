@@ -186,6 +186,9 @@ public sealed record CostingLineDto(
 
 public sealed record LineResponse(CostingLineDto Line, QuoteTotals Totals);
 
+/// <summary>The answer to removing a line: the quote's totals without it.</summary>
+public sealed record RemovedLineResponse(QuoteTotals Totals);
+
 /// <summary>The current version of a quote as the costing sheet loads it.</summary>
 public sealed record CostingSheetDto(
     int QuoteId,

@@ -31,4 +31,11 @@ public interface ICatalogueReader
 
     /// <summary>A rate item, including the item its rate is derived from where one is set.</summary>
     Task<RateItem?> GetRateItemAsync(int rateItemId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Every rate item, retired ones included because a live rate can derive from
+    /// them, each carrying only its general prices (no supplier) in force on the
+    /// date. One query, for screens that price the whole rate card at once.
+    /// </summary>
+    Task<IReadOnlyList<RateItem>> GetRateCardAsync(DateOnly asAt, CancellationToken ct = default);
 }
