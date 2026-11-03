@@ -44,10 +44,14 @@ public interface IQuotationGenerationService
     /// <summary>
     /// Writes the costing out as customer lines: one line per material, at its
     /// selling price, then one line for the labour, consumables, extras and
-    /// transport together. The new lines add up to the costing total excluding
-    /// VAT. Lines already on the quotation are kept, and the new ones go after them.
+    /// transport together. A material already copied is brought up to date, not
+    /// copied again, so the copied lines add up to the costing total excluding VAT.
+    /// Lines written by hand are kept, and the new ones go after them.
     /// </summary>
     Task<QuotationResult> AddLinesFromCostingAsync(int quoteId, CancellationToken ct = default);
+
+    /// <summary>Whether the copied material lines give their sheet count, or one item each.</summary>
+    Task<QuotationResult> SetShowSheetCountsAsync(int quoteId, bool show, CancellationToken ct = default);
 }
 
 public sealed class QuotationGenerationService : IQuotationGenerationService
@@ -256,48 +260,82 @@ public sealed class QuotationGenerationService : IQuotationGenerationService
         // Calculated first, so the quantities that follow from the materials are
         // current and the total is the one the approval check compares against.
         var totals = _calculator.Calculate(version!);
+        var prices = CostingOnQuotation.Price(version!, totals);
 
-        var materials = version!.CostingLines
-            .Where(l => l.LineType == CostingLineType.Material && l.LineTotal() > 0)
-            .OrderBy(l => l.SortOrder).ThenBy(l => l.Id)
-            .ToList();
-        var hasOtherCosts = version.TransportAmount > 0
-            || version.CostingLines.Any(l => l.LineType == CostingLineType.Rate && l.LineTotal() > 0);
-
-        if (materials.Count == 0 && !hasOtherCosts)
+        if (prices.Materials.Count == 0 && !prices.HasOtherCosts)
             return new(QuotationOutcome.Invalid, Errors: new Dictionary<string, string[]>
             {
                 ["Costing"] = new[] { "There is nothing on the costing sheet to copy. Add the materials and labour first." }
             });
 
-        // A material is shown at its selling price: its cost with the quote's markup.
-        // The markup is never shown on its own (US-11).
-        var factor = 1m + version.MarkupPercent / 100m;
-        var amounts = materials.Select(l => decimal.Round(l.LineTotal() * factor, 2, MidpointRounding.AwayFromZero)).ToList();
-
-        // The one remaining line is the difference to the costing total, so the new
-        // lines add up to it to the cent: the marked-up labour and consumables, the
-        // cut-outs and grooves at cost, and transport. With no such costs, the cents
-        // lost to rounding each material go on the last material instead.
-        var remainder = totals.TotalExVat - amounts.Sum();
-        if (!hasOtherCosts)
-            amounts[^1] += remainder;
-
-        // The customer reads the material as brand, colour and thickness only: no sheet
-        // size and no sheet count, so each material is one item at its selling price.
-        // One lookup for every line, not one per line (NFR-05).
+        // The customer reads the material as brand, colour and thickness only, with no
+        // sheet size. One lookup for every line, not one per line (NFR-05).
         var names = await _materialNames.ForMaterialPricesAsync(
-            materials.Where(l => l.MaterialPriceId is not null).Select(l => l.MaterialPriceId!.Value).Distinct().ToList(), ct);
+            prices.Materials.Where(m => m.Line.MaterialPriceId is not null).Select(m => m.Line.MaterialPriceId!.Value).Distinct().ToList(), ct);
 
+        AdoptEarlierCopies(version!, prices, names);
+        foreach (var line in CostingOnQuotation.Follow(version!, totals))
+            _quotes.RemoveQuotationLine(line);
+
+        // Only what is not on the quotation yet is added.
+        var copied = version!.QuotationLines.Where(l => l.CostingLine is not null).Select(l => l.CostingLine!).ToHashSet();
         var sortOrder = version.QuotationLines.Count == 0 ? 0 : version.QuotationLines.Max(l => l.SortOrder);
-        for (var i = 0; i < materials.Count; i++)
-            version.AddQuotationLine(new QuotationLine(CustomerMaterialName(materials[i], names), amounts[i], MaterialItem, quantity: 1m)
-            {
-                SortOrder = ++sortOrder
-            });
+        foreach (var (material, amount) in prices.Materials.Where(m => !copied.Contains(m.Line)))
+        {
+            var line = QuotationLine.ForMaterial(material, CustomerMaterialName(material, names), amount, MaterialItem,
+                CostingOnQuotation.Quantity(version, material));
+            line.SortOrder = ++sortOrder;
+            version.AddQuotationLine(line);
+        }
 
-        if (hasOtherCosts && remainder > 0)
-            version.AddQuotationLine(new QuotationLine(OtherCostsDescription, remainder, OtherCostsItem) { SortOrder = ++sortOrder });
+        if (prices.HasOtherCosts && prices.OtherCosts > 0 && !version.QuotationLines.Any(l => l.CarriesOtherCosts))
+        {
+            var rest = QuotationLine.ForOtherCosts(OtherCostsDescription, prices.OtherCosts, OtherCostsItem);
+            rest.SortOrder = ++sortOrder;
+            version.AddQuotationLine(rest);
+        }
+
+        await _quotes.SaveChangesAsync(ct);
+        return new(QuotationOutcome.Ok, Check: Check(version));
+    }
+
+    /// <summary>
+    /// Lines copied before a line remembered where it came from are recognised by the
+    /// item and description they were copied with, and from then on follow the costing
+    /// like any copied line, so copying again does not add them a second time.
+    /// </summary>
+    private static void AdoptEarlierCopies(QuoteVersion version, CostingOnQuotation.SellingPrices prices,
+        IReadOnlyDictionary<int, MaterialPriceName> names)
+    {
+        var unlinked = version.QuotationLines
+            .Where(l => l.CostingLine is null && !l.CarriesOtherCosts)
+            .OrderBy(l => l.SortOrder).ThenBy(l => l.Id)
+            .ToList();
+        var copied = version.QuotationLines.Where(l => l.CostingLine is not null).Select(l => l.CostingLine!).ToHashSet();
+
+        foreach (var (material, _) in prices.Materials.Where(m => !copied.Contains(m.Line)))
+        {
+            var name = CustomerMaterialName(material, names);
+            if (unlinked.FirstOrDefault(l => l.Room == MaterialItem && l.Description == name) is not { } earlier)
+                continue;
+            version.LinkQuotationLine(earlier, material, carriesOtherCosts: false);
+            unlinked.Remove(earlier);
+        }
+
+        if (!version.QuotationLines.Any(l => l.CarriesOtherCosts)
+            && unlinked.FirstOrDefault(l => l.Room == OtherCostsItem && l.Description == OtherCostsDescription) is { } rest)
+            version.LinkQuotationLine(rest, null, carriesOtherCosts: true);
+    }
+
+    public async Task<QuotationResult> SetShowSheetCountsAsync(int quoteId, bool show, CancellationToken ct = default)
+    {
+        var (version, refused) = await OpenVersionAsync(quoteId, ct);
+        if (refused is not null)
+            return refused;
+
+        version!.SetShowSheetCounts(show);
+        foreach (var line in CostingOnQuotation.Follow(version, _calculator.Calculate(version)))
+            _quotes.RemoveQuotationLine(line);
 
         await _quotes.SaveChangesAsync(ct);
         return new(QuotationOutcome.Ok, Check: Check(version));

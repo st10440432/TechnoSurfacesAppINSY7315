@@ -142,6 +142,24 @@ public sealed class QuotationController : ControllerBase
         return result.Outcome == QuotationOutcome.Ok ? Ok(result) : Failure(result, quoteId);
     }
 
+    /// <summary>
+    /// PUT /api/quotes/{quoteId}/quotation/sheet-counts: whether the material lines
+    /// copied from the costing give their number of sheets, or one item each.
+    /// </summary>
+    [HttpPut("quotation/sheet-counts")]
+    [ProducesResponseType<QuotationResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SheetCounts(int quoteId, QuotationSheetCountsRequest request, CancellationToken ct)
+    {
+        if (await RefuseUnlessEditableAsync(quoteId, ct) is { } refused)
+            return refused;
+
+        var result = await _quotation.SetShowSheetCountsAsync(quoteId, request.ShowSheetCounts, ct);
+        return result.Outcome == QuotationOutcome.Ok ? Ok(result) : Failure(result, quoteId);
+    }
+
     private async Task<IActionResult?> RefuseUnlessEditableAsync(int quoteId, CancellationToken ct)
     {
         var quote = await _quotes.GetAsync(quoteId, ct);
@@ -210,4 +228,9 @@ public sealed class QuotationOrderRequest
 {
     [Required]
     public List<int> LineIds { get; set; } = new();
+}
+
+public sealed class QuotationSheetCountsRequest
+{
+    public bool ShowSheetCounts { get; set; }
 }

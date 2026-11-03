@@ -17,7 +17,7 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -718,6 +718,12 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("CarriesOtherCosts")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("CostingLineId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(400)
@@ -738,6 +744,8 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CostingLineId");
 
                     b.HasIndex("QuoteVersionId");
 
@@ -912,6 +920,9 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
 
                     b.Property<int>("QuoteId")
                         .HasColumnType("int");
+
+                    b.Property<bool>("ShowSheetCounts")
+                        .HasColumnType("bit");
 
                     b.Property<decimal>("TransportAmount")
                         .HasPrecision(18, 2)
@@ -1157,11 +1168,17 @@ namespace TechnoSurfaces.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.QuotationLine", b =>
                 {
+                    b.HasOne("TechnoSurfaces.Domain.Quoting.CostingLine", "CostingLine")
+                        .WithMany()
+                        .HasForeignKey("CostingLineId");
+
                     b.HasOne("TechnoSurfaces.Domain.Quoting.QuoteVersion", null)
                         .WithMany("QuotationLines")
                         .HasForeignKey("QuoteVersionId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.Navigation("CostingLine");
                 });
 
             modelBuilder.Entity("TechnoSurfaces.Domain.Quoting.Quote", b =>

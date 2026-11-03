@@ -211,7 +211,8 @@ The costing sheet and the quote screens talk to these endpoints. Every error com
 | `GET /api/quotes/{id}/totals` | Recalculate |
 | `GET /api/quotes/{id}/quotation` | The customer quotation |
 | `GET /api/quotes/{id}/quotation/check` | Whether it adds up to the costing |
-| `POST /api/quotes/{id}/quotation-lines/from-costing` | Write the quotation lines from the costing |
+| `POST /api/quotes/{id}/quotation-lines/from-costing` | Write the quotation lines from the costing, adding only what is not on the quotation yet |
+| `PUT /api/quotes/{id}/quotation/sheet-counts` | Show or hide the number of sheets on copied material lines |
 | `POST, PUT, DELETE /api/quotes/{id}/quotation-lines...` | Edit and reorder quotation lines |
 | `GET, POST /api/quotes/{id}/invoice` | The Pastel invoice record |
 | `/api/customers...` | Customers and contacts: list, create, change, deactivate, reactivate |
@@ -401,7 +402,7 @@ These are the differences between what the Task 1 document describes and what wa
 
 - **Signing in.** Task 1's layer table and running costs named Microsoft Entra ID. The system uses ASP.NET Core Identity with accounts managed by the application, which is what NFR-03 and section 8.2 required and what the client asked for. Entra ID is not used for signing in.
 - **Phones and tablets.** NFR-12 and US-28 asked for a laptop. The marking rubric asks for phones and tablets as well, so every screen works at all three sizes.
-- **Customer quotation lines from the costing.** Not in Task 1. The estimator can write the quotation lines from the costing in one step, one line per material at its selling price and one for labour and extras, and then edit them.
+- **Customer quotation lines from the costing.** Not in Task 1. The estimator can write the quotation lines from the costing in one step, one line per material at its selling price and one for labour and extras, and then edit them. Copied lines stay in step with the costing sheet: a change of sheets, price, discount, markup or labour changes them at once, a material taken off the costing goes from the quotation too, and copying again adds only what is new. Each material is one item unless sheet counts are turned on for the quote.
 - **Approval waits for the quotation to add up.** US-10 says the quotation's total equals the costing's. The system refuses approval until it does, rather than only showing the difference.
 - **Each approved version records its heading, terms and warranties.** So an earlier version prints exactly as it was sent, even after the quote's validity date, contact details or the standing terms change.
 - **Expired quotes can be reopened.** Task 1's state diagram had Expired as a final state. A customer who comes back after the quote lapsed can now be given a new version with a fresh validity period (team decision).

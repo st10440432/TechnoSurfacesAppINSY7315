@@ -84,14 +84,27 @@
                                 data-confirm="Add the materials from the costing sheet?"
                                 data-confirm-detail="@(d.Lines.Count == 0
                                     ? "Each material becomes a line at its selling price, and the labour, consumables and extras become one more line, so the lines add up to the costing total. You can change or remove any of them afterwards."
-                                    : "Each material becomes a line at its selling price, and the labour, consumables and extras become one more line. They are added after the lines already here, so the quotation will come to more than the costing until you remove or change lines.")"
+                                    : "A material already on the quotation is brought up to date, not added again. Any material not on it yet, and the labour, consumables and extras if they are not, are added after the lines already here. Lines written by hand are left as they are.")"
                                 data-confirm-label="Add the lines"
-                                data-success="Lines added from the costing"
+                                data-success="Lines brought up to date with the costing"
                                 data-success-detail="Check the descriptions read the way the customer would describe the work."
                                 aria-describedby="from-costing-hint">
                             <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg> Add the materials from the costing sheet
                         </button>
-                        <span class="hint" id="from-costing-hint">One line per material at its selling price, and one line for the labour, consumables and extras. No cost price or markup is shown.</span>
+                        <span class="hint" id="from-costing-hint">
+                            One line per material at its selling price, and one line for the labour, consumables and extras. No cost price or markup is shown.
+                            Lines copied from the costing change with it: a new price, quantity, discount or markup on the costing sheet shows here at once.
+                        </span>
+                        <form class="check" data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{d.QuoteId}/quotation/sheet-counts")"
+                              data-success="@(Model.ShowSheetCounts ? "Sheet counts taken off" : "Sheet counts shown")"
+                              data-success-detail="@(Model.ShowSheetCounts ? "Each material line is one item again." : "Each material line copied from the costing gives its number of sheets.")">
+                            <input type="checkbox" id="show-sheet-counts" name="showSheetCounts" value="true" checked="@Model.ShowSheetCounts" data-autosubmit
+                                   aria-describedby="sheet-counts-hint" />
+                            <label for="show-sheet-counts">
+                                Show the number of sheets on material lines
+                                <span class="hint" id="sheet-counts-hint">Off, each material is one item, as the customer reads brand, colour and thickness only.</span>
+                            </label>
+                        </form>
                     </div>
                 }
             </div>

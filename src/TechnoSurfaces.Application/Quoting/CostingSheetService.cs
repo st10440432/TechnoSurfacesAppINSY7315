@@ -269,7 +269,7 @@ public sealed class CostingSheetService : ICostingSheetService
         else if (request.Quantity is { } quantity)
             version.ChangeQuantity(line, quantity);
 
-        var totals = _calculator.Calculate(version);
+        var totals = CalculateAndFollow(version);
         await _quotes.SaveChangesAsync(ct);
         return new(CostingOutcome.Ok, quote, line, totals);
     }
@@ -286,10 +286,12 @@ public sealed class CostingSheetService : ICostingSheetService
         if (version.IsSealed)
             return Sealed(version);
 
+        // The quotation line copied from this material goes with it, before the
+        // material itself is deleted.
         version.RemoveCostingLine(line);
+        var totals = CalculateAndFollow(version);
         _quotes.RemoveCostingLine(line);
 
-        var totals = _calculator.Calculate(version);
         await _quotes.SaveChangesAsync(ct);
         return new(CostingOutcome.Ok, quote, Totals: totals);
     }
@@ -307,7 +309,7 @@ public sealed class CostingSheetService : ICostingSheetService
         if (request.TransportAmount is { } transport)
             version.SetTransportAmount(transport);
 
-        var totals = _calculator.Calculate(version);
+        var totals = CalculateAndFollow(version);
         await _quotes.SaveChangesAsync(ct);
         return new(CostingOutcome.Ok, quote, Totals: totals);
     }
@@ -315,9 +317,22 @@ public sealed class CostingSheetService : ICostingSheetService
     private async Task<CostingResult> AddAsync(Quote quote, QuoteVersion version, CostingLine line, CancellationToken ct)
     {
         version.AddCostingLine(line);
-        var totals = _calculator.Calculate(version);
+        var totals = CalculateAndFollow(version);
         await _quotes.SaveChangesAsync(ct);
         return new(CostingOutcome.Ok, quote, line, totals);
+    }
+
+    /// <summary>
+    /// The new totals, with the quotation lines copied from the costing brought up to
+    /// date: a changed price, quantity, discount, markup or transport amount shows on
+    /// the customer quotation at once.
+    /// </summary>
+    private QuoteTotals CalculateAndFollow(QuoteVersion version)
+    {
+        var totals = _calculator.Calculate(version);
+        foreach (var removed in CostingOnQuotation.Follow(version, totals))
+            _quotes.RemoveQuotationLine(removed);
+        return totals;
     }
 
     private static CostingResult Sealed(QuoteVersion version) =>

@@ -109,6 +109,58 @@ public sealed class CostingApiTests
         Assert.True(check.GetProperty("matches").GetBoolean());
     }
 
+    private async Task<JsonElement> QuotationLinesAsync(ApiSession session, int quoteId) =>
+        (await (await session.GetAsync($"/api/quotes/{quoteId}/quotation")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("lines");
+
+    [Fact]
+    public async Task The_copied_lines_follow_the_costing_sheet_and_are_never_copied_twice()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var client = await SignedInAsync(AppFactory.EstimatorEmail);
+        int colourId, sheetSizeId;
+        using (var scope = _app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TechnoSurfacesDbContext>();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var price = await db.MaterialPrices
+                .Where(p => p.ColourId != null && p.EffectiveFrom <= today && p.EffectiveTo == null
+                         && p.Colour!.Status == TechnoSurfaces.Domain.CatalogueStatus.Active)
+                .OrderBy(p => p.Id)
+                .FirstAsync();
+            (colourId, sheetSizeId) = (price.ColourId!.Value, price.SheetSizeId);
+        }
+        var added = await client.PostAsync($"/api/quotes/{quoteId}/lines", new { type = "material", colourId, sheetSizeId, quantity = 2m });
+        var materialLineId = (await added.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("line").GetProperty("id").GetInt32();
+        await AddRateLineAsync(client, quoteId, await RateItemIdAsync("Sanding time"));
+
+        await client.PostAsync($"/api/quotes/{quoteId}/quotation-lines/from-costing");
+        await client.PostAsync($"/api/quotes/{quoteId}/quotation-lines/from-costing");
+        Assert.Equal(2, (await QuotationLinesAsync(client, quoteId)).GetArrayLength());
+
+        // Sheet counts on, then a new sheet count on the costing sheet.
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PutAsync($"/api/quotes/{quoteId}/quotation/sheet-counts", new { showSheetCounts = true })).StatusCode);
+        await client.PutAsync($"/api/quotes/{quoteId}/lines/{materialLineId}", new { quantity = 5m });
+        Assert.Equal(5m, (await QuotationLinesAsync(client, quoteId))[0].GetProperty("quantity").GetDecimal());
+
+        // Removing the material on SQL Server removes its quotation line first.
+        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"/api/quotes/{quoteId}/lines/{materialLineId}")).StatusCode);
+        Assert.Equal(1, (await QuotationLinesAsync(client, quoteId)).GetArrayLength());
+        var check = await (await client.GetAsync($"/api/quotes/{quoteId}/quotation/check")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(check.GetProperty("matches").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Another_estimator_cannot_change_the_sheet_counts_on_the_quotation()
+    {
+        var quoteId = await CreateQuoteAsync(AppFactory.EstimatorEmail);
+        var other = await SignedInAsync(OtherEstimatorEmail);
+
+        var response = await other.PutAsync($"/api/quotes/{quoteId}/quotation/sheet-counts", new { showSheetCounts = true });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     [Fact]
     public async Task Another_estimator_cannot_copy_the_costing_to_the_quotation()
     {

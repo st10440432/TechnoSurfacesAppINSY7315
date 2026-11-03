@@ -61,6 +61,13 @@ public class QuoteVersion
     /// </summary>
     public decimal TransportAmount { get; private set; }
 
+    /// <summary>
+    /// Whether the material lines on the customer quotation give the number of sheets.
+    /// Off by default: the client's customers read brand, colour and thickness only,
+    /// so each material is one item. It can be turned on per quote.
+    /// </summary>
+    public bool ShowSheetCounts { get; private set; }
+
     /// <summary>Once sealed the version is a read-only record.</summary>
     public bool IsSealed { get; private set; }
 
@@ -142,12 +149,27 @@ public class QuoteVersion
     }
 
     /// <summary>Rewrites a customer-facing line on this version (US-10).</summary>
-    public void ChangeQuotationLine(QuotationLine line, string description, decimal amountExVat, string? room, decimal quantity)
+    public void ChangeQuotationLine(QuotationLine line, string description, decimal amountExVat, string? room, decimal quantity) =>
+        ChangeLine(line).Change(description, amountExVat, room, quantity);
+
+    /// <summary>Takes a new amount and quantity from the costing for a copied line.</summary>
+    public void FollowCosting(QuotationLine line, decimal amountExVat, decimal quantity) =>
+        ChangeLine(line).FollowCosting(amountExVat, quantity);
+
+    /// <summary>Ties a line copied before lines remembered their source to its costing.</summary>
+    public void LinkQuotationLine(QuotationLine line, CostingLine? source, bool carriesOtherCosts)
+    {
+        if (source is not null && !_costingLines.Contains(source))
+            throw new InvalidOperationException($"{source.Description} is not a line on version {VersionNo}.");
+        ChangeLine(line).Follow(source, carriesOtherCosts);
+    }
+
+    private QuotationLine ChangeLine(QuotationLine line)
     {
         EnsureUnsealed();
         if (!_quotationLines.Contains(line))
             throw new InvalidOperationException($"That quotation line is not on version {VersionNo}.");
-        line.Change(description, amountExVat, room, quantity);
+        return line;
     }
 
     public void RemoveQuotationLine(QuotationLine line)
@@ -184,6 +206,12 @@ public class QuoteVersion
         if (markupPercent < 0)
             throw new ArgumentOutOfRangeException(nameof(markupPercent), "A markup cannot be negative.");
         MarkupPercent = markupPercent;
+    }
+
+    public void SetShowSheetCounts(bool show)
+    {
+        EnsureUnsealed();
+        ShowSheetCounts = show;
     }
 
     public void SetTransportAmount(decimal amount)
@@ -248,14 +276,23 @@ public class QuoteVersion
 
         var revision = new QuoteVersion(versionNo, createdByUserId, MarkupPercent, VatRate)
         {
-            TransportAmount = TransportAmount
+            TransportAmount = TransportAmount,
+            ShowSheetCounts = ShowSheetCounts
         };
 
+        // A copied quotation line follows the copy of its costing line, not the
+        // sealed original.
+        var copies = new Dictionary<CostingLine, CostingLine>();
         foreach (var line in _costingLines)
-            revision._costingLines.Add(line.CopyForRevision());
+        {
+            var copy = line.CopyForRevision();
+            copies[line] = copy;
+            revision._costingLines.Add(copy);
+        }
 
         foreach (var line in _quotationLines)
-            revision._quotationLines.Add(line.CopyForRevision());
+            revision._quotationLines.Add(line.CopyForRevision(
+                line.CostingLine is { } source && copies.TryGetValue(source, out var copied) ? copied : null));
 
         return revision;
     }

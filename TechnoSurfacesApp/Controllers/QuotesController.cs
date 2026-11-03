@@ -301,7 +301,8 @@ public class QuotesController : AppController
             Quote = detail,
             Document = document,
             Check = await _quotation.CheckAsync(id, ct),
-            Actions = await ActionsForAsync(quote)
+            Actions = await ActionsForAsync(quote),
+            ShowSheetCounts = quote.CurrentVersion?.ShowSheetCounts ?? false
         };
 
         SetPage("Customer quotation", "quotes", QuotesCrumb,
@@ -638,6 +639,9 @@ public sealed class QuotationVm
     public CustomerQuotation Document { get; init; } = null!;
     public QuotationCheck? Check { get; init; }
     public QuoteActions Actions { get; init; } = null!;
+
+    /// <summary>Whether copied material lines give their sheets, for the switch above the lines.</summary>
+    public bool ShowSheetCounts { get; init; }
 }
 
 public sealed class ApprovalsVm

@@ -201,7 +201,17 @@ public sealed class QuotationLineConfiguration : IEntityTypeConfiguration<Quotat
         e.Property(x => x.AmountExVat).HasPrecision(18, 2);
         e.Property(x => x.Quantity).HasPrecision(18, 4);
 
+        // The material a copied line follows. Both lines belong to the same version,
+        // so the database does not cascade; the costing sheet removes the quotation
+        // line itself when its material is removed.
+        e.HasOne(x => x.CostingLine)
+            .WithMany()
+            .HasForeignKey(x => x.CostingLineId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.ClientSetNull);
+
         e.HasIndex(x => x.QuoteVersionId);
+        e.HasIndex(x => x.CostingLineId);
     }
 }
 
