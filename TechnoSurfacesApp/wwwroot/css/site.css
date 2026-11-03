@@ -791,9 +791,10 @@ table.data tr.group-row td {
 }
 .filterbar .field { margin: 0; }
 .filterbar .select, .filterbar .input { min-width: 10rem; }
-.search { position: relative; flex: 1 1 16rem; }
-.search .ico { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--ink-secondary); pointer-events: none; }
-.search .input { padding-left: 2.25rem; }
+/* The icon shares the input's grid cell, so it centres on the input alone */
+.search { position: relative; display: grid; flex: 1 1 16rem; }
+.search .ico { grid-area: 2 / 1; align-self: center; margin-left: 0.75rem; z-index: 1; color: var(--ink-secondary); pointer-events: none; }
+.search .input { grid-area: 2 / 1; padding-left: 2.25rem; }
 
 /* ==========================================================================
    Quote screens

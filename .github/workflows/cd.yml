@@ -38,7 +38,7 @@ jobs:
         env:
           ConnectionStrings__DefaultConnection: Server=placeholder;Database=placeholder
         run: |
-          dotnet tool install --global dotnet-ef --version 10.0.12
+          dotnet tool install --global dotnet-ef --version 10.0.14
           mkdir -p migrations
           dotnet ef migrations script --idempotent --no-build --configuration Release \
             --project src/TechnoSurfaces.Infrastructure --startup-project TechnoSurfacesApp \
