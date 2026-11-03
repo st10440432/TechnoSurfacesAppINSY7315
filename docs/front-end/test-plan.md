@@ -109,6 +109,48 @@ The sign in password and the three fields on "Set your password" each have a but
 
 ![The password hidden](../images/show-password-hidden.jpg) ![The password shown](../images/show-password-shown.jpg)
 
+### Costing printout (30 October 2026)
+
+The costing sheet has a "Print the costing" button that opens a read-only printout of the whole costing. It was checked with a made-up test quote of 12 material lines, 33 rate lines and a transport amount.
+
+| Check | Result |
+|---|---|
+| Every line and total matches the costing sheet to the cent | Pass. All 45 line totals, the sub total, markup, cut-outs, grooves and transport, total ex VAT, VAT and total inc VAT were compared on both pages |
+| Heading with the quote reference, customer, version and date | Pass |
+| Says it is internal | Pass. "Internal: shows cost prices and markup. Not for the customer." at the top and the bottom |
+| No input boxes, buttons or side menu on the printout | Pass. An integration test checks the document has no input, button or select |
+| A4 portrait, no row split across pages, table headings repeat on each page | Pass in Chrome and Edge. The totals stay together on one page |
+| Opened by whoever can open the costing sheet, refused where it is refused | Pass. Integration tests for the estimator, the Managing Director, signed out and a quote that does not exist |
+| 375 and 1440 pixels | Pass. Nothing scrolls the page sideways. On a phone each table scrolls inside its own box, which takes keyboard focus |
+| axe-core 4.14 (WCAG 2.1 AA) at 375 and 1440 pixels, as both roles | 0 violations on the printout and on the costing sheet |
+
+The A4 print preview is saved as [costing-printout-a4.pdf](print/costing-printout-a4.pdf).
+
+### Old price list warning on the review screen (30 October 2026)
+
+"Before approving" on the review screen has a new check row. It names each supplier on the quote's current version whose price list is more than a year old, with the date on the list. With none, it shows as a passed check. The rule lives in one place (`PriceListAge`), read from the date on the supplier's price list, and the dashboard, the material catalogue, the suppliers screen and the review screen all use it. Before this, the catalogue went by the date of each price instead, so it could flag different suppliers from the dashboard.
+
+| Check | Result |
+|---|---|
+| A supplier on the quote with an old list is named with its date | Pass, integration test and by hand |
+| All suppliers recent: shown as passed | Pass, integration test |
+| Exactly a year old is not old, a day over is | Pass, unit test |
+| axe-core 4.14 (WCAG 2.1 AA) at 375 and 1440 pixels: review screen as both roles, catalogue and dashboard | 0 violations |
+
+![The old price list check](../images/review-old-price-list.jpg)
+
+### axe on every pull request (2 November 2026)
+
+The `accessibility` job in CI runs axe-core 4.14 against WCAG 2.1 A and AA on every pull request. It starts the app with its own empty database, signs in as the estimator and as the Managing Director, makes one test quote, and checks sign in and eight screens for each role (dashboard, quote list, costing sheet, customer quotation, review, customers, catalogue and users) at 375 and 1440 pixels: 34 checks. The tests are in `tests/accessibility`, and how to run them locally is in the README.
+
+| Check | Result |
+|---|---|
+| On the pull request that added the job | Failed on the review screen at 1440 pixels: on the build server its table was wider than its box and scrolled sideways, but could not be reached with the keyboard (`scrollable-region-focusable`) |
+| Fix | Any table wider than its box is given keyboard focus and a name from its caption, on load and whenever the page changes size |
+| Every pull request since, to the evening of 2 November 2026 | Passed, 40 runs |
+
+A failing accessibility job shows as a failed check on the pull request, but only `build-and-test` is required by the branch rules, so it does not yet block the merge on its own.
+
 ## Tool scores
 
 Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome extension. Both were run on 5 October 2026 on the three screens below, signed in as the Managing Director, against a local copy of the app with a test quote. Lighthouse ran in navigation mode for desktop. axe DevTools used axe-core 4.13.0 against WCAG 2.1 AA, and found no automatic, guided or manual issues on any of the three screens.
@@ -119,4 +161,5 @@ Lighthouse is built into Chrome developer tools. axe DevTools is a free Chrome e
 | Quote list | 100 | 100 | 0 |
 | Customer quotation | 100 | 100 | 0 |
 
-The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview is still to be checked by hand.
+The customer quotation is also checked in print preview: it must fit A4, show no side menu, and contain no cost price, supplier discount or markup anywhere in the page. The page source was searched for the test quotes' cost prices, markup, discount and price origins, and none of them appear on it. The A4 print preview was checked by hand on 30 October 2026, under [Customer quotation on A4](#customer-quotation-on-a4-30-october-2026).
+
