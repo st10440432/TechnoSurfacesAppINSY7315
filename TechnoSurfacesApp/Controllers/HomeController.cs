@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Auditing;
 using TechnoSurfaces.Application.Catalogue;
 using TechnoSurfaces.Application.Quoting;
+using TechnoSurfaces.Domain;
+using TechnoSurfaces.Domain.Catalogue;
 using TechnoSurfacesApp.Identity;
 using TechnoSurfacesApp.Services;
 
@@ -13,7 +15,8 @@ namespace TechnoSurfacesApp.Controllers;
 /// </summary>
 public class HomeController : AppController
 {
-    private const int StaleAfterDays = 365;
+    /// <summary>Changes shown under recent activity on the Managing Director's dashboard.</summary>
+    private const int RecentActivityCount = 8;
 
     private readonly IQuoteWorkflowService _workflow;
     private readonly ICatalogueBrowser _catalogue;
@@ -43,11 +46,17 @@ public class HomeController : AppController
             IsManagingDirector = isManagingDirector,
             AllQuotes = all,
             MyQuotes = all.Where(q => q.AuthorId == _me.Id).ToList(),
-            Queue = isManagingDirector ? await _workflow.ApprovalQueueAsync(ct) : [],
-            StaleSuppliers = suppliers.Where(s => s.PriceListDated.AddDays(StaleAfterDays) < Today).ToList(),
+            // Taken from the quotes already loaded rather than queried again, in the
+            // approval queue's own order: the quote that has waited longest first.
+            Queue = isManagingDirector
+                ? all.Where(q => q.Status == nameof(QuoteStatus.PendingApproval))
+                     .OrderBy(q => q.IssueDate).ThenBy(q => q.Id)
+                     .ToList()
+                : [],
+            StaleSuppliers = suppliers.Where(s => PriceListAge.IsOld(s.PriceListDated, Today)).ToList(),
             SupplierCount = suppliers.Count,
             Activity = await CanAsync(Policies.CanViewAuditTrail)
-                ? (await _audit.SearchAsync(new AuditFilter(), ct)).Rows.Take(8).ToList()
+                ? await _audit.RecentAsync(RecentActivityCount, ct)
                 : []
         };
 

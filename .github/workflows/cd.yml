@@ -19,8 +19,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
       - name: Restore
@@ -38,7 +38,7 @@ jobs:
         env:
           ConnectionStrings__DefaultConnection: Server=placeholder;Database=placeholder
         run: |
-          dotnet tool install --global dotnet-ef --version 10.0.12
+          dotnet tool install --global dotnet-ef --version 10.0.14
           mkdir -p migrations
           dotnet ef migrations script --idempotent --no-build --configuration Release \
             --project src/TechnoSurfaces.Infrastructure --startup-project TechnoSurfacesApp \
@@ -46,11 +46,11 @@ jobs:
           dotnet ef migrations script --idempotent --no-build --configuration Release \
             --project TechnoSurfacesApp --startup-project TechnoSurfacesApp \
             --context AuthDbContext -o migrations/auth.sql
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app
           path: publish
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: migrations
           path: migrations
@@ -75,14 +75,42 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Deploy to App Service
+        # With SLOT_NAME set on the environment (Standard tier only), the release
+        # goes to that slot and the live site keeps serving the current one.
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.WEBAPP_NAME }}
+          slot-name: ${{ vars.SLOT_NAME || 'production' }}
           package: app
       - name: Health check
         # The app migrates the database while it starts, so allow up to five
         # minutes. A failed check fails the run, and GitHub emails whoever
-        # triggered it.
+        # triggered it. With a slot, a failure here stops the release before
+        # anything is swapped.
+        env:
+          HOST: ${{ vars.SLOT_NAME && format('{0}-{1}', vars.WEBAPP_NAME, vars.SLOT_NAME) || vars.WEBAPP_NAME }}
+        run: |
+          url="https://$HOST.azurewebsites.net/health"
+          for attempt in $(seq 1 30); do
+            status=$(curl -s -o body.txt -w "%{http_code}" "$url" || true)
+            echo "Attempt $attempt: HTTP $status $(cat body.txt 2>/dev/null)"
+            if [ "$status" = "200" ] && grep -q "Healthy" body.txt; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$url did not report Healthy within five minutes"
+          exit 1
+      - name: Swap the slot into production
+        # The checked release becomes live, and the slot keeps the previous one,
+        # so the Rollback workflow can swap it back.
+        if: vars.SLOT_NAME != ''
+        run: |
+          group=$(az webapp list --query "[?name=='${{ vars.WEBAPP_NAME }}'].resourceGroup | [0]" -o tsv)
+          az webapp deployment slot swap --resource-group "$group" --name "${{ vars.WEBAPP_NAME }}" \
+            --slot "${{ vars.SLOT_NAME }}" --target-slot production
+      - name: Health check after the swap
+        if: vars.SLOT_NAME != ''
         run: |
           url="https://${{ vars.WEBAPP_NAME }}.azurewebsites.net/health"
           for attempt in $(seq 1 30); do
@@ -93,5 +121,5 @@ jobs:
             fi
             sleep 10
           done
-          echo "::error::$url did not report Healthy within five minutes"
+          echo "::error::$url did not report Healthy within five minutes of the swap. Run the Rollback workflow to swap back."
           exit 1

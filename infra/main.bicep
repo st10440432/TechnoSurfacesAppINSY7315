@@ -6,6 +6,16 @@ param environment string
 
 param location string = resourceGroup().location
 
+@description('Start of the two App Service names, which must be unique across Azure. A new subscription needs a new prefix while the old apps still exist.')
+param appPrefix string = 'tsqa-app'
+
+@description('App Service plan tier, shared by both environments, so pass the same value to both. S1 (Standard) adds a staging slot to production, so a release is swapped in and can be swapped back. A plan with a slot cannot move to B1 until the slot is deleted.')
+@allowed([
+  'B1'
+  'S1'
+])
+param planSku string = 'B1'
+
 param sqlAdminLogin string = 'tsadmin'
 
 @description('SQL admin password. Required on the first deployment, which creates the server. Not used when entraOnlyAuthentication is true.')
@@ -41,17 +51,19 @@ param entraOnlyAuthentication bool = false
 @description('Create the monthly budget. Set to false if the subscription does not support budgets.')
 param createBudget bool = true
 
-@description('Monthly budget in the subscription billing currency. 54 USD is the client ceiling of R1 000 at the R18.50 per USD rate used in Task 1 section 10.')
+@description('Monthly budget in the subscription billing currency. 54 USD is the client ceiling of R1 000 at the R18.50 per USD rate used in Task 1 section 10; a subscription billed in rand takes 1000.')
 param budgetAmount int = 54
 
 @description('First day of the current month, yyyy-MM-01. A budget cannot start in the past.')
 param budgetStartDate string = '2026-10-01'
 
 var isProd = environment == 'production'
+var useSlot = isProd && planSku == 'S1'
+var slotName = 'staging'
 var unique = uniqueString(resourceGroup().id)
 
 var planName = 'tsqa-plan'
-var appName = 'tsqa-app-${environment}'
+var appName = '${appPrefix}-${environment}'
 var sqlServerName = 'tsqa-sql-${unique}'
 var databaseName = 'tsqa-db-${environment}'
 var kvName = 'tsqa-kv-${unique}'
@@ -347,13 +359,71 @@ resource ai 'Microsoft.Insights/components@2020-02-02' = {
 // App Service
 // -----------------------------------------------------------------------------
 
+// The production app and its slot run the same configuration, so a swap moves
+// the code and nothing else.
+var siteConfig = {
+  linuxFxVersion: linuxRuntime
+  minTlsVersion: '1.2'
+  alwaysOn: true
+  appSettings: concat([
+    {
+      name: 'ASPNETCORE_ENVIRONMENT'
+      value: isProd ? 'Production' : 'Staging'
+    }
+    {
+      name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+      value: ai.properties.ConnectionString
+    }
+    {
+      // The App Service agent records each request and its SQL calls, with no
+      // SDK in the app. Production had it switched on in the portal only.
+      name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+      value: '~3'
+    }
+    {
+      name: 'XDT_MicrosoftApplicationInsights_Mode'
+      value: 'recommended'
+    }
+    {
+      name: 'ConnectionStrings__DefaultConnection'
+      value: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/app-connection-${environment})'
+    }
+    {
+      // Gives the app up to ten minutes to start, which covers the first
+      // start on an empty database: migrations plus loading the catalogue.
+      name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
+      value: '600'
+    }
+    {
+      // The database has no public endpoint, so the app applies migrations
+      // through the private endpoint when it starts.
+      name: 'Database__MigrateOnStartup'
+      value: 'true'
+    }
+    {
+      // Lets the sign-in rate limiter see the real client address behind the
+      // App Service front end.
+      name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED'
+      value: 'true'
+    }
+    {
+      name: 'Seed__DemoAccounts'
+      value: demoAccounts ? 'true' : 'false'
+    }
+    {
+      name: 'Seed__DevelopmentPassword'
+      value: demoAccounts ? '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/seed-demo-password)' : ''
+    }
+  ], initialAdminSettings)
+}
+
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: planName
   location: location
   kind: 'linux'
   sku: {
-    name: 'B1'
-    tier: 'Basic'
+    name: planSku
+    tier: planSku == 'S1' ? 'Standard' : 'Basic'
   }
   properties: {
     reserved: true
@@ -384,52 +454,11 @@ resource web 'Microsoft.Web/sites@2023-01-01' = {
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
+    // The app keeps nothing on the server between requests, so the ARRAffinity
+    // cookies only added the two ZAP low findings (risk R17).
+    clientAffinityEnabled: false
     virtualNetworkSubnetId: webSubnetId
-    siteConfig: {
-      linuxFxVersion: linuxRuntime
-      minTlsVersion: '1.2'
-      alwaysOn: true
-      appSettings: concat([
-        {
-          name: 'ASPNETCORE_ENVIRONMENT'
-          value: isProd ? 'Production' : 'Staging'
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: ai.properties.ConnectionString
-        }
-        {
-          name: 'ConnectionStrings__DefaultConnection'
-          value: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/app-connection-${environment})'
-        }
-        {
-          // Gives the app up to ten minutes to start, which covers the first
-          // start on an empty database: migrations plus loading the catalogue.
-          name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
-          value: '600'
-        }
-        {
-          // The database has no public endpoint, so the app applies migrations
-          // through the private endpoint when it starts.
-          name: 'Database__MigrateOnStartup'
-          value: 'true'
-        }
-        {
-          // Lets the sign-in rate limiter see the real client address behind the
-          // App Service front end.
-          name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED'
-          value: 'true'
-        }
-        {
-          name: 'Seed__DemoAccounts'
-          value: demoAccounts ? 'true' : 'false'
-        }
-        {
-          name: 'Seed__DevelopmentPassword'
-          value: demoAccounts ? '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/seed-demo-password)' : ''
-        }
-      ], initialAdminSettings)
-    }
+    siteConfig: siteConfig
   }
 }
 
@@ -443,6 +472,49 @@ resource kvReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
       '4633458b-17de-408a-b874-0445c86b69e6'
     )
     principalId: web.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Production staging slot (Standard tier only)
+// -----------------------------------------------------------------------------
+
+// A release is deployed here, checked on /health and then swapped into
+// production, so the live site never serves a version that is still starting.
+// After a swap the slot holds the previous release, and swapping back is the
+// rollback. It uses the production database and the same settings as production.
+resource slot 'Microsoft.Web/sites/slots@2023-01-01' = if (useSlot) {
+  parent: web
+  name: slotName
+  location: location
+  kind: 'app,linux'
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${sqlIdentity.id}': {}
+    }
+  }
+  properties: {
+    serverFarmId: plan.id
+    httpsOnly: true
+    clientAffinityEnabled: false
+    virtualNetworkSubnetId: webSubnetId
+    siteConfig: siteConfig
+  }
+}
+
+// The slot has its own system-assigned identity, so it needs its own access to
+// the Key Vault references.
+resource slotKvReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (useSlot) {
+  name: guid(kv.id, web.id, slotName, 'kv-secrets-user')
+  scope: kv
+  properties: {
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '4633458b-17de-408a-b874-0445c86b69e6'
+    )
+    principalId: slot!.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -542,7 +614,9 @@ resource availAlert 'Microsoft.Insights/metricalerts@2018-03-01' = {
 }
 
 // -----------------------------------------------------------------------------
-// Budget alert: warns at 80 percent of the client's monthly ceiling
+// Budget alert: warns when the month is forecast to pass 90 percent of the
+// client's ceiling, and again when it passes the ceiling. The running cost is
+// about 82 percent of it (October 2026), so an 80 percent alert fired every month.
 // -----------------------------------------------------------------------------
 
 resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (createBudget) {
@@ -555,10 +629,19 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (createBudget) {
       startDate: budgetStartDate
     }
     notifications: {
-      actualOver80Percent: {
+      forecastOver90Percent: {
         enabled: true
         operator: 'GreaterThan'
-        threshold: 80
+        threshold: 90
+        thresholdType: 'Forecasted'
+        contactEmails: [
+          alertEmail
+        ]
+      }
+      actualOver100Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 100
         thresholdType: 'Actual'
         contactEmails: [
           alertEmail
@@ -575,6 +658,7 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (createBudget) {
 output appName string = appName
 output appHostname string = appHostname
 output healthUrl string = healthUrl
+output slotName string = useSlot ? slotName : ''
 output keyVaultName string = kvName
 output sqlServerName string = sqlServerName
 output databaseName string = databaseName

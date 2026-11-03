@@ -451,6 +451,38 @@
         });
     }
 
+    // The show or hide button beside a password field (_ShowPassword):
+    // <button type="button" data-password-toggle="Password" aria-pressed="false">
+    // The label stays "Show password" and aria-pressed says whether it is on, so a
+    // screen reader reads "Show password, pressed" rather than two states at once.
+    // Focus stays on the button. Every field goes back to hidden before its form is
+    // sent, so the browser's password manager still sees a password field.
+    function wirePasswordToggles() {
+        var toggles = document.querySelectorAll("[data-password-toggle]");
+        if (toggles.length === 0) return;
+
+        function setShown(button, shown) {
+            var input = document.getElementById(button.dataset.passwordToggle);
+            if (!input) return;
+            input.type = shown ? "text" : "password";
+            button.setAttribute("aria-pressed", shown ? "true" : "false");
+            var use = button.querySelector("use");
+            if (use) use.setAttribute("href", shown ? "#i-eye-off" : "#i-eye");
+        }
+
+        toggles.forEach(function (button) {
+            button.addEventListener("click", function () {
+                setShown(button, button.getAttribute("aria-pressed") !== "true");
+            });
+        });
+
+        document.addEventListener("submit", function (e) {
+            e.target.querySelectorAll("[data-password-toggle]").forEach(function (button) {
+                setShown(button, false);
+            });
+        }, true);
+    }
+
     // A table too wide for its box scrolls sideways inside it. Only while it does, the
     // box takes focus so the arrow keys can scroll it, and is named after its table's
     // caption for a screen reader. Whether a table overflows depends on the screen
@@ -518,17 +550,27 @@
         });
     }
 
+    // Sets the dashboard bars from data-fill. Setting a style from a script is
+    // allowed by the CSP; a style="" attribute in the markup would need 'unsafe-inline'.
+    function wireFillBars() {
+        document.querySelectorAll("[data-fill]").forEach(function (el) {
+            el.style.setProperty("--fill", el.dataset.fill + "%");
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         wireNavigation();
         wireActionButtons();
         wireApiForms();
         wireAutoSubmit();
         wirePrint();
+        wirePasswordToggles();
         wireScrollableTables();
         wireConfirmForms();
         wireFormBusy();
         showStoredFlash();
         focusOnLoad();
+        wireFillBars();
     });
 
     window.TS = {

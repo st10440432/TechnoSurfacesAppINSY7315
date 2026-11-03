@@ -2,11 +2,24 @@
 @*
     The customer list (US-15), searchable by name or Pastel account code, with a
     form to add a customer. Adding posts to /api/customers through app.js and
-    opens the new customer.
+    opens the new customer. The list comes a page at a time, like the quote list,
+    because the client's Pastel list runs to about 1 560 customers; the page links
+    keep the search.
 *@
 @{
-    var count = Model.Customers.Count;
+    var pages = Model.Page;
+    var count = pages.TotalCount;
     var filtered = Model.Search is not null;
+    var paged = pages.PageCount > 1;
+    var range = paged ? $" Showing {pages.First} to {pages.Last}." : "";
+
+    Dictionary<string, string> PageLink(int number)
+    {
+        var values = new Dictionary<string, string> { ["page"] = number.ToString() };
+        if (Model.Search is { } search) values["q"] = search;
+        if (Model.IncludeInactive) values["inactive"] = "true";
+        return values;
+    }
 }
 
 <header class="page-head">
@@ -14,6 +27,14 @@
         <h1>Customers</h1>
         <p>The companies quotes are billed to, and the people they are addressed to.</p>
     </div>
+    @if (Model.CanImport)
+    {
+        <div class="page-head-actions">
+            <a class="btn btn-secondary" asp-action="Import">
+                <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Import from Pastel
+            </a>
+        </div>
+    }
 </header>
 
 <div class="grid grid-main">
@@ -39,7 +60,7 @@
             </div>
         </form>
 
-        <p class="list-count" role="status">@count customer@(count == 1 ? "" : "s")@(filtered ? $" match \"{Model.Search}\"" : "").</p>
+        <p class="list-count" role="status">@count customer@(count == 1 ? "" : "s")@(filtered ? $" match \"{Model.Search}\"" : "").@range</p>
 
         @if (count == 0)
         {
@@ -96,6 +117,29 @@
                     </tbody>
                 </table>
             </div>
+
+            @if (paged)
+            {
+                <nav class="pager" aria-label="Pages of customers">
+                    @if (pages.HasPrevious)
+                    {
+                        <a class="btn btn-secondary" asp-action="Index" asp-all-route-data="PageLink(pages.Page - 1)">Previous page</a>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+                    <p class="pager-status">Page @pages.Page of @pages.PageCount</p>
+                    @if (pages.HasNext)
+                    {
+                        <a class="btn btn-secondary" asp-action="Index" asp-all-route-data="PageLink(pages.Page + 1)">Next page</a>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+                </nav>
+            }
         }
     </section>
 

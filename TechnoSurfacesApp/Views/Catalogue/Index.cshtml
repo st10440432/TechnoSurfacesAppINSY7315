@@ -5,8 +5,6 @@
 *@
 @{
     var count = Model.Rows.Count;
-    bool IsStale(DateOnly? from) =>
-        from is { } f && Model.Today.DayNumber - f.DayNumber > TechnoSurfacesApp.Controllers.CatalogueController.StaleAfterDays;
 }
 
 <header class="page-head">
@@ -27,7 +25,7 @@
         <svg class="ico" aria-hidden="true"><use href="#i-alert" /></svg>
         <div>
             <strong>Some price lists are over a year old.</strong>
-            @string.Join("; ", Model.StaleSuppliers.Select(s => $"{s.Supplier}, from {Fmt.Date(s.NewestPrice)}")).
+            @string.Join("; ", Model.StaleSuppliers.Select(s => $"{s.Supplier}, dated {Fmt.Date(s.ListDated)}")).
             Check these prices with the supplier before quoting from them.
         </div>
     </div>
@@ -119,7 +117,7 @@
                                     {
                                         <span class="strong">@Fmt.Rand(sheet)</span>
                                         <span class="sub">@Fmt.Rand(r.PricePerSqm!.Value) per m², since @Fmt.Date(r.PriceFrom!.Value)</span>
-                                        @if (IsStale(r.PriceFrom))
+                                        @if (Model.HasOldPriceList(r.Supplier))
                                         {
                                             <span class="badge badge-warn stacked">Price list over a year old</span>
                                         }
