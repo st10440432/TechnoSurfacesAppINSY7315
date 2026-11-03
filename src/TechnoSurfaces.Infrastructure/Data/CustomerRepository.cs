@@ -14,7 +14,26 @@ public sealed class CustomerRepository : ICustomerRepository
 
     public CustomerRepository(TechnoSurfacesDbContext db) => _db = db;
 
-    public async Task<IReadOnlyList<CustomerSummary>> SearchAsync(string? search, bool includeInactive, CancellationToken ct = default)
+    public async Task<IReadOnlyList<CustomerSummary>> SearchAsync(string? search, bool includeInactive, CancellationToken ct = default) =>
+        await Summaries(Filtered(search, includeInactive).OrderBy(c => c.Name)).ToListAsync(ct);
+
+    public async Task<CustomerPage> SearchPageAsync(string? search, bool includeInactive, int page, int pageSize, CancellationToken ct = default)
+    {
+        if (pageSize < 1)
+            throw new ArgumentOutOfRangeException(nameof(pageSize), "A page holds at least one customer.");
+
+        var query = Filtered(search, includeInactive);
+        var total = await query.CountAsync(ct);
+        page = Math.Clamp(page, 1, Math.Max(1, (total + pageSize - 1) / pageSize));
+
+        var rows = await Summaries(query.OrderBy(c => c.Name).ThenBy(c => c.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize))
+            .ToListAsync(ct);
+        return new CustomerPage(rows, total, page, pageSize);
+    }
+
+    private IQueryable<Customer> Filtered(string? search, bool includeInactive)
     {
         var query = _db.Customers.AsNoTracking();
 
@@ -27,13 +46,13 @@ public sealed class CustomerRepository : ICustomerRepository
         if (search is not null)
             query = query.Where(c => c.Name.Contains(search) || (c.AccountCode != null && c.AccountCode.Contains(search)));
 
-        return await query
-            .OrderBy(c => c.Name)
-            .Select(c => new CustomerSummary(
-                c.Id, c.Name, c.AccountCode, c.City, c.IsActive,
-                c.Contacts.Count(k => k.IsActive)))
-            .ToListAsync(ct);
+        return query;
     }
+
+    private static IQueryable<CustomerSummary> Summaries(IQueryable<Customer> customers) =>
+        customers.Select(c => new CustomerSummary(
+            c.Id, c.Name, c.AccountCode, c.City, c.IsActive,
+            c.Contacts.Count(k => k.IsActive)));
 
     public async Task<IReadOnlyList<CustomerChoice>> ChoicesAsync(CancellationToken ct = default)
     {
@@ -64,6 +83,12 @@ public sealed class CustomerRepository : ICustomerRepository
 
     public Task<bool> AccountCodeTakenAsync(string accountCode, int? exceptCustomerId, CancellationToken ct = default) =>
         _db.Customers.AnyAsync(c => c.AccountCode == accountCode && c.Id != exceptCustomerId, ct);
+
+    public async Task<IReadOnlyList<ExistingCustomerKey>> ExistingKeysAsync(CancellationToken ct = default) =>
+        await _db.Customers
+            .AsNoTracking()
+            .Select(c => new ExistingCustomerKey(c.AccountCode, c.Name))
+            .ToListAsync(ct);
 
     public void Add(Customer customer) => _db.Customers.Add(customer);
 

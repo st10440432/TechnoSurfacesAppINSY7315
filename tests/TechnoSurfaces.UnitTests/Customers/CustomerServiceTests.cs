@@ -190,4 +190,35 @@ public sealed class CustomerServiceTests : IAsyncLifetime
         Assert.Equal(CustomerOutcome.NotFound, (await WithServiceAsync(s =>
             s.AddContactAsync(999, new ContactInput("Contact")))).Outcome);
     }
+
+    [Fact]
+    public async Task The_customer_list_comes_a_page_at_a_time_in_name_order()
+    {
+        for (var i = 1; i <= CustomerService.ListPageSize + 3; i++)
+            await CreateAsync($"Customer {i:00}", $"PAG{i:00}");
+
+        var first = await WithServiceAsync(s => s.ListPageAsync(null, false, 1));
+        var second = await WithServiceAsync(s => s.ListPageAsync(null, false, 2));
+
+        Assert.Equal(CustomerService.ListPageSize + 3, first.TotalCount);
+        Assert.Equal(2, first.PageCount);
+        Assert.Equal(CustomerService.ListPageSize, first.Customers.Count);
+        Assert.Equal("Customer 01", first.Customers[0].Name);
+        Assert.Equal(["Customer 26", "Customer 27", "Customer 28"], second.Customers.Select(c => c.Name));
+        Assert.Equal((26, 28), (second.First, second.Last));
+    }
+
+    [Fact]
+    public async Task A_page_past_the_end_shows_the_last_page_and_the_search_is_counted()
+    {
+        for (var i = 1; i <= 30; i++)
+            await CreateAsync(i % 2 == 0 ? $"Even {i:00}" : $"Odd {i:00}");
+
+        var past = await WithServiceAsync(s => s.ListPageAsync(null, false, 99));
+        var evens = await WithServiceAsync(s => s.ListPageAsync("Even", false, 1));
+
+        Assert.Equal(2, past.Page);
+        Assert.Equal(5, past.Customers.Count);
+        Assert.Equal((15, 1), (evens.TotalCount, evens.PageCount));
+    }
 }

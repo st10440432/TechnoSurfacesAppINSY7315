@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using TechnoSurfaces.Application.Catalogue;
@@ -66,7 +66,7 @@ public class QuotesController : AppController
     //  Quote list
     // ======================================================================
 
-    public async Task<IActionResult> Index(string? status, int? customerId, bool mine, string? q, CancellationToken ct)
+    public async Task<IActionResult> Index(string? status, int? customerId, bool mine, string? q, int? page, CancellationToken ct)
     {
         var filter = new QuoteListFilter(
             StatusText.All.Contains(status) ? status : null,
@@ -76,7 +76,7 @@ public class QuotesController : AppController
 
         var vm = new QuoteListVm
         {
-            Quotes = await _workflow.ListAsync(filter, ct),
+            Page = await _workflow.ListPageAsync(filter, page ?? 1, ct),
             Customers = await _customers.ListAsync(includeInactive: true, ct: ct),
             Status = filter.Status,
             CustomerId = filter.CustomerId,
@@ -169,6 +169,29 @@ public class QuotesController : AppController
         };
 
         SetPage("Costing sheet", "quotes", QuotesCrumb, new Crumb(detail.Reference));
+        return View(vm);
+    }
+
+    /// <summary>
+    /// The costing sheet as a printout, for checking the costing on paper before the
+    /// customer quotation is written (client request). Read only, with every line and
+    /// total as plain text. Opened by whoever can open the costing sheet, from the same
+    /// data, so the figures match the sheet to the cent.
+    /// </summary>
+    public async Task<IActionResult> CostingPrint(int id, CancellationToken ct)
+    {
+        if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
+            return QuoteNotFound(id);
+
+        var vm = new CostingPrintVm
+        {
+            Quote = detail,
+            Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
+            PrintedOn = Today
+        };
+
+        SetPage("Costing printout", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })));
         return View(vm);
     }
 
@@ -307,12 +330,21 @@ public class QuotesController : AppController
         if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return QuoteNotFound(id);
 
+        // The suppliers whose prices are on the version being approved (Task 1 2.4).
+        var materialPriceIds = costing.Quote!.CurrentVersion!.CostingLines
+            .Where(l => l.MaterialPriceId is not null)
+            .Select(l => l.MaterialPriceId!.Value)
+            .Distinct()
+            .ToList();
+
         var vm = new ReviewVm
         {
             Quote = detail,
             Sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!),
             Check = await _quotation.CheckAsync(id, ct),
-            Actions = await ActionsForAsync(costing.Quote!)
+            Actions = await ActionsForAsync(costing.Quote!),
+            Suppliers = await _catalogue.SuppliersForMaterialPricesAsync(materialPriceIds, ct),
+            Today = Today
         };
 
         SetPage("Review quote", "approvals",
@@ -493,7 +525,10 @@ public sealed record PricePreviewResult(bool Resolved, decimal? UnitPrice, strin
 
 public sealed class QuoteListVm
 {
-    public IReadOnlyList<QuoteSummary> Quotes { get; init; } = [];
+    /// <summary>The quotes on this page, and where the page sits in the whole list.</summary>
+    public QuotePage Page { get; init; } = new([], 0, 1, QuoteWorkflowService.ListPageSize);
+
+    public IReadOnlyList<QuoteSummary> Quotes => Page.Quotes;
     public IReadOnlyList<CustomerSummary> Customers { get; init; } = [];
     public string? Status { get; init; }
     public int? CustomerId { get; init; }
@@ -569,6 +604,17 @@ public sealed class CostingVm
     public QuotationCheck? Check { get; init; }
 }
 
+/// <summary>The costing sheet printout. Cost prices, discounts and markup: internal only.</summary>
+public sealed class CostingPrintVm
+{
+    public QuoteDetail Quote { get; init; } = null!;
+    public CostingSheetDto Sheet { get; init; } = null!;
+    public DateOnly PrintedOn { get; init; }
+}
+
+/// <summary>One table of rate lines on the printout. Transport is a line of the table added after the markup.</summary>
+public sealed record CostingPrintRatesVm(string Caption, IReadOnlyList<CostingLineDto> Lines, decimal Transport = 0);
+
 public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null);
 
 /// <summary>
@@ -606,6 +652,14 @@ public sealed class ReviewVm
     public CostingSheetDto Sheet { get; init; } = null!;
     public QuotationCheck? Check { get; init; }
     public QuoteActions Actions { get; init; } = null!;
+
+    /// <summary>The suppliers of the materials on the current version.</summary>
+    public IReadOnlyList<SupplierOption> Suppliers { get; init; } = [];
+    public DateOnly Today { get; init; }
+
+    /// <summary>The suppliers on this quote whose price list is over a year old (Task 1 2.4).</summary>
+    public IReadOnlyList<SupplierOption> OldPriceLists =>
+        Suppliers.Where(s => TechnoSurfaces.Domain.Catalogue.PriceListAge.IsOld(s.PriceListDated, Today)).ToList();
 }
 
 public sealed class VersionsVm

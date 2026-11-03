@@ -158,4 +158,37 @@ public sealed class AuditTrailServiceTests : IAsyncLifetime
         Assert.Single(await _service.ForQuoteReferenceAsync("TS-REF-1"));
         Assert.Empty(await _service.ForQuoteReferenceAsync("TS-DOES-NOT-EXIST"));
     }
+
+    [Fact]
+    public async Task A_quotes_history_includes_its_quotation_lines_and_invoice()
+    {
+        var customer = new Customer { Name = "Quotation Customer" };
+        _db.Customers.Add(customer);
+        await _db.SaveChangesAsync();
+
+        var contact = new Contact { CustomerId = customer.Id, FullName = "Quotation Contact" };
+        _db.Contacts.Add(contact);
+        await _db.SaveChangesAsync();
+
+        var quote = new Quote("TS-TEST-3", customer.Id, contact.Id, EstimatorId, new DateOnly(2026, 10, 1));
+        var version = quote.StartNewVersion(EstimatorId, 30m);
+        _db.Quotes.Add(quote);
+        await _db.SaveChangesAsync();
+
+        var v = version.Id.ToString();
+        var q = quote.Id.ToString();
+        await AddAsync(nameof(QuotationLine), "9101", nameof(QuotationLine.QuoteVersionId), null, v, EstimatorId, Noon);
+        await AddAsync(nameof(QuotationLine), "9101", nameof(QuotationLine.AmountExVat), "12500.00", "11800.00", MdId, Noon.AddMinutes(1));
+        await AddAsync(nameof(InvoiceRecord), "9201", nameof(InvoiceRecord.QuoteId), null, q, MdId, Noon.AddMinutes(2));
+
+        // A quotation line on some other quote's version must not appear.
+        await AddAsync(nameof(QuotationLine), "9102", nameof(QuotationLine.QuoteVersionId), null, "99999", EstimatorId, Noon);
+
+        var rows = await _service.ForQuoteAsync(quote.Id);
+
+        Assert.Equal(3, rows.Count);
+        Assert.Contains(rows, r => r.EntityName == nameof(QuotationLine) && r.NewValue == "11800.00");
+        Assert.Contains(rows, r => r.EntityName == nameof(InvoiceRecord) && r.EntityKey == "9201");
+        Assert.DoesNotContain(rows, r => r.EntityKey == "9102");
+    }
 }
