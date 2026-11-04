@@ -97,7 +97,14 @@
             }
             @if (bill.Extras.Count > 0)
             {
+                @* The job's own amounts, under their own heading so they are not read as the last section's. *@
                 <tbody>
+                    @if (bill.ExtrasHeading is not null)
+                    {
+                        <tr class="doc-bill-section">
+                            <th scope="rowgroup" colspan="6">@bill.ExtrasHeading</th>
+                        </tr>
+                    }
                     @foreach (var e in bill.Extras)
                     {
                         <tr>

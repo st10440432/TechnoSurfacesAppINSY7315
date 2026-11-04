@@ -59,7 +59,10 @@ public sealed record CustomerQuotationLine(int Id, string? Room, string Descript
 /// item at its rate under its section, then any amount for the whole job that is not
 /// spread over the rates.
 /// </summary>
-public sealed record CustomerBill(IReadOnlyList<CustomerBillSection> Sections, IReadOnlyList<CustomerBillExtra> Extras);
+/// The amounts for the whole job are a section of their own, under ExtrasHeading,
+/// so they are not read as part of the last items' section.
+public sealed record CustomerBill(IReadOnlyList<CustomerBillSection> Sections, IReadOnlyList<CustomerBillExtra> Extras,
+    string? ExtrasHeading = null);
 
 /// <summary>Items listed together under a heading, such as Worktops. The heading is null for items with no section.</summary>
 public sealed record CustomerBillSection(string? Heading, IReadOnlyList<CustomerBillItem> Items);
