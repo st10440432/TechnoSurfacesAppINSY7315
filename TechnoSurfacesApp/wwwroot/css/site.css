@@ -1138,6 +1138,10 @@ table.doc-lines .r { text-align: right; font-variant-numeric: tabular-nums; whit
     .doc { max-width: none; padding: 0; border: 0; box-shadow: none; }
     .card { box-shadow: none; }
     table.doc-lines th { background: var(--brand-navy) !important; color: var(--on-dark) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table.doc-lines tr.doc-bill-section th { background: var(--brand-navy-tint) !important; color: var(--brand-navy) !important; }
+    .doc .doc-scroll { overflow: visible; }
+    .doc .doc-scroll table.doc-bill, .doc .doc-scroll table.doc-summary { min-width: 0; }
+    table.doc-lines tbody th.doc-row-head { background: none !important; color: var(--ink) !important; }
     table.doc-lines tr, .doc-terms li, .doc-sign { break-inside: avoid; }
     a { color: var(--ink); text-decoration: none; }
 }
@@ -1218,6 +1222,18 @@ table.data .input-sm { width: 6.5rem; margin-left: auto; }
 /* The material cascade and the price it finds */
 h3.section-label { margin: 0 0 var(--space-1); }
 .card-body-top { border-top: 1px solid var(--line); }
+/* The items of a quote on the costing sheet: the one on screen is marked, and the forms for it and a new item sit one above the other. */
+/* The items on a quote: the one open below stands out, with a bar down its left edge,
+   and the forms to change it or add another stay folded until opened. */
+.item-forms { border-top: 1px solid var(--line); }
+.item-disclosure + .item-disclosure { border-top: 1px solid var(--line); }
+.disclosure-chevron { margin-left: auto; transition: transform 0.15s ease; }
+.disclosure[open] > summary .disclosure-chevron { transform: rotate(180deg); }
+tr.is-current > td { background: var(--brand-navy-tint); }
+tr.is-current > td:first-child { box-shadow: inset 4px 0 0 var(--brand-green-ink); }
+tr.is-current .row-link { font-weight: var(--weight-bold); color: var(--brand-navy); }
+.item-open { margin-left: var(--space-2); vertical-align: 0.1em; }
+@media (prefers-reduced-motion: reduce) { .disclosure-chevron { transition: none; } }
 .from-costing { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .cascade-qty { margin-top: var(--space-4); }
 /* The Add to the costing button has no label, so it drops by a label's height to sit level with
@@ -1272,6 +1288,22 @@ address.doc-co { font-style: normal; }
 .doc-col-item  { width: 22%; }
 .doc-col-qty   { width: 8%; }
 .doc-col-total { width: 18%; }
+
+/* A bill of quantities: narrow number and unit columns, a section heading over its items. */
+.doc-scroll { overflow-x: auto; margin-bottom: var(--space-5); }
+.doc-scroll table.doc-bill { min-width: 34rem; margin-bottom: 0; }
+
+/* The summary of sheets and adhesive: a column per material, row headings in the body. */
+.doc-scroll table.doc-summary { min-width: 40rem; margin-bottom: 0; }
+table.doc-summary th.c { text-align: center; }
+table.doc-summary th.r { text-align: right; }
+table.doc-summary th.doc-col-material { min-width: 7rem; text-transform: none; letter-spacing: 0; vertical-align: bottom; }
+table.doc-lines tbody th.doc-row-head { padding: var(--space-3); background: none; color: var(--ink); font-size: inherit; font-weight: var(--weight-regular, 400); text-align: left; text-transform: none; letter-spacing: 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.doc-summary tbody.doc-summary-totals tr:first-child > * { border-top: 2px solid var(--brand-navy); }
+table.doc-bill .doc-col-item  { width: 8%; }
+table.doc-bill .doc-col-unit  { width: 7%; }
+table.doc-bill .doc-col-total { width: 14%; }
+table.doc-lines tr.doc-bill-section th { background: var(--brand-navy-tint); color: var(--brand-navy); font-size: var(--text-sm); }
 .doc-validity { margin: var(--space-5) 0 0; }
 table.doc-warranty { width: min(100%, 30rem); margin-top: var(--space-2); border-collapse: collapse; font-size: var(--text-xs); }
 table.doc-warranty th, table.doc-warranty td { padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--line); text-align: left; }
@@ -1292,6 +1324,9 @@ table.doc-warranty thead th { color: var(--ink-secondary); text-transform: upper
     font-size: var(--text-sm);
 }
 .doc-internal-foot { margin: var(--space-6) 0 0; }
+/* An item of a quote with several on the costing printout. Printed one item to a page, as the client's tender costing is. */
+.doc-item { margin: var(--space-8) 0 var(--space-2); padding-top: var(--space-4); border-top: 2px solid var(--brand-navy); font-size: var(--text-md); color: var(--brand-navy); }
+@media print { .costing-print .doc-item:not(:first-of-type) { break-before: page; } }
 .doc-section { margin: var(--space-6) 0 var(--space-2); font-size: var(--text-sm); color: var(--brand-navy); text-transform: uppercase; letter-spacing: 0.06em; }
 .costing-print table.doc-lines { font-size: var(--text-sm); }
 /* The description gets the room; the figures' headings wrap instead of widening their columns. */

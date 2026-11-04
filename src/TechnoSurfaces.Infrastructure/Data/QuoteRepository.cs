@@ -61,6 +61,7 @@ public sealed class QuoteRepository : IQuoteRepository
     private static IQueryable<Quote> WithEveryVersion(IQueryable<Quote> quotes) =>
         quotes
             .Include(q => q.Versions).ThenInclude(v => v.CostingLines)
+            .Include(q => q.Versions).ThenInclude(v => v.Items)
             .Include(q => q.Versions).ThenInclude(v => v.QuotationLines)
             .Include(q => q.Versions).ThenInclude(v => v.Terms)
             .Include(q => q.Versions).ThenInclude(v => v.Warranties);
@@ -69,6 +70,7 @@ public sealed class QuoteRepository : IQuoteRepository
     private static IQueryable<Quote> WithCurrentVersion(IQueryable<Quote> quotes) =>
         quotes
             .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.CostingLines)
+            .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.Items)
             .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.QuotationLines)
             .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.Terms)
             .Include(q => q.Versions.OrderByDescending(v => v.VersionNo).Take(1)).ThenInclude(v => v.Warranties);
@@ -85,6 +87,7 @@ public sealed class QuoteRepository : IQuoteRepository
         await _db.Entry(quote).Collection(q => q.Versions).Query()
             .Where(v => v.VersionNo < current.VersionNo)
             .Include(v => v.CostingLines)
+            .Include(v => v.Items)
             .Include(v => v.QuotationLines)
             .Include(v => v.Terms)
             .Include(v => v.Warranties)
@@ -100,6 +103,17 @@ public sealed class QuoteRepository : IQuoteRepository
     public void RemoveCostingLine(CostingLine line) => _db.CostingLines.Remove(line);
 
     public void RemoveQuotationLine(QuotationLine line) => _db.QuotationLines.Remove(line);
+
+    public void RemoveItem(QuoteItem item) => _db.QuoteItems.Remove(item);
+
+    public async Task LoadBufferStockAsync(QuoteVersion version, CancellationToken ct = default)
+    {
+        // A version not saved yet has nothing to read.
+        if (version.Id != 0)
+            await _db.Entry(version).Collection(v => v.BufferStock).LoadAsync(ct);
+    }
+
+    public void RemoveBufferStock(QuoteBufferStock buffer) => _db.Remove(buffer);
 
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

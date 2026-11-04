@@ -8,8 +8,8 @@ This web application replaces that sheet. The estimator picks a material by supp
 
 | | |
 |---|---|
-| Production | https://tsqa-app-production.azurewebsites.net |
-| Staging | https://tsqa-app-staging.azurewebsites.net |
+| Production | https://technoproduction.azurewebsites.net |
+| Staging | https://technostaging.azurewebsites.net |
 | Health check | `/health` on either address |
 | Presentation | https://www.youtube.com/watch?v=EoP8_cdqwwg |
 
@@ -78,6 +78,32 @@ All twenty screens from the Task 1 journey maps are built, plus a few the build 
 - Running the app: rate card, users, quotation terms, audit trail
 
 Six screens are for the Managing Director only and do not appear in an estimator's menu. An estimator who opens one by its address gets a read-only view, or for users and the audit trail a page saying who it is for, rather than an error page, as the Task 1 journey map specified.
+
+### Items on a quote
+
+A quote is made of items, as the client costs a tender with one spreadsheet page per item: a kitchen, a vanity, or one item of a bill of quantities such as a floor unit. A new quote starts with one item, so a small job is costed exactly as before.
+
+- Each item has its own costing sheet and its own markup. Its sandpaper and silicon follow its own material, not the whole job's.
+- An item's total is for one of it. The number needed, such as three of the same reception counter, counts it that many times. Transport is added once for the job.
+- The costing sheet shows one item at a time, with the list of items above it; the printout gives every item in full, one to a printed page, then the whole quote.
+- A new item starts at the markup of the item before it. Removing an item removes its costing and the quotation lines copied from it; the last item stays.
+- Allowances, such as travel, inspection and time away for a tender out of town, are one amount for the job, typed beside transport and added at cost.
+- An item can be priced per square metre of its material instead of by its markup, as the client sometimes prices a job. Its cut-outs and grooves are still added at cost. The list of items shows what each comes to per square metre, and the item's form what its costing comes to per square metre at its markup, to price from.
+
+### Sheets and adhesive
+
+The costing sheet's Sheets and adhesive page is the analysis the client draws up for a tender's order. Internal, as it carries cost prices.
+
+- For every item, the sheets of each material and the seam kits joining them, as many times as the item is needed. Each material, as the costing sheet names it with its colour and sheet size, is a column.
+- Per material: the sheets for the items, the buffer stock typed by the estimator, the sheets to order, the cost of a sheet after any supplier discount, and the purchase cost; then the total purchase cost.
+- Seam kits are the rate card's Seamkit lines. An item of one material uses its seam kits on that material; the seam kits of an item of several materials are counted on their own, as they cannot be told apart.
+
+### Bill of quantities
+
+The customer quotation has two layouts, chosen per quote on the quotation page. Written lines, one per room or element, suit a kitchen or a vanity. A bill of quantities lists the work as the client sends a tender: each item's number, description, unit, quantity, rate and amount, under its section heading, such as Worktops or Floor units.
+
+- The bill is built from the items on the costing sheet, where each item's unit and section are set, so it always adds up to the costing and nothing is typed twice. The rate is the price of one of the item, with its own markup; the customer sees no cost or markup.
+- Transport and the allowance are spread over the items' rates in proportion to each item's amount, as the client prices a tender. The amount stays the rate for the quantity, and the cents lost to rounding go on the rate of the last item needed once. Switched off, they are listed after the items on lines of their own, with the allowance's wording editable.
 
 ### Customers from Sage Pastel
 
@@ -168,19 +194,21 @@ The columns that record which user made a quote, version, price, invoice or audi
 
 ## The pricing calculation
 
-The order of operations was confirmed by the client:
+The order of operations was confirmed by the client. Each item on the quote is worked out on its own, for one of it:
 
 ```
 effective unit price = unit price x (1 - supplier discount %)
 line total           = effective unit price x quantity
-sub total            = sum of line totals above the line
-markup               = sub total x markup %
-below the line       = cut-outs, grooves and petrol/delivery, at cost
-total ex VAT         = sub total + markup + below the line
+item sub total       = sum of the item's line totals above the line
+item markup          = item sub total x the item's markup %
+item below the line  = the item's cut-outs and grooves, at cost
+item total           = item sub total + item markup + item below the line
+item amount          = item total x the number of the item needed
+total ex VAT         = sum of item amounts + petrol/delivery + allowances
 VAT                  = total ex VAT x 15%
 ```
 
-Sandpaper and consumables take their quantity from the total square metres of material, and silicon and sealing from the number of sheets, two per sheet. Both are shown as calculated, charged at the exact quantity rather than rounded up (the client confirmed this on 27 October 2026), and can be typed over. Overtime is the normal fabrication rate times 1.5 and installation mirrors fabrication; both are held as rules on the rate card, not as separate figures.
+A quote of one item needed once totals exactly as before items. Sandpaper and consumables take their quantity from the item's square metres of material, and silicon and sealing from its number of sheets, two per sheet. Both are shown as calculated, charged at the exact quantity rather than rounded up (the client confirmed this on 27 October 2026), and can be typed over. Overtime is the normal fabrication rate times 1.5 and installation mirrors fabrication; both are held as rules on the rate card, not as separate figures.
 
 When a line is added its price is copied onto it, so a later price change does not move a quote that already exists. The price screen for each material lists the quotes that used it and the price each one kept.
 
@@ -205,13 +233,20 @@ The costing sheet and the quote screens talk to these endpoints. Every error com
 | `GET /api/quotes/{id}/versions` | Version history |
 | `GET /api/quotes/{id}/versions/{n}/costing` | Any version's costing |
 | `GET /api/quotes/{id}/versions/{n}/quotation` | Any version's customer quotation |
-| `GET, PUT /api/quotes/{id}/costing` | The current costing; change markup or petrol/delivery |
-| `POST /api/quotes/{id}/lines` | Add a costing line (422 if the price cannot be resolved) |
+| `GET, PUT /api/quotes/{id}/costing` | The current costing; change every item's markup, petrol/delivery or the allowance |
+| `POST /api/quotes/{id}/items`, `PUT, DELETE /api/quotes/{id}/items/{itemId}` | Add, change or remove an item |
+| `PUT /api/quotes/{id}/items/{itemId}/costing` | One item's markup |
+| `POST /api/quotes/{id}/items/{itemId}/lines` | Add a costing line to an item (422 if the price cannot be resolved) |
+| `POST /api/quotes/{id}/lines` | Add a costing line to the first item |
 | `PUT, DELETE /api/quotes/{id}/lines/{lineId}` | Change or remove a line |
 | `GET /api/quotes/{id}/totals` | Recalculate |
 | `GET /api/quotes/{id}/quotation` | The customer quotation |
 | `GET /api/quotes/{id}/quotation/check` | Whether it adds up to the costing |
-| `POST /api/quotes/{id}/quotation-lines/from-costing` | Write the quotation lines from the costing |
+| `POST /api/quotes/{id}/quotation-lines/from-costing` | Write the quotation lines from the costing, adding only what is not on the quotation yet |
+| `PUT /api/quotes/{id}/quotation/sheet-counts` | Show or hide the number of sheets on copied material lines |
+| `GET /api/quotes/{id}/sheet-summary` | Internal: sheets and seam kits per item and material, the order and its purchase cost |
+| `PUT /api/quotes/{id}/buffer-stock` | One material's buffer stock; no sheets takes it off |
+| `PUT /api/quotes/{id}/quotation/layout` | Written lines or a bill of quantities; spread the allowances or list them; the allowance's wording |
 | `POST, PUT, DELETE /api/quotes/{id}/quotation-lines...` | Edit and reorder quotation lines |
 | `GET, POST /api/quotes/{id}/invoice` | The Pastel invoice record |
 | `/api/customers...` | Customers and contacts: list, create, change, deactivate, reactivate |
@@ -277,7 +312,7 @@ Everything runs in one resource group in South Africa North, defined in `infra/m
 | Resource | Purpose |
 |---|---|
 | App Service plan, Basic B1 or Standard S1 (Linux) | Shared by staging and production. On S1, production also has a staging slot for swapping releases in and back out |
-| Two App Services | `tsqa-app-staging` and `tsqa-app-production`, HTTPS only, TLS 1.2, Always On |
+| Two App Services | `technostaging` and `technoproduction`, HTTPS only, TLS 1.2, Always On |
 | Azure SQL server, two Basic databases | One database per environment. Public network access is disabled; the apps reach it through a private endpoint on a virtual network |
 | Key Vault | The connection strings and the first Managing Director's details, read by the apps' managed identities |
 | Managed identity | The identity the apps sign in to Azure SQL as |
@@ -401,7 +436,7 @@ These are the differences between what the Task 1 document describes and what wa
 
 - **Signing in.** Task 1's layer table and running costs named Microsoft Entra ID. The system uses ASP.NET Core Identity with accounts managed by the application, which is what NFR-03 and section 8.2 required and what the client asked for. Entra ID is not used for signing in.
 - **Phones and tablets.** NFR-12 and US-28 asked for a laptop. The marking rubric asks for phones and tablets as well, so every screen works at all three sizes.
-- **Customer quotation lines from the costing.** Not in Task 1. The estimator can write the quotation lines from the costing in one step, one line per material at its selling price and one for labour and extras, and then edit them.
+- **Customer quotation lines from the costing.** Not in Task 1. The estimator can write the quotation lines from the costing in one step, one line per material at its selling price and one for labour and extras, and then edit them. Copied lines stay in step with the costing sheet: a change of sheets, price, discount, markup or labour changes them at once, a material taken off the costing goes from the quotation too, and copying again adds only what is new. Each material is one item unless sheet counts are turned on for the quote.
 - **Approval waits for the quotation to add up.** US-10 says the quotation's total equals the costing's. The system refuses approval until it does, rather than only showing the difference.
 - **Each approved version records its heading, terms and warranties.** So an earlier version prints exactly as it was sent, even after the quote's validity date, contact details or the standing terms change.
 - **Expired quotes can be reopened.** Task 1's state diagram had Expired as a final state. A customer who comes back after the quote lapsed can now be given a new version with a fresh validity period (team decision).
@@ -435,7 +470,7 @@ These are the differences between what the Task 1 document describes and what wa
 - **The review screen's checks.** Task 1 section 2.4 promised warnings when the markup or the price per square metre looks unusual and when a supplier's price list is old. The validity check and the old price list check are built: the review screen names each supplier on the quote whose price list is more than a year old, by the same rule as the dashboard and the catalogue. The other two need the client's idea of "unusual", or will show the quote's figure against the range of recent approved quotes.
 - **Users linked in the database.** The ERD links users to the quotes, versions, prices and audit entries they made. Those columns hold the user's id but are not foreign keys, because changes made by the system itself are recorded against the user id "system", which has no user record.
 - **Deployment slots on the Basic tier.** Slots need the Standard tier, which costs US$101.47 a month for the plan against US$17.74 for Basic, and the client's budget for hosting is up to R1 000 a month. The client offered to run the Standard tier with a slot for up to three months after handover; two are planned, then the plan moves back to Basic, where rollback is by redeploying.
-- **Large tenders.** Waiting for the client: the scope of pricing a large tender by item.
+- **Large tenders.** Items with their own costing and markup, the bill of quantities, spread allowances, the summary of sheets and adhesive and pricing an item per square metre are built.
 - **Rate card and bank details** from the client.
 
 ## Team

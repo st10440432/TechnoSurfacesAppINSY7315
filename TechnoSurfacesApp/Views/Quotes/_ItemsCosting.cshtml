@@ -1,0 +1,28 @@
+@model TechnoSurfacesApp.Api.CostingSheetDto
+@*
+    The costing lines read only, on the review and version screens. A quote of one
+    item shows its two tables as before; a quote of several shows each item under its
+    own heading with its markup, its total for one and the number needed.
+*@
+@if (Model.Items.Count == 1)
+{
+    var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.ForItem(Model.Items[0].Id), false);
+    <partial name="_MaterialLines" model="lines" />
+    <partial name="_RateLines" model="lines" />
+}
+else
+{
+    foreach (var item in Model.Totals.Items)
+    {
+        var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.ForItem(item.ItemId), false, IdPrefix: $"item-{item.ItemId}-");
+        <div class="card-body item-costing">
+            <h3 class="section-label">@(item.Number is null ? item.Name : $"{item.Number}. {item.Name}")</h3>
+            <p class="hint">
+                @(item.PricePerM2 is { } p ? $"Priced at {Fmt.Rand(p)} per m²" : $"Markup {Fmt.Pct(item.MarkupPercent)}"). One costs @Fmt.Rand(item.TotalExVat) ex VAT;
+                @Fmt.Qty(item.Quantity) needed, @Fmt.Rand(item.AmountExVat).
+            </p>
+        </div>
+        <partial name="_MaterialLines" model="lines" />
+        <partial name="_RateLines" model="lines" />
+    }
+}

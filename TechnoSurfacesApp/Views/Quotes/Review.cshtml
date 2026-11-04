@@ -150,8 +150,7 @@ else if (q.Status != "PendingApproval")
                 <span class="spacer"></span>
                 <span class="badge">For Techno Surfaces only</span>
             </div>
-            <partial name="_MaterialLines" model="new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, false)" />
-            <partial name="_RateLines" model="new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, false)" />
+            <partial name="_ItemsCosting" model="Model.Sheet" />
         </section>
     </div>
 
@@ -160,7 +159,7 @@ else if (q.Status != "PendingApproval")
             <div class="card-head"><h2 id="review-totals-title">Totals</h2></div>
             <div class="card-body">
                 <div class="totals-row"><span class="lbl">Sub total</span><span class="val">@Fmt.Rand(t.SubTotalExVat)</span></div>
-                <div class="totals-row"><span class="lbl">Markup @Fmt.Pct(t.MarkupPercent)</span><span class="val">@Fmt.Rand(t.MarkupAmount)</span></div>
+                <div class="totals-row"><span class="lbl">Markup@(t.Items.Count == 1 ? " " + Fmt.Pct(t.MarkupPercent) : " on every item")</span><span class="val">@Fmt.Rand(t.MarkupAmount)</span></div>
                 <div class="totals-row"><span class="lbl">Cut-outs, grooves and transport</span><span class="val">@Fmt.Rand(t.BelowTheLineTotal)</span></div>
                 <div class="totals-row total-line"><span class="lbl">Total ex VAT</span><span class="val">@Fmt.Rand(t.TotalExVat)</span></div>
                 <div class="totals-row"><span class="lbl">VAT at @Fmt.Pct(t.VatRate * 100)</span><span class="val">@Fmt.Rand(t.VatAmount)</span></div>

@@ -152,12 +152,17 @@ public class QuotesController : AppController
     //  Costing sheet: the internal costing, with the material cascade
     // ======================================================================
 
-    public async Task<IActionResult> Costing(int id, CancellationToken ct)
+    /// <summary>
+    /// The costing sheet of one item on the quote, the first unless another is asked
+    /// for. Each item has its own lines and markup, as the client costs a tender with
+    /// one spreadsheet page per item.
+    /// </summary>
+    public async Task<IActionResult> Costing(int id, int? item, CancellationToken ct)
     {
         if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return QuoteNotFound(id);
 
-        var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
+        var sheet = ItemSheet(CostingSheetDto.From(costing.Quote!, costing.Totals!), item);
         var vm = new CostingVm
         {
             Quote = detail,
@@ -196,23 +201,53 @@ public class QuotesController : AppController
     }
 
     /// <summary>
+    /// The summary of sheets and adhesive, as the client draws one up for a tender:
+    /// what to order per material and what it costs to buy. Internal, like the
+    /// costing; the buffer stock is typed here.
+    /// </summary>
+    public async Task<IActionResult> SheetSummary(int id, CancellationToken ct)
+    {
+        var detail = await DetailAsync(id, ct);
+        var quote = await _quotes.GetAsync(id, ct);
+        var summary = await _costing.GetSheetSummaryAsync(id, ct: ct);
+        if (detail is null || quote is null || summary is null)
+            return QuoteNotFound(id);
+
+        var vm = new SheetSummaryVm
+        {
+            Quote = detail,
+            Summary = summary,
+            CanEdit = (await ActionsForAsync(quote)).CanEdit,
+            PrintedOn = Today
+        };
+
+        SetPage("Sheets and adhesive", "quotes", QuotesCrumb,
+            new Crumb(detail.Reference, Url.Action(nameof(Costing), new { id })));
+        return View(vm);
+    }
+
+    /// <summary>
     /// The parts of the costing sheet that a change can move, rendered on their own:
     /// both line tables, the quotation check and the next-step buttons. The sheet
     /// swaps them in after every change, because one change can move other lines (a
     /// line calculated from the total area follows the materials) and can make a
     /// step possible, such as submitting once the first line is added.
     /// </summary>
-    public async Task<IActionResult> CostingLines(int id, CancellationToken ct)
+    public async Task<IActionResult> CostingLines(int id, int? item, CancellationToken ct)
     {
         if (await CostingScreenAsync(id, ct) is not (var detail, var costing))
             return NotFound();
 
         var actions = await ActionsForAsync(costing.Quote!);
-        var sheet = CostingSheetDto.From(costing.Quote!, costing.Totals!);
+        var sheet = ItemSheet(CostingSheetDto.From(costing.Quote!, costing.Totals!), item);
         return PartialView("_CostingRefresh", new CostingRefreshVm(
             new CostingLinesVm(sheet, actions.CanEdit, await RateGridAsync(costing.Quote!.IssueDate, sheet, ct)),
             new QuoteActionBar(detail, actions, await _quotation.CheckAsync(id, ct))));
     }
+
+    /// <summary>The sheet narrowed to the item asked for, or to the first item when that one is not on the quote.</summary>
+    private static CostingSheetDto ItemSheet(CostingSheetDto sheet, int? itemId) =>
+        sheet.ForItem(sheet.Items.FirstOrDefault(i => i.Id == itemId)?.Id ?? sheet.Items[0].Id);
 
     /// <summary>
     /// The whole rate card as the costing sheet lists it: every item that can be
@@ -235,10 +270,11 @@ public class QuotesController : AppController
                 ? found
                 : PriceResolution.Failure($"Rate item {item.Id} is not on the rate card.");
             var card = PricePreviewResult.From(resolution, issueDate);
-            // The same rule the calculator applies, so the figure shown before the
-            // line is added is the one it is added with.
+            // The same rule the calculator applies, to the item's own material, so the
+            // figure shown before the line is added is the one it is added with.
             var calculated = Enum.TryParse<DerivationRule>(item.Derivation, out var rule)
-                ? QuoteCalculationService.DerivedQuantity(rule, item.DerivationFactor, sheet.Totals.TotalAreaM2, sheet.Totals.TotalSheetCount)
+                ? QuoteCalculationService.DerivedQuantity(rule, item.DerivationFactor,
+                    sheet.CurrentItem?.AreaM2 ?? sheet.Totals.TotalAreaM2, sheet.CurrentItem?.SheetCount ?? sheet.Totals.TotalSheetCount)
                 : null;
             rows.Add(new RateGridRow(item, card, calculated, rateLines.Where(l => l.RateItemId == item.Id).ToList()));
         }
@@ -301,7 +337,12 @@ public class QuotesController : AppController
             Quote = detail,
             Document = document,
             Check = await _quotation.CheckAsync(id, ct),
-            Actions = await ActionsForAsync(quote)
+            Actions = await ActionsForAsync(quote),
+            ShowSheetCounts = quote.CurrentVersion?.ShowSheetCounts ?? false,
+            SpreadAllowances = quote.CurrentVersion?.SpreadAllowances ?? true,
+            AllowanceDescription = quote.CurrentVersion?.AllowanceWording ?? QuoteVersion.DefaultAllowanceDescription,
+            AllowanceAmount = quote.CurrentVersion?.AllowanceAmount ?? 0m,
+            TransportAmount = quote.CurrentVersion?.TransportAmount ?? 0m
         };
 
         SetPage("Customer quotation", "quotes", QuotesCrumb,
@@ -612,10 +653,25 @@ public sealed class CostingPrintVm
     public DateOnly PrintedOn { get; init; }
 }
 
+public sealed class SheetSummaryVm
+{
+    public QuoteDetail Quote { get; init; } = null!;
+    public SheetSummary Summary { get; init; } = null!;
+    public bool CanEdit { get; init; }
+    public DateOnly PrintedOn { get; init; }
+}
+
 /// <summary>One table of rate lines on the printout. Transport is a line of the table added after the markup.</summary>
 public sealed record CostingPrintRatesVm(string Caption, IReadOnlyList<CostingLineDto> Lines, decimal Transport = 0);
 
-public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null);
+/// <summary>One item's costing on the printout: its own lines and figures.</summary>
+public sealed record CostingPrintItemVm(CostingSheetDto Sheet, ItemTotals Item, bool Several);
+
+/// <summary>
+/// The line tables of one sheet. <paramref name="IdPrefix"/> keeps the tables' ids
+/// apart when a page shows several items' tables; the costing screen uses none.
+/// </summary>
+public sealed record CostingLinesVm(CostingSheetDto Sheet, bool CanEdit, IReadOnlyList<RateGridRow>? RateGrid = null, string IdPrefix = "");
 
 /// <summary>
 /// One rate card item on the costing sheet: its rate-card price on the quote date,
@@ -638,6 +694,18 @@ public sealed class QuotationVm
     public CustomerQuotation Document { get; init; } = null!;
     public QuotationCheck? Check { get; init; }
     public QuoteActions Actions { get; init; } = null!;
+
+    /// <summary>Whether copied material lines give their sheets, for the switch above the lines.</summary>
+    public bool ShowSheetCounts { get; init; }
+
+    // For the bill of quantities settings. The amounts are the job's, typed on the
+    // costing sheet; they are shown here so the estimator knows what is spread.
+    public bool SpreadAllowances { get; init; }
+    public string AllowanceDescription { get; init; } = "";
+    public decimal AllowanceAmount { get; init; }
+    public decimal TransportAmount { get; init; }
+
+    public bool IsBillOfQuantities => Document.Bill is not null;
 }
 
 public sealed class ApprovalsVm

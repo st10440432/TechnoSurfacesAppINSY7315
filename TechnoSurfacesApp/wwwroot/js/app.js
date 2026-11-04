@@ -437,10 +437,13 @@
         });
     }
 
-    // Selects that submit their filter form when changed.
+    // Fields that submit their form when changed: a filter, or a switch on an API form,
+    // which requestSubmit sends through the API form handler above.
     function wireAutoSubmit() {
         document.addEventListener("change", function (e) {
-            if (e.target.matches("[data-autosubmit]") && e.target.form) e.target.form.submit();
+            if (!e.target.matches("[data-autosubmit]") || !e.target.form) return;
+            if (e.target.form.requestSubmit) e.target.form.requestSubmit();
+            else e.target.form.submit();
         });
     }
 

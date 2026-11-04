@@ -105,9 +105,10 @@ public sealed class QuoteListQueryTests
         Assert.Equal(list.Commands, secondPage.Commands);
 
         // The dashboard totals every quote, but reads only its current version: the quote,
-        // that version and its one line, three rows a quote. Every version would be five.
+        // that version, its one item, whose markup the total needs, and its one line, four
+        // rows a quote. Every version would be seven.
         Assert.Equal(dashboard.Commands, dashboardAfter.Commands);
-        Assert.True(dashboardAfter.Rows - dashboard.Rows <= 30 * 3,
-            $"The dashboard read {dashboardAfter.Rows - dashboard.Rows} more rows for 30 more quotes; at most 90 are needed.");
+        Assert.True(dashboardAfter.Rows - dashboard.Rows <= 30 * 4,
+            $"The dashboard read {dashboardAfter.Rows - dashboard.Rows} more rows for 30 more quotes; at most 120 are needed.");
     }
 }

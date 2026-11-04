@@ -11,6 +11,7 @@
     var sectionOrder = new[] { "Notes", "LeadTimes", "Exclusions", "TermsAndConditions", "Disclaimers", "Warranties", "PaymentTerms", "BankDetails" };
     int Rank(string section) { var at = Array.IndexOf(sectionOrder, section); return at < 0 ? int.MaxValue : at; }
     var sections = d.Terms.OrderBy(s => Rank(s.Section)).ToList();
+    var bill = d.Bill;
 }
 <article class="doc" aria-labelledby="doc-title">
     <div class="doc-top">
@@ -55,6 +56,70 @@
         </dl>
     </div>
 
+    @if (bill is not null)
+    {
+        @* A bill of quantities, as the client sends a tender: built from the items.
+           Six columns do not fit a phone, so the table scrolls sideways there. *@
+        <div class="doc-scroll" tabindex="0" role="region" aria-label="Bill of quantities">
+        <table class="doc-lines doc-bill">
+            <caption class="sr-only">Bill of quantities</caption>
+            <thead>
+                <tr>
+                    <th scope="col" class="doc-col-item">Item</th>
+                    <th scope="col">Description</th>
+                    <th scope="col" class="doc-col-unit">Unit</th>
+                    <th scope="col" class="r doc-col-qty">Qty</th>
+                    <th scope="col" class="r doc-col-total">Rate</th>
+                    <th scope="col" class="r doc-col-total">Amount</th>
+                </tr>
+            </thead>
+            @foreach (var group in bill.Sections)
+            {
+                <tbody>
+                    @if (group.Heading is not null)
+                    {
+                        <tr class="doc-bill-section">
+                            <th scope="rowgroup" colspan="6">@group.Heading</th>
+                        </tr>
+                    }
+                    @foreach (var i in group.Items)
+                    {
+                        <tr>
+                            <td>@i.Number</td>
+                            <td class="pre-line">@i.Description</td>
+                            <td>@i.Unit</td>
+                            <td class="r">@Fmt.Qty(i.Quantity)</td>
+                            <td class="r">@Fmt.Rand(i.AmountEach)</td>
+                            <td class="r">@Fmt.Rand(i.AmountExVat)</td>
+                        </tr>
+                    }
+                </tbody>
+            }
+            @if (bill.Extras.Count > 0)
+            {
+                @* The job's own amounts, under their own heading so they are not read as the last section's. *@
+                <tbody>
+                    @if (bill.ExtrasHeading is not null)
+                    {
+                        <tr class="doc-bill-section">
+                            <th scope="rowgroup" colspan="6">@bill.ExtrasHeading</th>
+                        </tr>
+                    }
+                    @foreach (var e in bill.Extras)
+                    {
+                        <tr>
+                            <td></td>
+                            <td colspan="4">@e.Description</td>
+                            <td class="r">@Fmt.Rand(e.AmountExVat)</td>
+                        </tr>
+                    }
+                </tbody>
+            }
+        </table>
+        </div>
+    }
+    else
+    {
     <table class="doc-lines">
         <caption class="sr-only">Quoted work</caption>
         <thead>
@@ -81,6 +146,7 @@
             }
         </tbody>
     </table>
+    }
 
     <div class="doc-totals">
         <div class="totals-row">

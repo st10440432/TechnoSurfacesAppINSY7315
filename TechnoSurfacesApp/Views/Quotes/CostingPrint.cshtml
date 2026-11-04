@@ -10,9 +10,7 @@
 @{
     var q = Model.Quote;
     var t = Model.Sheet.Totals;
-    var materials = Model.Sheet.Lines.Where(l => l.LineType == "Material").ToList();
-    var rates = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && !l.IsBelowTheLine).ToList();
-    var belowTheLine = Model.Sheet.Lines.Where(l => l.LineType == "Rate" && l.IsBelowTheLine).ToList();
+    var several = t.Items.Count > 1;
 }
 
 <header class="page-head no-print">
@@ -62,88 +60,65 @@
         </dl>
     </div>
 
-    <h3 class="doc-section">Materials</h3>
-    @if (materials.Count == 0)
+    @foreach (var item in t.Items)
     {
-        <p class="muted">No material is on this version.</p>
+        <partial name="_CostingPrintItem" model="new TechnoSurfacesApp.Controllers.CostingPrintItemVm(Model.Sheet.ForItem(item.ItemId), item, several)" />
     }
-    else
+
+    @if (several)
     {
-        <div class="table-wrap" tabindex="0" role="region" aria-label="Material lines">
+        <h3 class="doc-item">The whole quote</h3>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Items on the quote">
             <table class="doc-lines">
-                <caption class="sr-only">Material lines</caption>
+                <caption class="sr-only">Items on the quote</caption>
                 <thead>
                     <tr>
-                        <th scope="col">Material and size</th>
-                        <th scope="col" class="r">Sheets</th>
-                        <th scope="col" class="r">Price per sheet</th>
-                        <th scope="col" class="r">Supplier discount</th>
-                        <th scope="col" class="r">Line total</th>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="r">Markup</th>
+                        <th scope="col" class="r">One</th>
+                        <th scope="col" class="r">Needed</th>
+                        <th scope="col" class="r">Amount ex VAT</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var l in materials)
+                    @foreach (var i in t.Items)
                     {
                         <tr>
-                            <td>
-                                <strong>@l.Description</strong>
-                                <span class="sub">@l.PriceOrigin</span>
-                            </td>
-                            <td class="r">@Fmt.Qty(l.Quantity)</td>
-                            <td class="r">@Fmt.Rand(l.UnitPrice)</td>
-                            <td class="r">@(l.SupplierDiscountPercent == 0 ? "None" : Fmt.Pct(l.SupplierDiscountPercent))</td>
-                            <td class="r">@Fmt.Rand(l.LineTotal)</td>
+                            <td>@(i.Number is null ? i.Name : $"{i.Number}. {i.Name}")</td>
+                            <td class="r">@(i.PricePerM2 is { } p ? $"{Fmt.Rand(p)} per m²" : Fmt.Pct(i.MarkupPercent))</td>
+                            <td class="r">@Fmt.Rand(i.TotalExVat)</td>
+                            <td class="r">@Fmt.Qty(i.Quantity)</td>
+                            <td class="r">@Fmt.Rand(i.AmountExVat)</td>
                         </tr>
                     }
                 </tbody>
-                <tfoot>
-                    <tr>
-                        <td>Material in total, @Fmt.Sqm(t.TotalAreaM2)</td>
-                        <td class="r">@Fmt.Qty(t.TotalSheetCount)</td>
-                        <td colspan="2"></td>
-                        <td class="r">@Fmt.Rand(materials.Sum(l => l.LineTotal))</td>
-                    </tr>
-                </tfoot>
             </table>
         </div>
     }
 
-    <h3 class="doc-section">Labour, consumables and extras</h3>
-    @if (rates.Count == 0)
-    {
-        <p class="muted">No labour, consumables or extras are on this version.</p>
-    }
-    else
-    {
-        <partial name="_CostingPrintRates" model='new TechnoSurfacesApp.Controllers.CostingPrintRatesVm("Labour, consumables and extras", rates)' />
-    }
-
     <div class="doc-totals">
+        @if (several)
+        {
+            <div class="totals-row">
+                <span class="lbl">Sub total of every item</span>
+                <span class="val">@Fmt.Rand(t.SubTotalExVat)</span>
+            </div>
+            <div class="totals-row">
+                <span class="lbl">Markup on every item</span>
+                <span class="val">@Fmt.Rand(t.MarkupAmount)</span>
+            </div>
+        }
         <div class="totals-row">
-            <span class="lbl">Sub total</span>
-            <span class="val">@Fmt.Rand(t.SubTotalExVat)</span>
+            <span class="lbl">Transport</span>
+            <span class="val">@Fmt.Rand(t.TransportAmount)</span>
         </div>
-        <div class="totals-row">
-            <span class="lbl">Markup @Fmt.Pct(t.MarkupPercent)</span>
-            <span class="val">@Fmt.Rand(t.MarkupAmount)</span>
-        </div>
-    </div>
-
-    <h3 class="doc-section">Added after the markup, at cost</h3>
-    @if (belowTheLine.Count == 0 && t.TransportAmount == 0)
-    {
-        <p class="muted">No cut-outs, grooves or transport are on this version.</p>
-    }
-    else
-    {
-        <partial name="_CostingPrintRates" model='new TechnoSurfacesApp.Controllers.CostingPrintRatesVm("Cut-outs, grooves and transport, added after the markup", belowTheLine, t.TransportAmount)' />
-    }
-
-    <div class="doc-totals">
-        <div class="totals-row">
-            <span class="lbl">Cut-outs, grooves and transport</span>
-            <span class="val">@Fmt.Rand(t.BelowTheLineTotal)</span>
-        </div>
+        @if (t.AllowanceAmount > 0)
+        {
+            <div class="totals-row">
+                <span class="lbl">Allowances</span>
+                <span class="val">@Fmt.Rand(t.AllowanceAmount)</span>
+            </div>
+        }
         <div class="totals-row total-line">
             <span class="lbl">Total ex VAT</span>
             <span class="val">@Fmt.Rand(t.TotalExVat)</span>
@@ -156,11 +131,13 @@
             <span class="lbl">Total inc VAT</span>
             <span class="val">@Fmt.Rand(t.TotalIncVat)</span>
         </div>
-        <dl class="facts facts-tight">
-            <dt>Total area</dt><dd>@Fmt.Sqm(t.TotalAreaM2)</dd>
-            <dt>Sheets</dt><dd>@Fmt.Qty(t.TotalSheetCount)</dd>
-            <dt>Rand per m², ex VAT</dt><dd>@(t.TotalAreaM2 > 0 ? Fmt.Rand(t.TotalExVat / t.TotalAreaM2) : "Not yet")</dd>
-        </dl>
+        @if (several)
+        {
+            <dl class="facts facts-tight">
+                <dt>Total area</dt><dd>@Fmt.Sqm(t.TotalAreaM2)</dd>
+                <dt>Sheets</dt><dd>@Fmt.Qty(t.TotalSheetCount)</dd>
+            </dl>
+        }
     </div>
 
     <p class="doc-internal doc-internal-foot">

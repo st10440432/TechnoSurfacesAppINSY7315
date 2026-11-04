@@ -93,6 +93,20 @@ public sealed class QuoteVersionConfiguration : IEntityTypeConfiguration<QuoteVe
         e.Property(x => x.MarkupPercent).HasPrecision(5, 2);
         e.Property(x => x.VatRate).HasPrecision(5, 4);
         e.Property(x => x.TransportAmount).HasPrecision(18, 2);
+        e.Property(x => x.AllowanceAmount).HasPrecision(18, 2);
+        e.Property(x => x.AllowanceDescription).HasMaxLength(QuoteVersion.AllowanceDescriptionMaxLength);
+
+        e.HasMany(x => x.Items)
+            .WithOne()
+            .HasForeignKey(i => i.QuoteVersionId)
+            .OnDelete(DeleteBehavior.NoAction);
+        e.Navigation(x => x.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        e.HasMany(x => x.BufferStock)
+            .WithOne()
+            .HasForeignKey(b => b.QuoteVersionId)
+            .OnDelete(DeleteBehavior.NoAction);
+        e.Navigation(x => x.BufferStock).UsePropertyAccessMode(PropertyAccessMode.Field);
 
         e.HasMany(x => x.CostingLines)
             .WithOne()
@@ -188,7 +202,47 @@ public sealed class CostingLineConfiguration : IEntityTypeConfiguration<CostingL
             t.HasCheckConstraint("CK_CostingLine_OverridePositive", "[OverriddenUnitPrice] IS NULL OR [OverriddenUnitPrice] > 0");
         });
 
+        // The item whose costing the line is part of. Nullable in the database so a
+        // line written by an earlier release still saves; the app always sets it.
+        e.HasOne(x => x.Item)
+            .WithMany()
+            .HasForeignKey(x => x.QuoteItemId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.ClientSetNull);
+
         e.HasIndex(x => x.QuoteVersionId);
+        e.HasIndex(x => x.QuoteItemId);
+    }
+}
+
+public sealed class QuoteItemConfiguration : IEntityTypeConfiguration<QuoteItem>
+{
+    public void Configure(EntityTypeBuilder<QuoteItem> e)
+    {
+        e.Property(x => x.Number).HasMaxLength(QuoteItem.NumberMaxLength);
+        e.Property(x => x.Name).HasMaxLength(QuoteItem.NameMaxLength).IsRequired();
+        e.Property(x => x.Quantity).HasPrecision(18, 4);
+        e.Property(x => x.MarkupPercent).HasPrecision(5, 2);
+
+        // Items saved before units were recorded are counted in numbers, as every item
+        // on the client's tenders is.
+        e.Property(x => x.Unit).HasMaxLength(QuoteItem.UnitMaxLength).IsRequired().HasDefaultValue(QuoteItem.DefaultUnit);
+        e.Property(x => x.Section).HasMaxLength(QuoteItem.SectionMaxLength);
+        e.Property(x => x.PricePerM2).HasPrecision(18, 2);
+
+        e.HasIndex(x => x.QuoteVersionId);
+    }
+}
+
+public sealed class QuoteBufferStockConfiguration : IEntityTypeConfiguration<QuoteBufferStock>
+{
+    public void Configure(EntityTypeBuilder<QuoteBufferStock> e)
+    {
+        e.Property(x => x.Material).HasMaxLength(QuoteBufferStock.MaterialMaxLength).IsRequired();
+        e.Property(x => x.Sheets).HasPrecision(18, 4);
+
+        // One buffer per material on a version.
+        e.HasIndex(x => new { x.QuoteVersionId, x.Material }).IsUnique();
     }
 }
 
@@ -201,7 +255,17 @@ public sealed class QuotationLineConfiguration : IEntityTypeConfiguration<Quotat
         e.Property(x => x.AmountExVat).HasPrecision(18, 2);
         e.Property(x => x.Quantity).HasPrecision(18, 4);
 
+        // The material a copied line follows. Both lines belong to the same version,
+        // so the database does not cascade; the costing sheet removes the quotation
+        // line itself when its material is removed.
+        e.HasOne(x => x.CostingLine)
+            .WithMany()
+            .HasForeignKey(x => x.CostingLineId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.ClientSetNull);
+
         e.HasIndex(x => x.QuoteVersionId);
+        e.HasIndex(x => x.CostingLineId);
     }
 }
 
