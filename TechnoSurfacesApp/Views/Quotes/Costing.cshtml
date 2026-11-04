@@ -115,7 +115,7 @@
                                        aria-current="@(current ? "page" : null)">@ItemLabel(i)</a>
                                     @if (current)
                                     {
-                                        <span class="sub">On screen</span>
+                                        <span class="badge badge-good item-open">Open below</span>
                                     }
                                 </td>
                                 <td data-label="Markup" class="right">@(i.PricePerM2 is { } p ? $"{Fmt.Rand(p)} per m²" : Fmt.Pct(i.MarkupPercent))</td>
@@ -131,10 +131,16 @@
 
             @if (a.CanEdit)
             {
-                <div class="card-body item-forms">
-                    <form novalidate data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{q.Id}/items/{item.ItemId}")"
-                          data-success="Item saved" aria-labelledby="this-item-title">
-                        <h3 class="section-label" id="this-item-title">This item</h3>
+                @* Folded away until opened, so the items and the costing below stay in view. *@
+                <div class="item-forms">
+                    <details class="disclosure item-disclosure">
+                        <summary class="disclosure-summary">
+                            <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
+                            <span>Change this item: @ItemLabel(item)</span>
+                            <svg class="ico disclosure-chevron" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                        </summary>
+                    <form class="disclosure-body" novalidate data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{q.Id}/items/{item.ItemId}")"
+                          data-success="Item saved" aria-label="Change this item">
                         <div class="field-row field-row-3">
                             <div class="field">
                                 <label class="label" for="item-number">Number <span class="optional">optional</span></label>
@@ -193,12 +199,18 @@
                             }
                         </div>
                     </form>
+                    </details>
 
-                    <form novalidate data-api-form data-method="POST" data-url="@Url.Content($"~/api/quotes/{q.Id}/items")"
+                    <details class="disclosure item-disclosure">
+                        <summary class="disclosure-summary">
+                            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                            <span>Add an item</span>
+                            <svg class="ico disclosure-chevron" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                        </summary>
+                    <form class="disclosure-body" novalidate data-api-form data-method="POST" data-url="@Url.Content($"~/api/quotes/{q.Id}/items")"
                           data-redirect-to="@(Url.Action("Costing", new { id = q.Id }) + "?item={id}")"
                           data-success="Item added" data-success-detail="Its costing sheet is open. Add its materials and labour."
-                          aria-labelledby="new-item-title">
-                        <h3 class="section-label" id="new-item-title">Add an item</h3>
+                          aria-label="Add an item">
                         <div class="field-row field-row-3">
                             <div class="field">
                                 <label class="label" for="new-item-number">Number <span class="optional">optional</span></label>
@@ -226,13 +238,15 @@
                             <div class="field">
                                 <label class="label" for="new-item-unit">Unit</label>
                                 <input class="input" id="new-item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
-                                       value="@itemDto.Unit" />
+                                       placeholder="@TechnoSurfaces.Domain.Quoting.QuoteItem.DefaultUnit" aria-describedby="new-item-unit-hint" />
+                                <span class="hint" id="new-item-unit-hint">Left empty, it is counted in numbers, No.</span>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-secondary">
                             <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> Add the item
                         </button>
                     </form>
+                    </details>
                 </div>
             }
         </section>
