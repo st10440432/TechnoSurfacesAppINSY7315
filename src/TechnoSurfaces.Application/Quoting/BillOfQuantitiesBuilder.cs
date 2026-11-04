@@ -18,6 +18,11 @@ internal static class BillOfQuantitiesBuilder
     /// <summary>The wording of the transport line when it is listed on its own.</summary>
     internal const string TransportDescription = "Transport";
 
+    // The heading over the amounts for the whole job, named for what is under it.
+    internal const string AllowancesHeading = "Allowances";
+    internal const string TransportHeading = "Transport";
+    internal const string AllowancesAndTransportHeading = "Allowances and transport";
+
     private sealed class Row(QuoteItem item, decimal rate, decimal amount)
     {
         public QuoteItem Item { get; } = item;
@@ -55,7 +60,15 @@ internal static class BillOfQuantitiesBuilder
             sections[^1].Items.Add(new CustomerBillItem(row.Item.Number, row.Item.Name, row.Item.Unit, row.Item.Quantity, row.Rate, row.Amount));
         }
 
-        return new CustomerBill(sections.Select(s => new CustomerBillSection(s.Heading, s.Items)).ToList(), extras);
+        var extrasHeading = (version.AllowanceAmount > 0 && extras.Count > 0, version.TransportAmount > 0 && extras.Count > 0) switch
+        {
+            (true, true) => AllowancesAndTransportHeading,
+            (true, false) => AllowancesHeading,
+            (false, true) => TransportHeading,
+            _ => null
+        };
+
+        return new CustomerBill(sections.Select(s => new CustomerBillSection(s.Heading, s.Items)).ToList(), extras, extrasHeading);
     }
 
     /// <summary>What the bill adds up to before VAT.</summary>

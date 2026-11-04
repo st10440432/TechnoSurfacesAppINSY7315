@@ -154,6 +154,7 @@ public sealed class BillOfQuantitiesTests : IAsyncLifetime
 
         Assert.Equal(new[] { (2250m, 2250m), (450m, 1350m) }, Rows(document).Select(r => (r.AmountEach, r.AmountExVat)));
         Assert.Empty(document.Bill!.Extras);
+        Assert.Null(document.Bill.ExtrasHeading);
         Assert.Equal(3600m, document.Totals.SubtotalExVat);
         Assert.True((await WithQuotationAsync(s => s.CheckAsync(_quoteId)))!.Matches);
     }
@@ -205,10 +206,15 @@ public sealed class BillOfQuantitiesTests : IAsyncLifetime
                 new CustomerBillExtra("Transport", 200m)
             },
             document.Bill!.Extras);
+        Assert.Equal("Allowances and transport", document.Bill.ExtrasHeading);
         Assert.Equal(3600m, document.Totals.SubtotalExVat);
 
         await LayoutAsync(new QuotationLayoutInput(AllowanceDescription: "Site inspection and travel to George"));
         Assert.Equal("Site inspection and travel to George", (await DocumentAsync())!.Bill!.Extras[0].Description);
+
+        // Transport alone is headed as what it is.
+        await ExtrasAsync(allowance: 0m, transport: 200m);
+        Assert.Equal("Transport", (await DocumentAsync())!.Bill!.ExtrasHeading);
     }
 
     [Fact]
