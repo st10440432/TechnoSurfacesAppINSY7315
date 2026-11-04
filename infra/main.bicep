@@ -9,6 +9,9 @@ param location string = resourceGroup().location
 @description('Start of the two App Service names, which must be unique across Azure. A new subscription needs a new prefix while the old apps still exist.')
 param appPrefix string = 'tsqa-app'
 
+@description('Full App Service name, unique across Azure. Leave it out for <appPrefix>-<environment>. The production slot is reached at <appName>-staging.azurewebsites.net.')
+param appName string = '${appPrefix}-${environment}'
+
 @description('App Service plan tier, shared by both environments, so pass the same value to both. S1 (Standard) adds a staging slot to production, so a release is swapped in and can be swapped back. A plan with a slot cannot move to B1 until the slot is deleted.')
 @allowed([
   'B1'
@@ -63,7 +66,6 @@ var slotName = 'staging'
 var unique = uniqueString(resourceGroup().id)
 
 var planName = 'tsqa-plan'
-var appName = '${appPrefix}-${environment}'
 var sqlServerName = 'tsqa-sql-${unique}'
 var databaseName = 'tsqa-db-${environment}'
 var kvName = 'tsqa-kv-${unique}'

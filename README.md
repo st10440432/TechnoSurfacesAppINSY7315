@@ -8,8 +8,8 @@ This web application replaces that sheet. The estimator picks a material by supp
 
 | | |
 |---|---|
-| Production | https://tsqa-app-production.azurewebsites.net |
-| Staging | https://tsqa-app-staging.azurewebsites.net |
+| Production | https://technoproduction.azurewebsites.net |
+| Staging | https://technostaging.azurewebsites.net |
 | Health check | `/health` on either address |
 | Presentation | https://www.youtube.com/watch?v=EoP8_cdqwwg |
 
@@ -312,7 +312,7 @@ Everything runs in one resource group in South Africa North, defined in `infra/m
 | Resource | Purpose |
 |---|---|
 | App Service plan, Basic B1 or Standard S1 (Linux) | Shared by staging and production. On S1, production also has a staging slot for swapping releases in and back out |
-| Two App Services | `tsqa-app-staging` and `tsqa-app-production`, HTTPS only, TLS 1.2, Always On |
+| Two App Services | `technostaging` and `technoproduction`, HTTPS only, TLS 1.2, Always On |
 | Azure SQL server, two Basic databases | One database per environment. Public network access is disabled; the apps reach it through a private endpoint on a virtual network |
 | Key Vault | The connection strings and the first Managing Director's details, read by the apps' managed identities |
 | Managed identity | The identity the apps sign in to Azure SQL as |
