@@ -9,7 +9,7 @@
     var lines = Model.Sheet.Lines.Where(l => l.LineType == "Material").ToList();
     var totals = Model.Sheet.Totals;
 }
-<div id="material-lines">
+<div id="@(Model.IdPrefix)material-lines">
     @if (lines.Count == 0)
     {
         <div class="empty">
@@ -92,8 +92,8 @@
                 <tfoot>
                     <tr class="total-row">
                         <td data-label="Material">Material in total</td>
-                        <td data-label="Sheets" class="right">@Fmt.Qty(totals.TotalSheetCount)</td>
-                        <td data-label="Total area" class="right" colspan="3">@Fmt.Sqm(totals.TotalAreaM2) of material</td>
+                        <td data-label="Sheets" class="right">@Fmt.Qty(Model.Sheet.CurrentItem?.SheetCount ?? totals.TotalSheetCount)</td>
+                        <td data-label="Total area" class="right" colspan="3">@Fmt.Sqm(Model.Sheet.CurrentItem?.AreaM2 ?? totals.TotalAreaM2) of material</td>
                         @if (Model.CanEdit) { <td aria-hidden="true"></td> }
                     </tr>
                 </tfoot>

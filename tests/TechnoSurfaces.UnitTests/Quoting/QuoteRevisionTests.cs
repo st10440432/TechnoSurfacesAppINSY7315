@@ -13,6 +13,9 @@ public sealed class QuoteRevisionTests
 {
     private readonly QuoteCalculationService _calculator = new();
 
+    /// <summary>The quote's figures. Each version has its own items, so the item list is left out.</summary>
+    private QuoteTotals Figures(QuoteVersion version) => _calculator.Calculate(version) with { Items = [] };
+
     private static readonly DateOnly ReopenedOn = new(2026, 10, 25);
 
     private static Quote SentQuoteWithLines(out QuoteVersion first)
@@ -63,7 +66,7 @@ public sealed class QuoteRevisionTests
 
         var second = quote.Reopen("estimator", ReopenedOn);
 
-        Assert.Equal(_calculator.Calculate(first), _calculator.Calculate(second));
+        Assert.Equal(Figures(first), Figures(second));
         Assert.Equal(first.MarkupPercent, second.MarkupPercent);
         Assert.Equal(first.TransportAmount, second.TransportAmount);
         Assert.Equal(first.QuotationLines.Single().AmountExVat, second.QuotationLines.Single().AmountExVat);
@@ -86,14 +89,14 @@ public sealed class QuoteRevisionTests
     public void Editing_the_revision_leaves_version_one_unchanged()
     {
         var quote = SentQuoteWithLines(out var first);
-        var totalsBefore = _calculator.Calculate(first);
+        var totalsBefore = Figures(first);
 
         var second = quote.Reopen("estimator", ReopenedOn);
         second.SetMarkupPercent(30m);
         second.ChangeQuantity(second.CostingLines.First(), 3m);
 
-        Assert.Equal(totalsBefore, _calculator.Calculate(first));
-        Assert.NotEqual(totalsBefore, _calculator.Calculate(second));
+        Assert.Equal(totalsBefore, Figures(first));
+        Assert.NotEqual(totalsBefore, Figures(second));
         Assert.Throws<InvalidOperationException>(() => first.SetMarkupPercent(30m));
     }
 
@@ -107,7 +110,7 @@ public sealed class QuoteRevisionTests
 
         Assert.Equal(QuoteStatus.Draft, quote.Status);
         Assert.Equal(2, second.VersionNo);
-        Assert.Equal(_calculator.Calculate(first), _calculator.Calculate(second));
+        Assert.Equal(Figures(first), Figures(second));
     }
 
     [Fact]

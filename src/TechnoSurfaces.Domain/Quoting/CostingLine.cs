@@ -50,6 +50,13 @@ public class CostingLine
     public int Id { get; private set; }
     public int QuoteVersionId { get; private set; }
 
+    /// <summary>The item on the quote this line is part of the costing of.</summary>
+    public int? QuoteItemId { get; private set; }
+    public QuoteItem? Item { get; private set; }
+
+    /// <summary>Puts the line in an item's costing. Made through QuoteVersion.</summary>
+    internal void PlaceIn(QuoteItem item) => Item = item;
+
     public CostingLineType LineType { get; private set; }
 
     /// <summary>Set on a material line. Traceability only; the price is copied below.</summary>
@@ -182,6 +189,16 @@ public class CostingLine
     }
 
     public bool IsDerived => Derivation != DerivationRule.Entered;
+
+    /// <summary>
+    /// A seam kit: the adhesive the sheets of a job are joined with, counted on the
+    /// summary of sheets and adhesive. Known by its name, as the rate card calls it
+    /// Seamkit and the client's own sheets "seamkit 50ml" or "seam kit".
+    /// </summary>
+    public bool IsSeamKit =>
+        LineType == CostingLineType.Rate
+        && (Description.Contains("seamkit", StringComparison.OrdinalIgnoreCase)
+            || Description.Contains("seam kit", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// A copy of this line for a new version of the quote. Everything is carried

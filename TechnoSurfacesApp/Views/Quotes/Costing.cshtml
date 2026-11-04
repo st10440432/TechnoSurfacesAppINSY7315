@@ -5,13 +5,25 @@
     (NFR-01) and the sheet size beside it (US-02). A price that cannot be found
     blocks the line and says why (US-03). Every change is saved through the costing
     API by costing.js, and the totals panel announces the new figures.
+
+    A quote is made of items, such as a kitchen and a vanity, or the items of a
+    tender's bill of quantities. The sheet shows one item at a time: its own lines,
+    its own markup and its own total, then the quote's total across every item.
 *@
 @{
     var q = Model.Quote;
     var a = Model.Actions;
     var t = Model.Sheet.Totals;
+    var item = Model.Sheet.CurrentItem!;
+    var itemDto = Model.Sheet.Items.First(i => i.Id == item.ItemId);
     var lines = new TechnoSurfacesApp.Controllers.CostingLinesVm(Model.Sheet, a.CanEdit, Model.RateGrid);
-    var randPerM2 = t.TotalAreaM2 > 0 ? Fmt.Rand(t.TotalExVat / t.TotalAreaM2) : "Not yet";
+    var randPerM2 = item.AreaM2 > 0 ? Fmt.Rand(item.TotalExVat / item.AreaM2) : "Not yet";
+    // What the item's costing comes to per m² at its markup, the figure to price it by area from.
+    var costedPerM2 = item.AreaM2 > 0
+        ? Fmt.Rand((item.SubTotalExVat * (1m + item.MarkupPercent / 100m) + item.BelowTheLineTotal) / item.AreaM2)
+        : "nothing yet, as it has no material";
+    var several = Model.Sheet.Items.Count > 1;
+    string ItemLabel(TechnoSurfaces.Application.Costing.ItemTotals i) => i.Number is null ? i.Name : $"{i.Number}. {i.Name}";
 
     string? lockedReason = a.CanEdit ? null
         : q.IsSealed ? $"Version {q.VersionNo} is locked because it has been approved. To change it, reopen the quote as a new version."
@@ -27,6 +39,9 @@
     <div class="page-head-actions">
         <a class="btn btn-secondary" asp-action="CostingPrint" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-print" /></svg> Print the costing
+        </a>
+        <a class="btn btn-secondary" asp-action="SheetSummary" asp-route-id="@q.Id">
+            <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg> Sheets and adhesive
         </a>
         <a class="btn btn-secondary" asp-action="Quotation" asp-route-id="@q.Id">
             <svg class="ico" aria-hidden="true"><use href="#i-file" /></svg> Customer quotation
@@ -56,18 +71,177 @@
 <div class="grid grid-main" id="costing"
      data-quote="@q.Id"
      data-api="@Url.Content($"~/api/quotes/{q.Id}/")"
+     data-item="@item.ItemId"
+     data-item-api="@Url.Content($"~/api/quotes/{q.Id}/items/{item.ItemId}/")"
      data-catalogue="@Url.Content("~/api/catalogue/")"
-     data-lines-url="@Url.Action("CostingLines", new { id = q.Id })"
+     data-lines-url="@Url.Action("CostingLines", new { id = q.Id, item = item.ItemId })"
      data-price-url="@Url.Action("PricePreview", new { id = q.Id })"
      data-rate-url="@Url.Action("RatePreview", new { id = q.Id })">
 
     <div class="stack-gap">
 
+        @* ---------------- Items ---------------- *@
+        <section class="card" aria-labelledby="items-title">
+            <div class="card-head">
+                <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
+                <h2 id="items-title">Items on this quote</h2>
+            </div>
+            <div class="card-body">
+                <p class="hint">
+                    Each item has its own costing and markup, like a page of the tender costing: a kitchen, a vanity, or one item of a bill of quantities.
+                    Its total is for one of it, and the quote counts it as many times as the job needs.
+                </p>
+            </div>
+            <div class="table-wrap">
+                <table class="data stack">
+                    <caption class="sr-only">Items on this quote, with the total for one and for the number needed</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Item</th>
+                            <th scope="col" class="right">Markup</th>
+                            <th scope="col" class="right">One</th>
+                            <th scope="col" class="right">Per m²</th>
+                            <th scope="col" class="right">Needed</th>
+                            <th scope="col" class="right">Amount ex VAT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in t.Items)
+                        {
+                            var current = i.ItemId == item.ItemId;
+                            <tr class="@(current ? "is-current" : null)">
+                                <td data-label="Item">
+                                    <a class="row-link" asp-action="Costing" asp-route-id="@q.Id" asp-route-item="@i.ItemId"
+                                       aria-current="@(current ? "page" : null)">@ItemLabel(i)</a>
+                                    @if (current)
+                                    {
+                                        <span class="sub">On screen</span>
+                                    }
+                                </td>
+                                <td data-label="Markup" class="right">@(i.PricePerM2 is { } p ? $"{Fmt.Rand(p)} per m²" : Fmt.Pct(i.MarkupPercent))</td>
+                                <td data-label="One" class="right">@Fmt.Rand(i.TotalExVat)</td>
+                                <td data-label="Per m²" class="right">@(i.RandPerM2 is { } r ? Fmt.Rand(r) : "No material")</td>
+                                <td data-label="Needed" class="right">@Fmt.Qty(i.Quantity)</td>
+                                <td data-label="Amount ex VAT" class="right strong">@Fmt.Rand(i.AmountExVat)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (a.CanEdit)
+            {
+                <div class="card-body item-forms">
+                    <form novalidate data-api-form data-method="PUT" data-url="@Url.Content($"~/api/quotes/{q.Id}/items/{item.ItemId}")"
+                          data-success="Item saved" aria-labelledby="this-item-title">
+                        <h3 class="section-label" id="this-item-title">This item</h3>
+                        <div class="field-row field-row-3">
+                            <div class="field">
+                                <label class="label" for="item-number">Number <span class="optional">optional</span></label>
+                                <input class="input" id="item-number" name="number" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.NumberMaxLength"
+                                       value="@itemDto.Number" aria-describedby="item-number-hint" />
+                                <span class="hint" id="item-number-hint">Its number on the bill of quantities.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="item-name">Name</label>
+                                <input class="input" id="item-name" name="name" required maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.NameMaxLength"
+                                       value="@itemDto.Name" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="item-quantity">Needed</label>
+                                <input class="input input-num" id="item-quantity" name="quantity" type="number" inputmode="decimal" min="0.0001" step="any"
+                                       required value="@Fmt.Input(itemDto.Quantity)" />
+                            </div>
+                        </div>
+                        <div class="field-row field-row-2">
+                            <div class="field">
+                                <label class="label" for="item-section">Section <span class="optional">optional</span></label>
+                                <input class="input" id="item-section" name="section" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.SectionMaxLength"
+                                       value="@itemDto.Section" aria-describedby="item-section-hint" />
+                                <span class="hint" id="item-section-hint">The heading it is listed under on a bill of quantities, such as Worktops.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="item-unit">Unit</label>
+                                <input class="input" id="item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
+                                       value="@itemDto.Unit" aria-describedby="item-unit-hint" />
+                                <span class="hint" id="item-unit-hint">Left empty, it is counted in numbers, No.</span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="item-price-m2">Price per m² <span class="optional">optional</span></label>
+                            <span class="input-group">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-num" id="item-price-m2" name="pricePerM2" type="number" inputmode="decimal" min="0" step="any"
+                                       value="@(itemDto.PricePerM2 is { } price ? Fmt.Input(price) : null)" aria-describedby="item-price-m2-hint" />
+                            </span>
+                            <span class="hint" id="item-price-m2-hint">
+                                Prices the item by the square metres of its material instead of by its markup. Left empty, the markup prices it.
+                                At its markup of @Fmt.Pct(item.MarkupPercent), its costing comes to @costedPerM2 per m².
+                            </span>
+                        </div>
+                        <div class="btn-row">
+                            <button type="submit" class="btn btn-secondary">Save the item</button>
+                            @if (several)
+                            {
+                                <button type="button" class="btn btn-ghost btn-danger"
+                                        data-api-action data-method="DELETE" data-url="@Url.Content($"~/api/quotes/{q.Id}/items/{item.ItemId}")"
+                                        data-confirm="Remove @itemDto.Name?" data-confirm-tone="danger" data-confirm-label="Remove the item"
+                                        data-confirm-detail="Its costing lines go with it, and so do the quotation lines copied from its materials."
+                                        data-success="Item removed" data-redirect="@Url.Action("Costing", new { id = q.Id })">
+                                    <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg> Remove this item
+                                </button>
+                            }
+                        </div>
+                    </form>
+
+                    <form novalidate data-api-form data-method="POST" data-url="@Url.Content($"~/api/quotes/{q.Id}/items")"
+                          data-redirect-to="@(Url.Action("Costing", new { id = q.Id }) + "?item={id}")"
+                          data-success="Item added" data-success-detail="Its costing sheet is open. Add its materials and labour."
+                          aria-labelledby="new-item-title">
+                        <h3 class="section-label" id="new-item-title">Add an item</h3>
+                        <div class="field-row field-row-3">
+                            <div class="field">
+                                <label class="label" for="new-item-number">Number <span class="optional">optional</span></label>
+                                <input class="input" id="new-item-number" name="number" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.NumberMaxLength" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="new-item-name">Name</label>
+                                <input class="input" id="new-item-name" name="name" required maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.NameMaxLength"
+                                       aria-describedby="new-item-name-hint" />
+                                <span class="hint" id="new-item-name-hint">Such as Vanity 1, or the bill of quantities description.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="new-item-quantity">Needed</label>
+                                <input class="input input-num" id="new-item-quantity" name="quantity" type="number" inputmode="decimal" min="0.0001" step="any"
+                                       required value="1" />
+                            </div>
+                        </div>
+                        <div class="field-row field-row-2">
+                            <div class="field">
+                                <label class="label" for="new-item-section">Section <span class="optional">optional</span></label>
+                                <input class="input" id="new-item-section" name="section" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.SectionMaxLength"
+                                       value="@itemDto.Section" aria-describedby="new-item-section-hint" />
+                                <span class="hint" id="new-item-section-hint">Filled with this item's, for the next item under the same heading.</span>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="new-item-unit">Unit</label>
+                                <input class="input" id="new-item-unit" name="unit" maxlength="@TechnoSurfaces.Domain.Quoting.QuoteItem.UnitMaxLength"
+                                       value="@itemDto.Unit" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-secondary">
+                            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg> Add the item
+                        </button>
+                    </form>
+                </div>
+            }
+        </section>
+
         @* ---------------- Materials ---------------- *@
         <section class="card" aria-labelledby="materials-title">
             <div class="card-head">
                 <svg class="ico" aria-hidden="true"><use href="#i-layers" /></svg>
-                <h2 id="materials-title">Materials</h2>
+                <h2 id="materials-title">Materials@(several ? $" for {ItemLabel(item)}" : "")</h2>
             </div>
 
             @if (a.CanEdit)
@@ -143,7 +317,7 @@
         <section class="card" aria-labelledby="rates-title">
             <div class="card-head">
                 <svg class="ico" aria-hidden="true"><use href="#i-calc" /></svg>
-                <h2 id="rates-title">Labour, consumables and extras</h2>
+                <h2 id="rates-title">Labour, consumables and extras@(several ? $" for {ItemLabel(item)}" : "")</h2>
             </div>
 
             <partial name="_RateLines" model="lines" />
@@ -166,29 +340,61 @@
                 }
             </div>
             <div class="card-body">
+                @if (several)
+                {
+                    <h3 class="section-label">@ItemLabel(item)</h3>
+                }
                 <div class="totals-row">
                     <span class="lbl">Sub total</span>
-                    <span class="val" data-total="subTotalExVat">@Fmt.Rand(t.SubTotalExVat)</span>
+                    <span class="val" data-item-total="subTotalExVat">@Fmt.Rand(item.SubTotalExVat)</span>
                 </div>
                 <div class="totals-row">
                     <span class="lbl">
-                        @if (a.CanEdit)
+                        @if (item.PricePerM2 is { } perM2)
+                        {
+                            @:Priced at @Fmt.Rand(perM2) per m², over its costing
+                        }
+                        else if (a.CanEdit)
                         {
                             <label for="markup">Markup</label>
                             <span class="input-group input-group-sm input-inline">
                                 <input class="input input-sm input-num" id="markup" type="number" inputmode="decimal" min="0" max="999.99" step="any"
-                                       required value="@Fmt.Input(t.MarkupPercent)" data-costing-field="markupPercent" data-saved="@Fmt.Input(t.MarkupPercent)"
+                                       required value="@Fmt.Input(item.MarkupPercent)" data-costing-field="markupPercent" data-saved="@Fmt.Input(item.MarkupPercent)"
                                        aria-describedby="markup-hint" />
                                 <span class="addon" aria-hidden="true">%</span>
                             </span>
                         }
                         else
                         {
-                            @:Markup @Fmt.Pct(t.MarkupPercent)
+                            @:Markup @Fmt.Pct(item.MarkupPercent)
                         }
                     </span>
-                    <span class="val" data-total="markupAmount">@Fmt.Rand(t.MarkupAmount)</span>
+                    <span class="val" data-item-total="markupAmount">@Fmt.Rand(item.MarkupAmount)</span>
                 </div>
+                <div class="totals-row">
+                    <span class="lbl">Cut-outs and grooves</span>
+                    <span class="val" data-item-total="belowTheLineTotal">@Fmt.Rand(item.BelowTheLineTotal)</span>
+                </div>
+                <div class="totals-row total-line">
+                    <span class="lbl">@(several || item.Quantity != 1 ? "One of this item" : "Item total")</span>
+                    <span class="val" data-item-total="totalExVat">@Fmt.Rand(item.TotalExVat)</span>
+                </div>
+                @if (item.Quantity != 1)
+                {
+                    <div class="totals-row">
+                        <span class="lbl">Times @Fmt.Qty(item.Quantity) needed</span>
+                        <span class="val" data-item-total="amountExVat">@Fmt.Rand(item.AmountExVat)</span>
+                    </div>
+                }
+
+                @if (several)
+                {
+                    <h3 class="section-label">The whole quote</h3>
+                    <div class="totals-row">
+                        <span class="lbl">@Model.Sheet.Items.Count items</span>
+                        <span class="val" data-total="itemsTotal">@Fmt.Rand(t.TotalExVat - t.TransportAmount - t.AllowanceAmount)</span>
+                    </div>
+                }
                 <div class="totals-row">
                     <span class="lbl">
                         @if (a.CanEdit)
@@ -197,7 +403,8 @@
                             <span class="input-group input-group-sm input-inline">
                                 <span class="addon before" aria-hidden="true">R</span>
                                 <input class="input input-sm input-num" id="transport" type="number" inputmode="decimal" min="0" step="any"
-                                       required value="@Fmt.Input(t.TransportAmount)" data-costing-field="transportAmount" data-saved="@Fmt.Input(t.TransportAmount)" />
+                                       required value="@Fmt.Input(t.TransportAmount)" data-costing-field="transportAmount" data-saved="@Fmt.Input(t.TransportAmount)"
+                                       aria-describedby="transport-hint" />
                             </span>
                         }
                         else
@@ -208,8 +415,23 @@
                     <span class="val" data-total="transportAmount">@Fmt.Rand(t.TransportAmount)</span>
                 </div>
                 <div class="totals-row">
-                    <span class="lbl">Cut-outs, grooves and transport</span>
-                    <span class="val" data-total="belowTheLineTotal">@Fmt.Rand(t.BelowTheLineTotal)</span>
+                    <span class="lbl">
+                        @if (a.CanEdit)
+                        {
+                            <label for="allowance">Allowances</label>
+                            <span class="input-group input-group-sm input-inline">
+                                <span class="addon before" aria-hidden="true">R</span>
+                                <input class="input input-sm input-num" id="allowance" type="number" inputmode="decimal" min="0" step="any"
+                                       required value="@Fmt.Input(t.AllowanceAmount)" data-costing-field="allowanceAmount" data-saved="@Fmt.Input(t.AllowanceAmount)"
+                                       aria-describedby="transport-hint" />
+                            </span>
+                        }
+                        else
+                        {
+                            @:Allowances
+                        }
+                    </span>
+                    <span class="val" data-total="allowanceAmount">@Fmt.Rand(t.AllowanceAmount)</span>
                 </div>
                 <div class="totals-row total-line">
                     <span class="lbl">Total ex VAT</span>
@@ -225,16 +447,20 @@
                 </div>
 
                 <dl class="facts facts-tight">
-                    <dt>Total area</dt>
-                    <dd data-total="totalAreaM2" data-format="area">@Fmt.Sqm(t.TotalAreaM2)</dd>
-                    <dt>Sheets</dt>
-                    <dd data-total="totalSheetCount" data-format="quantity">@Fmt.Qty(t.TotalSheetCount)</dd>
+                    <dt>Area@(several ? " of this item" : "")</dt>
+                    <dd data-item-total="areaM2" data-format="area">@Fmt.Sqm(item.AreaM2)</dd>
+                    <dt>Sheets@(several ? " for this item" : "")</dt>
+                    <dd data-item-total="sheetCount" data-format="quantity">@Fmt.Qty(item.SheetCount)</dd>
                     <dt>Rand per m², ex VAT</dt>
-                    <dd data-total="randPerM2">@randPerM2</dd>
+                    <dd data-item-total="randPerM2">@randPerM2</dd>
                 </dl>
 
                 <p class="totals-note" id="markup-hint">
-                    The markup applies to the sub total only. Cut-outs, grooves and transport are added after it, at cost, as the client confirmed.
+                    The markup is this item's, and applies to its sub total only. Cut-outs and grooves are added after it, at cost, as the client confirmed.
+                </p>
+                <p class="totals-note" id="transport-hint">
+                    Transport and allowances, such as travel, inspection and time away, are for the whole job, added once after every item at cost.
+                    On a bill of quantities they can be spread over the items' rates.
                 </p>
 
                 @* Read out by a screen reader after every recalculation. *@

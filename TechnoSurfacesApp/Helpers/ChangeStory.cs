@@ -34,6 +34,12 @@ public static class ChangeStories
         ["SupplierDiscountPercent"] = "supplier discount",
         ["MarkupPercent"] = "markup",
         ["TransportAmount"] = "transport",
+        ["AllowanceAmount"] = "allowances",
+        ["AllowanceDescription"] = "allowance wording",
+        ["AllowancesOnOwnLines"] = "allowances on their own lines",
+        ["Layout"] = "quotation layout",
+        ["Unit"] = "unit",
+        ["Section"] = "section",
         ["Status"] = "status",
         ["Site"] = "site",
         ["Project"] = "project",
@@ -63,7 +69,7 @@ public static class ChangeStories
     };
 
     private static readonly HashSet<string> Money = new(StringComparer.Ordinal)
-        { "ResolvedUnitPrice", "OverriddenUnitPrice", "TransportAmount", "AmountExVat", "Amount", "AmountIncVat", "PricePerSqm" };
+        { "ResolvedUnitPrice", "OverriddenUnitPrice", "TransportAmount", "AllowanceAmount", "AmountExVat", "Amount", "AmountIncVat", "PricePerSqm" };
 
     private static readonly HashSet<string> Percent = new(StringComparer.Ordinal)
         { "MarkupPercent", "SupplierDiscountPercent" };
@@ -218,6 +224,8 @@ public static class ChangeStories
             return Fmt.Date(date);
         if (property == "Status")
             return StatusText.Label(value);
+        if (property == "Layout")
+            return value is "1" or "BillOfQuantities" ? "bill of quantities" : "written lines";
         if (value is "True" or "False")
             return value == "True" ? "yes" : "no";
         return value;
