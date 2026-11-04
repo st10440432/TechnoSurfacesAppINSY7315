@@ -29,7 +29,8 @@ To allow SQL logins again, first run
 and then deploy without -EntraOnly.
 
 Deploying into a new subscription while the old apps still exist needs a new
--AppPrefix, because App Service names are unique across Azure. A subscription
+-AppPrefix, or a full -AppName for each environment, because App Service names are
+unique across Azure. A subscription
 billed in rand takes -BudgetAmount 1000.
 
 -PlanSku S1 puts the shared plan on the Standard tier and gives production a
@@ -46,12 +47,14 @@ and then deploy both environments with -PlanSku B1.
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail team@example.com -EntraOnly
 ./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail owner@example.com -AppPrefix technosurfaces-quotes -BudgetAmount 1000
 ./infra/deploy.ps1 -Environment production -ResourceGroup tsqa-rg -AlertEmail owner@example.com -AppPrefix technosurfaces-quotes -PlanSku S1 -EntraOnly
+./infra/deploy.ps1 -Environment staging -ResourceGroup tsqa-rg -AlertEmail owner@example.com -AppName technostaging -PlanSku S1 -DemoAccounts
 #>
 param(
     [Parameter(Mandatory)] [ValidateSet('staging', 'production')] [string] $Environment,
     [Parameter(Mandatory)] [string] $ResourceGroup,
     [Parameter(Mandatory)] [string] $AlertEmail,
     [string] $AppPrefix = 'tsqa-app',
+    [string] $AppName = '',
     [int] $BudgetAmount = 54,
     [ValidateSet('B1', 'S1')] [string] $PlanSku = 'B1',
     [switch] $DemoAccounts,
@@ -77,6 +80,10 @@ $parameters = @{
     createBudget     = @{ value = -not $NoBudget }
     entraOnlyAuthentication = @{ value = [bool] $EntraOnly }
     budgetStartDate  = @{ value = (Get-Date -Day 1).ToString('yyyy-MM-dd') }
+}
+
+if ($AppName) {
+    $parameters.appName = @{ value = $AppName }
 }
 
 if (-not $EntraOnly) {
