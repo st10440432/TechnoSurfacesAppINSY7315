@@ -1223,8 +1223,17 @@ table.data .input-sm { width: 6.5rem; margin-left: auto; }
 h3.section-label { margin: 0 0 var(--space-1); }
 .card-body-top { border-top: 1px solid var(--line); }
 /* The items of a quote on the costing sheet: the one on screen is marked, and the forms for it and a new item sit one above the other. */
-.item-forms { display: grid; gap: var(--space-5); border-top: 1px solid var(--line); }
-tr.is-current > td { background: var(--surface-sunken); }
+/* The items on a quote: the one open below stands out, with a bar down its left edge,
+   and the forms to change it or add another stay folded until opened. */
+.item-forms { border-top: 1px solid var(--line); }
+.item-disclosure + .item-disclosure { border-top: 1px solid var(--line); }
+.disclosure-chevron { margin-left: auto; transition: transform 0.15s ease; }
+.disclosure[open] > summary .disclosure-chevron { transform: rotate(180deg); }
+tr.is-current > td { background: var(--brand-navy-tint); }
+tr.is-current > td:first-child { box-shadow: inset 4px 0 0 var(--brand-green-ink); }
+tr.is-current .row-link { font-weight: var(--weight-bold); color: var(--brand-navy); }
+.item-open { margin-left: var(--space-2); vertical-align: 0.1em; }
+@media (prefers-reduced-motion: reduce) { .disclosure-chevron { transition: none; } }
 .from-costing { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
 .cascade-qty { margin-top: var(--space-4); }
 /* The Add to the costing button has no label, so it drops by a label's height to sit level with
